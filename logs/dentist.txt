@@ -1,0 +1,12 @@
+[2025-10-07 04:27:27] USER: i need a dentist
+[2025-10-07 04:27:27] BOT:  I’ll forward this to a staff member. Can you share your name and number?
+
+[2025-10-07 04:27:40] USER: 0756565656 and alex ryan
+[2025-10-07 04:27:40] BOT:  I’ll forward this to a staff member. Can you share your name and number?
+
+[2025-10-07 04:27:57] USER: what are your opening hours
+[2025-10-07 04:27:57] BOT:  I’ll forward this to a staff member. Can you share your name and number?
+
+[2025-10-07 04:28:08] USER: do you have parking?
+[2025-10-07 04:28:08] BOT:  Yes, there is free parking behind the clinic.
+

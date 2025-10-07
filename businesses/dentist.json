@@ -1,0 +1,11 @@
+{
+  "name": "Smile Dental Clinic",
+  "faqs": {
+    "what are your hours?": "We’re open Mon–Fri, 9am–5pm.",
+    "where are you located?": "123 Main Street, London.",
+    "do you accept insurance?": "Yes, we accept most major insurance providers.",
+    "how much is a checkup?": "A standard checkup is £60.",
+    "do you have parking?": "Yes, there is free parking behind the clinic."
+  }
+}
+

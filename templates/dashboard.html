@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ business['name'] }} Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container py-5">
+  <h2>{{ business['name'] }} — Dashboard</h2>
+
+  <div class="mb-3">
+    <a class="btn btn-warning" href="{{ url_for('edit_business', business_id=business['id']) }}">✏️ Edit Business</a>
+    <a class="btn btn-secondary" href="{{ url_for('businesses') }}">⬅ Back to Businesses</a>
+  </div>
+
+  <hr>
+
+  <h3>Business Info</h3>
+  {% if business_data.info %}
+    <ul class="list-group mb-3">
+      {% for key, value in business_data.info.items() %}
+        <li class="list-group-item"><b>{{ key }}:</b> {{ value }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No info added yet.</p>
+  {% endif %}
+
+  <h3>FAQs</h3>
+  {% if business_data.faqs %}
+    <ul class="list-group mb-3">
+      {% for q, a in business_data.faqs.items() %}
+        <li class="list-group-item"><b>Q:</b> {{ q }}<br><b>A:</b> {{ a }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No FAQs added yet.</p>
+  {% endif %}
+
+  <h3>Appointments</h3>
+  {% if appointments %}
+    <ul class="list-group mb-3">
+      {% for appt in appointments %}
+        <li class="list-group-item">{{ appt['date'] }} at {{ appt['time'] }} — {{ appt['service'] }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No appointments yet.</p>
+  {% endif %}
+
+  <h3>Recent Messages (last 50)</h3>
+  {% if messages %}
+    <ul class="list-group">
+      {% for msg in messages %}
+        <li class="list-group-item"><b>{{ msg['sender'] }}:</b> {{ msg['text'] }} <i>({{ msg['timestamp'] }})</i></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No messages yet.</p>
+  {% endif %}
+</body>
+</html>
+

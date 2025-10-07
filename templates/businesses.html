@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Businesses</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container py-5">
+  <h2 class="mb-4">All Businesses</h2>
+
+  {% if businesses %}
+    <ul class="list-group mb-4">
+      {% for b in businesses %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ b['name'] }}</span>
+          <span>
+            <a class="btn btn-sm btn-info" href="{{ url_for('business_dashboard', business_id=b['id']) }}">Dashboard</a>
+            <a class="btn btn-sm btn-warning" href="{{ url_for('edit_business', business_id=b['id']) }}">Edit</a>
+            <a class="btn btn-sm btn-danger" href="{{ url_for('delete_business', business_id=b['id']) }}">Delete</a>
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No businesses found.</p>
+  {% endif %}
+
+  <h3>Add New Business</h3>
+  <form method="POST" class="row g-2 mb-3">
+    <div class="col-md-6">
+      <input type="text" name="name" class="form-control" placeholder="Business Name" required>
+    </div>
+    <div class="col-md-6">
+      <button type="submit" class="btn btn-success w-100">Add Business</button>
+    </div>
+  </form>
+
+  <a class="btn btn-secondary" href="{{ url_for('logout') }}">Logout</a>
+</body>
+</html>
+

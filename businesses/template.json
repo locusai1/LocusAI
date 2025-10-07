@@ -1,0 +1,10 @@
+{
+  "name": "BUSINESS NAME HERE",
+  "faqs": {
+    "what are your hours?": "Enter business hours here.",
+    "where are you located?": "Enter business address here.",
+    "what services do you offer?": "List services here.",
+    "how much does it cost?": "Add pricing info here."
+  }
+}
+
