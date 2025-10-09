@@ -1,58 +1,79 @@
-from core.booking import book_appointment
+from openai import OpenAI
 
-def classify_intent(user_input, business_data):
+client = OpenAI()
+
+def _to_plain_dict(obj):
     """
-    Very simple keyword-based intent classifier.
-    Later this can be upgraded to AI-based.
+    Accepts dict or sqlite3.Row and returns a plain dict.
     """
-    text = user_input.lower()
+    try:
+        # sqlite3.Row supports .keys()
+        return {k: obj[k] for k in obj.keys()}
+    except Exception:
+        # assume it's already a dict (or None)
+        return obj or {}
 
-    # FAQ intent
-    for question in business_data.get("faqs", {}):
-        if question in text:
-            return "faq"
-
-    # Booking intent
-    if "book" in text or "appointment" in text or "schedule" in text:
-        return "booking"
-
-    # Escalation (fallback)
-    return "escalation"
-
-
-def process_message(user_input, business_data, state={}):
+def process_message(user_input, business_data, state=None):
     """
-    Main receptionist flow manager.
-    Decides what to do based on intent.
+    Generate a receptionist-like AI response with natural, human tone.
+    - user_input: customer's message (str)
+    - business_data: dict or sqlite3.Row with keys:
+        name, hours, address, services, tone (any may be missing)
+    - state: mutable dict to persist chat history across turns
+      (we mutate it in-place so callers don't need to handle returns)
+    Returns: reply string
     """
+    if state is None:
+        state = {}
 
-    intent = classify_intent(user_input, business_data)
+    # Keep a short rolling history (list of {"role","content"})
+    history = state.setdefault("history", [])
+    # Optional: a per-session id could be stored in state later
+    # session_id = state.get("session_id", "default")
 
-    # Handle FAQ
-    if intent == "faq":
-        for question, answer in business_data["faqs"].items():
-            if question in user_input.lower():
-                return answer
+    bd = _to_plain_dict(business_data)
+    name = bd.get("name", "this business")
+    hours = bd.get("hours", "not provided")
+    address = bd.get("address", "not provided")
+    services = bd.get("services", "not provided")
+    tone = bd.get("tone", "friendly and professional")
 
-    # Handle Booking
-    if intent == "booking":
-        if "date" not in state:
-            state["stage"] = "booking_date"
-            return "Sure, I can help with booking. What date works for you?"
+    system_prompt = f"""
+You are the AI receptionist for {name}.
+Speak naturally and helpfully in a {tone} manner.
+Use these details when relevant:
+- Hours: {hours}
+- Address: {address}
+- Services: {services}
 
-        elif "time" not in state:
-            state["stage"] = "booking_time"
-            return "Great! What time works best?"
+Rules:
+- Be concise but warm (1–3 sentences unless the user asks for detail).
+- If you don't know something, say you'll pass a message to the team and offer to take contact details.
+- If user wants to book, ask the minimal questions needed (name, phone, preferred date/time, service).
+- Never invent facts not present in the business info.
+"""
 
-        elif "service" not in state:
-            state["stage"] = "booking_service"
-            return "Got it. What service would you like to book?"
+    messages = [{"role": "system", "content": system_prompt}]
+    # include short rolling history
+    messages.extend(history[-8:])
+    messages.append({"role": "user", "content": user_input})
 
-        else:
-            # Call booking function (dummy for now)
-            return book_appointment(state["date"], state["time"], state["service"])
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=300,
+            temperature=0.6,
+        )
+        reply = resp.choices[0].message.content
+    except Exception as e:
+        reply = f"Sorry, I'm having trouble right now ({e})."
 
-    # Escalation
-    if intent == "escalation":
-        return "I’ll forward this to a staff member. Can you share your name and number?"
+    # update rolling history in-place
+    history.append({"role": "user", "content": user_input})
+    history.append({"role": "assistant", "content": reply})
+    # trim to last 10 exchanges (20 messages)
+    if len(history) > 20:
+        del history[:-20]
+    return (reply or "").strip()
 

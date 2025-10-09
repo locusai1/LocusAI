@@ -13,8 +13,7 @@ def load_business_from_db(business_name_or_slug: str):
     - Case-insensitive
     - Trims whitespace
     - Tries slugified fallback
-    - Partial LIKE match
-    - Token AND match (handles extra/multiple spaces & order)
+    - Falls back to partial LIKE match
     """
     q = (business_name_or_slug or "").strip()
     if not q:
@@ -40,7 +39,7 @@ def load_business_from_db(business_name_or_slug: str):
         if row:
             return row
 
-        # 3) partial LIKE match (simple)
+        # 3) partial match
         like = f"%{q_lower}%"
         row = con.execute(
             "SELECT * FROM businesses WHERE lower(name) LIKE ? OR lower(slug) LIKE ? LIMIT 1",
@@ -48,21 +47,5 @@ def load_business_from_db(business_name_or_slug: str):
         ).fetchone()
         if row:
             return row
-
-        # 4) token AND match on name/slug (handles weird spacing)
-        words = [w for w in re.split(r"[^a-z0-9]+", q_lower) if w]
-        if words:
-            # name token AND
-            clause = " AND ".join(["lower(name) LIKE ?"] * len(words))
-            params = [f"%{w}%" for w in words]
-            row = con.execute(f"SELECT * FROM businesses WHERE {clause} LIMIT 1", params).fetchone()
-            if row:
-                return row
-
-            # slug token AND
-            clause = " AND ".join(["lower(slug) LIKE ?"] * len(words))
-            row = con.execute(f"SELECT * FROM businesses WHERE {clause} LIMIT 1", params).fetchone()
-            if row:
-                return row
 
     raise ValueError(f"Business '{business_name_or_slug}' not found in DB")

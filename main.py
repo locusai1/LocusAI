@@ -1,34 +1,39 @@
-from core.ai import process_message
+# main.py — safe CLI runner
+from core.db import init_db, create_session, log_message
 from core.knowledge import load_business_from_db
-from core.db import create_session, log_message
+from core.ai import process_message
 
 def run():
-    business_name = input("Enter business name (e.g. 'Dental Clinic'): ").strip()
-    business_data = load_business_from_db(business_name)
+    # Make sure tables/columns exist
+    init_db()
 
-    print(f"\n🤖 AI Receptionist ready for {business_data['name']}!\n")
+    business_query = input("Enter business name (e.g. 'Dental Clinic'): ").strip()
+    business = load_business_from_db(business_query)
+    print(f"Loaded business: {business['name']} [{business['slug']}]")
 
-    # create a session for logging
-    session_id = create_session(business_data["id"])
+    # Create a new session for this run
+    session_id = create_session(business["id"])
+    state = {}  # in-memory chat state
 
+    print("Type your message. Type 'exit' to quit.")
     while True:
-        user_input = input("👤 You: ")
-        if user_input.lower() in ["quit", "exit"]:
-            print("👋 Goodbye!")
+        user = input("You: ").strip()
+        if user.lower() in ("exit", "quit"):
+            print("Goodbye!")
             break
 
-        # log user message
-        log_message(session_id, "user", user_input)
+        # Log the user's message
+        log_message(session_id, "user", user)
 
-        # process with AI
-        bot_response = process_message(user_input, business_data)
+        # Get AI reply
+        reply = process_message(user, business, state)
+        # Safety net: ensure string
+        reply = (reply or "").strip()
 
-        # log bot message
-        log_message(session_id, "bot", bot_response)
+        print("AI :", reply)
 
-        print(f"🤖 Bot: {bot_response}")
-
+        # Log the bot's reply
+        log_message(session_id, "bot", reply)
 
 if __name__ == "__main__":
     run()
-

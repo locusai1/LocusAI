@@ -1,148 +1,165 @@
-import os
-import re
+# core/db.py
 import sqlite3
+from contextlib import contextmanager
 
 DB_PATH = "receptionist.db"
 
-def get_conn():
-    """Create a SQLite connection with row access by column name."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _connect():
+    con = sqlite3.connect(DB_PATH, check_same_thread=False)
+    con.row_factory = sqlite3.Row
+    # Enforce FK constraints
+    con.execute("PRAGMA foreign_keys = ON;")
+    return con
 
+@contextmanager
+def get_conn():
+    con = _connect()
+    try:
+        yield con
+        con.commit()
+    finally:
+        con.close()
+
+# ---------- Schema helpers ----------
+
+def _table_exists(con, name: str) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;",
+        (name,),
+    ).fetchone()
+    return bool(row)
+
+def _has_column(con, table: str, column: str) -> bool:
+    cols = con.execute(f"PRAGMA table_info({table});").fetchall()
+    return any(c["name"] == column for c in cols)
+
+def _ensure_table_businesses(con):
+    if not _table_exists(con, "businesses"):
+        con.execute("""
+            CREATE TABLE businesses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                slug TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+    # ensure optional columns exist
+    for col in ("hours", "address", "services", "tone"):
+        if not _has_column(con, "businesses", col):
+            con.execute(f"ALTER TABLE businesses ADD COLUMN {col} TEXT;")
+
+def _ensure_table_sessions(con):
+    if not _table_exists(con, "sessions"):
+        con.execute("""
+            CREATE TABLE sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                business_id INTEGER NOT NULL,
+                started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES businesses(id)
+            );
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_business_id ON sessions(business_id);")
+
+def _ensure_table_messages(con):
+    if not _table_exists(con, "messages"):
+        con.execute("""
+            CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                sender TEXT NOT NULL CHECK(sender IN ('user','bot')),
+                text TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);")
+    else:
+        # make sure required columns exist (for older DBs)
+        for col in ("session_id", "timestamp", "sender", "text"):
+            if not _has_column(con, "messages", col):
+                # we won't try to rebuild; raise to reveal mismatch
+                raise RuntimeError(f"messages table missing required column: {col}")
 
 def init_db():
-    """Initialise all required tables if they don’t exist."""
+    """Create/upgrade tables and indexes idempotently."""
     with get_conn() as con:
-        con.executescript("""
-        PRAGMA foreign_keys = ON;
+        _ensure_table_businesses(con)
+        _ensure_table_sessions(con)
+        _ensure_table_messages(con)
 
-        CREATE TABLE IF NOT EXISTS businesses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            slug TEXT NOT NULL UNIQUE,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
+# ---------- Business helpers ----------
 
-        CREATE TABLE IF NOT EXISTS business_info (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            business_id INTEGER NOT NULL,
-            key TEXT NOT NULL,
-            value TEXT NOT NULL,
-            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS faqs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            business_id INTEGER NOT NULL,
-            question TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            business_id INTEGER NOT NULL,
-            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (business_id) REFERENCES businesses(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id INTEGER NOT NULL,
-            timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            sender TEXT NOT NULL CHECK(sender IN ('user','bot')),
-            text TEXT NOT NULL,
-            FOREIGN KEY (session_id) REFERENCES sessions(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            business_id INTEGER NOT NULL,
-            session_id INTEGER,
-            date TEXT,
-            time TEXT,
-            service TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (business_id) REFERENCES businesses(id),
-            FOREIGN KEY (session_id) REFERENCES sessions(id)
-        );
-        """)
-
-
-# --- Utility helpers ---
-
-def slugify(name: str) -> str:
-    """Convert business name to slug (safe for filenames/URLs)."""
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-
-
-# --- Business management ---
-
-def get_or_create_business(name: str):
-    """Find a business or create it if it doesn’t exist."""
-    slug = slugify(name)
+def create_business(name: str, slug: str, hours: str = None, address: str = None,
+                    services: str = None, tone: str = None) -> int:
     with get_conn() as con:
-        row = con.execute("SELECT id FROM businesses WHERE slug = ?", (slug,)).fetchone()
-        if row:
-            return row["id"], slug
-        con.execute("INSERT INTO businesses (name, slug) VALUES (?, ?)", (name, slug))
-        new_id = con.execute("SELECT id FROM businesses WHERE slug = ?", (slug,)).fetchone()["id"]
-        return new_id, slug
+        cur = con.execute("""
+            INSERT INTO businesses (name, slug, hours, address, services, tone)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (name, slug, hours, address, services, tone))
+        return cur.lastrowid
 
-
-def add_business_info(business_id: int, key: str, value: str):
+def update_business(business_id: int, **fields) -> None:
+    if not fields:
+        return
+    cols = []
+    vals = []
+    for k, v in fields.items():
+        if k not in {"name", "slug", "hours", "address", "services", "tone"}:
+            continue
+        cols.append(f"{k}=?")
+        vals.append(v)
+    if not cols:
+        return
+    vals.append(business_id)
     with get_conn() as con:
-        con.execute(
-            "INSERT INTO business_info (business_id, key, value) VALUES (?, ?, ?)",
-            (business_id, key, value)
-        )
+        con.execute(f"UPDATE businesses SET {', '.join(cols)} WHERE id=?;", vals)
 
-
-def get_business_info(business_id: int):
+def get_business_by_id(business_id: int):
     with get_conn() as con:
-        rows = con.execute("SELECT key, value FROM business_info WHERE business_id = ?", (business_id,)).fetchall()
-        return {row["key"]: row["value"] for row in rows}
+        return con.execute("SELECT * FROM businesses WHERE id=?;", (business_id,)).fetchone()
 
-
-# --- FAQ management ---
-
-def add_faq(business_id: int, question: str, answer: str):
+def list_businesses(limit: int = 100):
     with get_conn() as con:
-        con.execute(
-            "INSERT INTO faqs (business_id, question, answer) VALUES (?, ?, ?)",
-            (business_id, question, answer)
-        )
+        return con.execute(
+            "SELECT * FROM businesses ORDER BY id DESC LIMIT ?;", (limit,)
+        ).fetchall()
 
-
-def get_faqs(business_id: int):
-    with get_conn() as con:
-        rows = con.execute("SELECT question, answer FROM faqs WHERE business_id = ?", (business_id,)).fetchall()
-        return {row["question"]: row["answer"] for row in rows}
-
-
-# --- Sessions & messages ---
+# ---------- Session & Messages ----------
 
 def create_session(business_id: int) -> int:
     with get_conn() as con:
-        cur = con.execute("INSERT INTO sessions (business_id) VALUES (?)", (business_id,))
+        cur = con.execute(
+            "INSERT INTO sessions (business_id) VALUES (?)",
+            (business_id,)
+        )
         return cur.lastrowid
 
+def log_message(session_id: int, sender: str, text) -> int:
+    """
+    Persist a message. Coerces None -> "" to satisfy NOT NULL on messages.text.
+    'sender' must be 'user' or 'bot' to satisfy CHECK constraint.
+    Returns inserted message id.
+    """
+    if sender not in ("user", "bot"):
+        raise ValueError("sender must be 'user' or 'bot'")
+    if text is None:
+        text = ""
+    else:
+        text = str(text)
 
-def log_message(session_id: int, sender: str, text: str):
     with get_conn() as con:
-        con.execute(
+        cur = con.execute(
             "INSERT INTO messages (session_id, sender, text) VALUES (?, ?, ?)",
             (session_id, sender, text),
         )
+        return cur.lastrowid
 
-
-# --- Appointments ---
-
-def log_appointment(business_id: int, session_id: int, date: str, time: str, service: str):
+def get_session_messages(session_id: int, limit: int = 100):
     with get_conn() as con:
-        con.execute(
-            "INSERT INTO appointments (business_id, session_id, date, time, service) VALUES (?, ?, ?, ?, ?)",
-            (business_id, session_id, date, time, service),
-        )
-
+        return con.execute("""
+            SELECT id, session_id, timestamp, sender, text
+            FROM messages
+            WHERE session_id=?
+            ORDER BY id DESC
+            LIMIT ?;
+        """, (session_id, limit)).fetchall()
