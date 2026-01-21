@@ -1,4 +1,4 @@
-# AI Business Utility Agent R&D - Complete Project Documentation
+# AxisAI - Complete Project Documentation
 
 > **This file is automatically read by Claude at the start of each session.**
 > Last updated: January 21, 2026
@@ -11,8 +11,12 @@
 ## Quick Reference
 
 ```bash
-# Start the server
-cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+# Start the server (option 1 - use alias)
+axisai          # jumps to project folder
+axisrun         # jumps to folder AND starts server
+
+# Start the server (option 2 - manual)
+cd "/Users/paulomartinez/AxisAI"
 .venv/bin/python -m flask --app dashboard run --host=0.0.0.0 --port=5050
 
 # Access at: http://127.0.0.1:5050
@@ -24,6 +28,31 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 # Run tests continuously (watches for file changes)
 .venv/bin/ptw tests/ --clear
 ```
+
+---
+
+## Development Environment Setup
+
+**Folder Location**: `/Users/paulomartinez/AxisAI/`
+
+**Terminal Shortcuts** (configured in ~/.zshrc):
+- `axisai` or `axis` - Jump to project folder
+- `axisrun` - Jump to folder and start Flask server
+- Desktop shortcut: "AxisAI Terminal.command" - Double-click to open Terminal in project folder
+
+**Autosave System**:
+- LaunchAgent runs every 15 minutes: `com.axisai.autosave`
+- Automatically commits any uncommitted changes to git
+- Config: `/Users/paulomartinez/Library/LaunchAgents/com.axisai.autosave.plist`
+- Script: `/Users/paulomartinez/AxisAI/tools/autosave.sh`
+- Logs: `/Users/paulomartinez/AxisAI/logs/autosave.log`
+- To check if running: `launchctl list | grep axisai`
+
+**Git Repository**:
+- All code is version controlled with git
+- Autosave creates commits automatically every 15 min
+- To check status: `git status`
+- To see recent saves: `git log --oneline -10`
 
 ---
 
@@ -41,8 +70,8 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 - **Real Estate Agencies** - Property inquiries, viewing scheduling
 
 **Owner**: Paulo Martinez
-**Location**: `/Users/paulomartinez/AI Business Utility Agent R&D/`
-**Previous Name**: `dentist-ai` (renamed Jan 21, 2026 - legacy name, not the target market)
+**Location**: `/Users/paulomartinez/AxisAI/`
+**Previous Names**: `AI Business Utility Agent R&D`, `dentist-ai`
 
 ---
 
@@ -76,7 +105,7 @@ DASHBOARD_PASSWORD=admin             # Default admin password
 ## Complete File Structure
 
 ```
-AI Business Utility Agent R&D/
+AxisAI/
 │
 ├── dashboard.py              # Main Flask app entry point
 │   - Registers all blueprints
@@ -1409,7 +1438,7 @@ Add `data-theme="dark"` to `<html>` element.
 
 ### Running the Server
 ```bash
-cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+cd "/Users/paulomartinez/AxisAI"
 .venv/bin/python -m flask --app dashboard run --host=0.0.0.0 --port=5050
 ```
 
@@ -1438,7 +1467,7 @@ SELECT * FROM users;
 
 ### Creating Backup
 ```bash
-cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+cd "/Users/paulomartinez/AxisAI"
 zip -r backup.zip . -x ".venv/*" -x ".git/*"
 ```
 
@@ -2189,7 +2218,7 @@ core/reminders.py::send_reminder()
 ### Environment Setup Checklist
 ```bash
 # 1. Navigate to project
-cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+cd "/Users/paulomartinez/AxisAI"
 
 # 2. Activate virtual environment
 source .venv/bin/activate
