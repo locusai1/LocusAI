@@ -1,0 +1,55 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+
+# Logs
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.bak
+*.bak.*
+*.backup*
+backup_*.zip
+*-backup-*.zip
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Uploads and tenant files
+businesses/
+static/uploads/

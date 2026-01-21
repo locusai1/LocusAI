@@ -1,62 +1,233 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>{{ business['name'] }} Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="container py-5">
-  <h2>{{ business['name'] }} — Dashboard</h2>
+{% extends "base.html" %}
+{% block title %}Dashboard - AxisAI{% endblock %}
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+  <p class="page-greeting">My Workspace</p>
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <h1 class="page-title">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 18 else 'evening') }}, {{ session.user.email.split('@')[0]|title if session.user else 'there' }}</h1>
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('analytics.analytics_index') }}" class="btn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        View Analytics
+      </a>
+      <a href="{{ url_for('onboard.business_new') }}" class="btn btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        New Business
+      </a>
+    </div>
+  </div>
+</div>
 
-  <div class="mb-3">
-    <a class="btn btn-warning" href="{{ url_for('edit_business', business_id=business['id']) }}">✏️ Edit Business</a>
-    <a class="btn btn-secondary" href="{{ url_for('businesses') }}">⬅ Back to Businesses</a>
+<!-- KPI Stats -->
+<div class="stats-grid mb-6">
+  <div class="stat-card">
+    <div class="stat-label">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      Today's appointments
+    </div>
+    <div class="stat-value">{{ kpis.get("today", 0) }}</div>
   </div>
 
-  <hr>
+  <div class="stat-card">
+    <div class="stat-label">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Pending
+    </div>
+    <div class="stat-value">{{ kpis.get("pending", 0) }}</div>
+  </div>
 
-  <h3>Business Info</h3>
-  {% if business_data.info %}
-    <ul class="list-group mb-3">
-      {% for key, value in business_data.info.items() %}
-        <li class="list-group-item"><b>{{ key }}:</b> {{ value }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No info added yet.</p>
-  {% endif %}
+  <div class="stat-card">
+    <div class="stat-label">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Confirmed
+    </div>
+    <div class="stat-value">{{ kpis.get("confirmed", 0) }}</div>
+  </div>
 
-  <h3>FAQs</h3>
-  {% if business_data.faqs %}
-    <ul class="list-group mb-3">
-      {% for q, a in business_data.faqs.items() %}
-        <li class="list-group-item"><b>Q:</b> {{ q }}<br><b>A:</b> {{ a }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No FAQs added yet.</p>
-  {% endif %}
+  <div class="stat-card">
+    <div class="stat-label">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+      Total all time
+    </div>
+    <div class="stat-value">{{ kpis.get("total", 0) }}</div>
+  </div>
+</div>
 
-  <h3>Appointments</h3>
-  {% if appointments %}
-    <ul class="list-group mb-3">
-      {% for appt in appointments %}
-        <li class="list-group-item">{{ appt['date'] }} at {{ appt['time'] }} — {{ appt['service'] }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No appointments yet.</p>
-  {% endif %}
+<!-- Main Content Grid -->
+<div class="grid lg:grid-cols-3 gap-6">
+  <!-- Chart (2 columns) -->
+  <div class="lg:col-span-2 card">
+    <div class="card-header">
+      <h3 class="card-title">Appointments - Last 7 Days</h3>
+      <span class="badge badge-success">Live</span>
+    </div>
+    <div class="card-body">
+      <div style="height: 240px;">
+        <canvas id="kpiChart"
+          data-labels='{{ series_labels|tojson }}'
+          data-values='{{ series_values|tojson }}'></canvas>
+      </div>
+    </div>
+  </div>
 
-  <h3>Recent Messages (last 50)</h3>
-  {% if messages %}
-    <ul class="list-group">
-      {% for msg in messages %}
-        <li class="list-group-item"><b>{{ msg['sender'] }}:</b> {{ msg['text'] }} <i>({{ msg['timestamp'] }})</i></li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No messages yet.</p>
-  {% endif %}
-</body>
-</html>
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Quick Actions</h3>
+    </div>
+    <div class="card-body space-y-3">
+      <a href="{{ url_for('appointments.appointments_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
+        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div>
+          <div class="font-medium text-sm">Manage Appointments</div>
+          <div class="text-xs text-tertiary">View and edit all appointments</div>
+        </div>
+      </a>
 
+      <a href="{{ url_for('customers.customers_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
+        <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        </div>
+        <div>
+          <div class="font-medium text-sm">View Customers</div>
+          <div class="text-xs text-tertiary">Customer profiles and history</div>
+        </div>
+      </a>
+
+      <a href="{{ url_for('chat.chat_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
+        <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        </div>
+        <div>
+          <div class="font-medium text-sm">AI Conversations</div>
+          <div class="text-xs text-tertiary">View chat history</div>
+        </div>
+      </a>
+
+      <a href="{{ url_for('escalations.escalations_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
+        <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div>
+          <div class="font-medium text-sm">Escalations</div>
+          <div class="text-xs text-tertiary">Handle customer issues</div>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Businesses Table -->
+<div class="card mt-6">
+  <div class="card-header">
+    <h3 class="card-title">Your Businesses</h3>
+    <span class="text-sm text-tertiary">{{ businesses|length }} business{{ 'es' if businesses|length != 1 else '' }}</span>
+  </div>
+  <div class="table-container" style="border: none; border-radius: 0;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Business Name</th>
+          <th>Slug</th>
+          <th>Today</th>
+          <th>Brand</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in businesses %}
+        <tr>
+          <td>
+            <div class="font-medium text-primary">{{ b['name'] }}</div>
+          </td>
+          <td>
+            <code class="text-xs px-2 py-1 rounded" style="background: var(--bg-muted);">{{ b['slug'] }}</code>
+          </td>
+          <td>
+            <span class="badge">{{ appt_counts.get(b['id'], 0) }} appt{{ 's' if appt_counts.get(b['id'], 0) != 1 else '' }}</span>
+          </td>
+          <td>
+            {% set ac = b.get('accent_color') or '#000000' %}
+            <div class="w-6 h-6 rounded-md shadow-sm" style="background: {{ ac }};"></div>
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-2">
+              <a href="{{ url_for('appointments.appointments_index') }}?business_id={{ b['id'] }}" class="btn btn-sm btn-ghost">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                View
+              </a>
+              <a href="{{ url_for('edit_business', business_id=b['id']) }}" class="btn btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Edit
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const canvas = document.getElementById('kpiChart');
+  if (!canvas) return;
+
+  const labels = JSON.parse(canvas.dataset.labels || '[]');
+  const values = JSON.parse(canvas.dataset.values || '[]');
+
+  new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Appointments',
+        data: values,
+        borderColor: '#171717',
+        backgroundColor: 'rgba(23, 23, 23, 0.05)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#171717'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#171717',
+          titleColor: '#fff',
+          bodyColor: '#fff',
+          padding: 12,
+          cornerRadius: 8,
+          displayColors: false
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#737373', font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f0f0f0' },
+          ticks: { color: '#737373', font: { size: 11 }, stepSize: 1 }
+        }
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

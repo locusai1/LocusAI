@@ -1,87 +1,99 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Edit {{ business['name'] }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="container py-5">
-  <h2>Edit Business: {{ business['name'] }}</h2>
+{% extends "base.html" %}
+{% block title %}Edit Business — AxisAI{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="page-title">Edit Business</h1>
+  <a class="btn" href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
+</div>
 
-  <h3>Business Name</h3>
-  <form method="POST" class="mb-3">
-    <input type="hidden" name="action" value="update_name">
-    <input type="text" name="name" value="{{ business['name'] }}" class="form-control mb-2">
-    <button type="submit" class="btn btn-primary">Update Name</button>
-  </form>
+<form class="card p-6 grid gap-4" method="post">
+  <div class="grid-2">
+    <div>
+      <label class="subtle text-xs">Name</label>
+      <input class="input" name="name" value="{{ business['name'] }}">
+    </div>
+    <div>
+      <label class="subtle text-xs">Slug</label>
+      <input class="input" name="slug" value="{{ business['slug'] }}">
+      <div class="subtle text-xs mt-1">Auto-cleaned to lowercase-with-dashes when saved.</div>
+    </div>
+  </div>
 
-  <hr>
+  <div class="grid-3">
+    <div>
+      <label class="subtle text-xs">Hours</label>
+      <input class="input" name="hours" value="{{ business.get('hours','') }}">
+    </div>
+    <div>
+      <label class="subtle text-xs">Escalation phone</label>
+      <input class="input" name="escalation_phone" value="{{ business.get('escalation_phone','') }}">
+    </div>
+    <div>
+      <label class="subtle text-xs">Escalation email</label>
+      <input class="input" name="escalation_email" value="{{ business.get('escalation_email','') }}">
+    </div>
+  </div>
 
-  <h3>Business Info</h3>
-  {% if info %}
-    <ul class="list-group mb-3">
-      {% for row in info %}
-        <li class="list-group-item">
-          <form method="POST" class="d-flex gap-2">
-            <input type="hidden" name="action" value="update_info">
-            <input type="hidden" name="key" value="{{ row['key'] }}">
-            <label class="me-2">{{ row['key'] }}:</label>
-            <input type="text" name="value" value="{{ row['value'] }}" class="form-control">
-            <button type="submit" class="btn btn-sm btn-success">Save</button>
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No info yet.</p>
-  {% endif %}
+  <div>
+    <label class="subtle text-xs">Address</label>
+    <input class="input" name="address" value="{{ business.get('address','') }}">
+  </div>
 
-  <h4>Add New Info</h4>
-  <form method="POST" class="mb-3 d-flex gap-2">
-    <input type="hidden" name="action" value="update_info">
-    <input type="text" name="key" placeholder="Key" class="form-control">
-    <input type="text" name="value" placeholder="Value" class="form-control">
-    <button type="submit" class="btn btn-sm btn-primary">Add</button>
-  </form>
+  <div>
+    <label class="subtle text-xs">Tone (AI personality notes)</label>
+    <textarea class="input" name="tone" rows="3">{{ business.get('tone','') }}</textarea>
+  </div>
 
-  <hr>
+  <div class="grid-3 items-end">
+    <div>
+      <label class="subtle text-xs">Accent color</label>
+      {% set ac = business.get('accent_color') or '#2f6fec' %}
+      <div class="flex items-center gap-2">
+        <input type="color" class="h-10 w-16 input" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value">
+        <input class="input" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value">
+      </div>
+      <div id="brandPreview" class="mt-2" style="height:6px; border-radius:999px; background: {{ ac }}"></div>
+      <div class="subtle text-xs mt-2">Professional presets:</div>
+      <div class="flex flex-wrap gap-2 mt-2">
+        {% for c in ['#2f6fec','#2563eb','#0ea5e9','#10b981','#0891b2','#7c3aed','#9333ea','#f97316','#ef4444','#0ea5e9'] %}
+          <button onclick="event.preventDefault(); document.querySelectorAll('input[name=accent_color]').forEach(i=>i.value='{{ c }}'); document.getElementById('brandPreview').style.background='{{ c }}'" class="btn" style="background: {{ c }}; border-color: transparent; color: #fff;">{{ c }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <label class="subtle text-xs">Data retention (days)</label>
+      <input class="input" name="data_retention_days" type="number" min="0" value="{{ business.get('data_retention_days') or '' }}">
+    </div>
+    <div class="subtle text-xs">
+      Pick a calm, trustworthy colour (blues/teals/violets are ideal for professional use).
+    </div>
+  </div>
 
-  <h3>FAQs</h3>
-  {% if faqs %}
-    <ul class="list-group mb-3">
-      {% for faq in faqs %}
-        <li class="list-group-item">
-          <b>Q:</b> {{ faq['question'] }}<br>
-          <b>A:</b> {{ faq['answer'] }}<br>
+  <div>
+    <button class="btn btn-primary" type="submit">Save changes</button>
+  </div>
+</form>
 
-          <form method="POST" class="mt-2 d-flex gap-2">
-            <input type="hidden" name="action" value="edit_faq">
-            <input type="hidden" name="faq_id" value="{{ faq['id'] }}">
-            <input type="text" name="question" value="{{ faq['question'] }}" class="form-control">
-            <input type="text" name="answer" value="{{ faq['answer'] }}" class="form-control">
-            <button type="submit" class="btn btn-sm btn-success">Save</button>
-          </form>
-
-          <form method="POST" class="mt-2">
-            <input type="hidden" name="action" value="delete_faq">
-            <input type="hidden" name="faq_id" value="{{ faq['id'] }}">
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="text-muted">No FAQs yet.</p>
-  {% endif %}
-
-  <h4>Add New FAQ</h4>
-  <form method="POST" class="mb-3 d-flex gap-2">
-    <input type="hidden" name="action" value="add_faq">
-    <input type="text" name="question" placeholder="Question" class="form-control">
-    <input type="text" name="answer" placeholder="Answer" class="form-control">
-    <button type="submit" class="btn btn-sm btn-primary">Add</button>
-  </form>
-
-  <a href="{{ url_for('business_dashboard', business_id=business['id']) }}" class="btn btn-secondary">⬅ Back to Dashboard</a>
-</body>
-</html>
-
+<div class="card p-6 mt-6">
+  <div class="font-semibold mb-3">Logo</div>
+  <div class="flex items-center gap-6">
+    <div class="w-24 h-24 rounded-2xl border flex items-center justify-center bg-white">
+      {% if business.get('logo_path') %}
+        <img src="{{ url_for('static', filename=business['logo_path']) }}" class="max-w-full max-h-full object-contain">
+      {% else %}
+        <img src="{{ url_for('static', filename='logo.svg') }}" class="max-w-full max-h-full object-contain">
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('upload_logo', business_id=business['id']) }}" enctype="multipart/form-data" class="flex items-center gap-3">
+      <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg" class="input" style="width:auto;">
+      <button class="btn btn-primary">Upload</button>
+    </form>
+    {% if business.get('logo_path') %}
+      <form method="post" action="{{ url_for('delete_logo', business_id=business['id']) }}">
+        <button class="btn">Use default</button>
+      </form>
+    {% endif %}
+  </div>
+  <p class="subtle text-xs mt-2">PNG/JPG/WebP/SVG up to 5MB. Raster images are auto-squared & optimized.</p>
+</div>
+{% endblock %}

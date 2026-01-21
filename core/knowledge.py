@@ -3,18 +3,15 @@ from core.db import get_conn
 
 def slugify(s: str) -> str:
     s = (s or "").strip().lower()
-    s = re.sub(r"[^a-z0-9]+", "_", s)
-    return s.strip("_")
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
 
 def load_business_from_db(business_name_or_slug: str):
     """
     Robust lookup:
-    - Accepts name or slug
-    - Case-insensitive
-    - Trims whitespace
-    - Tries slugified fallback
-    - Partial LIKE match
-    - Token AND match (handles extra/multiple spaces & order)
+    - Accepts name or slug (any case, any spacing)
+    - Trims, normalizes hyphens
+    - Exact, slug, partial LIKE, and token-AND fallbacks
     """
     q = (business_name_or_slug or "").strip()
     if not q:
@@ -24,45 +21,30 @@ def load_business_from_db(business_name_or_slug: str):
     q_slug  = slugify(q)
 
     with get_conn() as con:
-        # 1) exact case-insensitive on name/slug
-        row = con.execute(
-            "SELECT * FROM businesses WHERE lower(name)=? OR lower(slug)=? LIMIT 1",
-            (q_lower, q_lower),
-        ).fetchone()
-        if row:
-            return row
+        # Exact by name (case-insensitive)
+        row = con.execute("SELECT * FROM businesses WHERE lower(name)=?", (q_lower,)).fetchone()
+        if row: return row
 
-        # 2) slugified fallback
-        row = con.execute(
-            "SELECT * FROM businesses WHERE lower(slug)=? OR lower(name)=? LIMIT 1",
-            (q_slug, q_slug.replace('_', ' ')),
-        ).fetchone()
-        if row:
-            return row
+        # Exact by slug
+        row = con.execute("SELECT * FROM businesses WHERE lower(slug)=?", (q_slug,)).fetchone()
+        if row: return row
 
-        # 3) partial LIKE match (simple)
-        like = f"%{q_lower}%"
-        row = con.execute(
-            "SELECT * FROM businesses WHERE lower(name) LIKE ? OR lower(slug) LIKE ? LIMIT 1",
-            (like, like),
-        ).fetchone()
-        if row:
-            return row
+        # Partial LIKE (name then slug)
+        row = con.execute("SELECT * FROM businesses WHERE lower(name) LIKE ? LIMIT 1", (f"%{q_lower}%",)).fetchone()
+        if row: return row
+        row = con.execute("SELECT * FROM businesses WHERE lower(slug) LIKE ? LIMIT 1", (f"%{q_slug}%",)).fetchone()
+        if row: return row
 
-        # 4) token AND match on name/slug (handles weird spacing)
+        # Token AND match across name, then slug
         words = [w for w in re.split(r"[^a-z0-9]+", q_lower) if w]
         if words:
-            # name token AND
             clause = " AND ".join(["lower(name) LIKE ?"] * len(words))
             params = [f"%{w}%" for w in words]
             row = con.execute(f"SELECT * FROM businesses WHERE {clause} LIMIT 1", params).fetchone()
-            if row:
-                return row
+            if row: return row
 
-            # slug token AND
             clause = " AND ".join(["lower(slug) LIKE ?"] * len(words))
             row = con.execute(f"SELECT * FROM businesses WHERE {clause} LIMIT 1", params).fetchone()
-            if row:
-                return row
+            if row: return row
 
     raise ValueError(f"Business '{business_name_or_slug}' not found in DB")

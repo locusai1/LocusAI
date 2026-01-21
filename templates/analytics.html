@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+{% block title %}Analytics - AxisAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Header with Date Range Selector -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Analytics Dashboard</h1>
+      <p class="text-sm subtle mt-1">{{ range_label }} &middot; {{ start_date }} to {{ end_date }}</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Date Range Buttons -->
+      <div class="flex rounded-lg overflow-hidden border" style="border-color: var(--card-border)">
+        {% for key, label in [('today', 'Today'), ('7d', '7D'), ('30d', '30D'), ('90d', '90D'), ('this_year', 'YTD')] %}
+        <a href="?range={{ key }}"
+           class="px-3 py-2 text-sm font-medium transition-colors
+                  {% if range_key == key %}bg-blue-600 text-white{% else %}hover:bg-gray-100{% endif %}
+                  {% if not loop.last %}border-r{% endif %}"
+           style="{% if range_key != key %}border-color: var(--card-border){% endif %}">
+          {{ label }}
+        </a>
+        {% endfor %}
+      </div>
+
+      <!-- Export Button -->
+      <a href="{{ url_for('analytics.api_export', range=range_key) }}"
+         class="btn flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Cards Row -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Conversations Card -->
+    <div class="card p-5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-10 bg-blue-500"></div>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium subtle">Conversations</span>
+        <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-3xl font-bold mb-1">{{ "{:,}".format(stats.conversations.total) }}</div>
+      <div class="flex items-center gap-2 text-sm">
+        {% if changes.conversations.direction == 'up' %}
+        <span class="text-green-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+          {{ changes.conversations.value }}%
+        </span>
+        {% elif changes.conversations.direction == 'down' %}
+        <span class="text-red-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          {{ changes.conversations.value }}%
+        </span>
+        {% else %}
+        <span class="subtle">No change</span>
+        {% endif %}
+        <span class="subtle">vs previous period</span>
+      </div>
+    </div>
+
+    <!-- Appointments Card -->
+    <div class="card p-5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-10 bg-green-500"></div>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium subtle">Appointments</span>
+        <div class="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-3xl font-bold mb-1">{{ "{:,}".format(stats.appointments.total) }}</div>
+      <div class="flex items-center gap-2 text-sm">
+        {% if changes.appointments.direction == 'up' %}
+        <span class="text-green-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+          {{ changes.appointments.value }}%
+        </span>
+        {% elif changes.appointments.direction == 'down' %}
+        <span class="text-red-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          {{ changes.appointments.value }}%
+        </span>
+        {% else %}
+        <span class="subtle">No change</span>
+        {% endif %}
+        <span class="subtle">vs previous period</span>
+      </div>
+    </div>
+
+    <!-- New Customers Card -->
+    <div class="card p-5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-10 bg-purple-500"></div>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium subtle">New Customers</span>
+        <div class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-3xl font-bold mb-1">{{ "{:,}".format(stats.customers.new) }}</div>
+      <div class="flex items-center gap-2 text-sm">
+        {% if changes.customers.direction == 'up' %}
+        <span class="text-green-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+          {{ changes.customers.value }}%
+        </span>
+        {% elif changes.customers.direction == 'down' %}
+        <span class="text-red-600 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          {{ changes.customers.value }}%
+        </span>
+        {% else %}
+        <span class="subtle">No change</span>
+        {% endif %}
+        <span class="subtle">vs previous period</span>
+      </div>
+    </div>
+
+    <!-- Escalations Card -->
+    <div class="card p-5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-10 bg-amber-500"></div>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium subtle">Escalations</span>
+        <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-3xl font-bold mb-1">{{ "{:,}".format(stats.escalations.total) }}</div>
+      <div class="flex items-center gap-2 text-sm">
+        <span class="subtle">{{ stats.conversations.escalation_rate }}% escalation rate</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Secondary Stats Row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-blue-600">{{ stats.messages.avg_per_session }}</div>
+      <div class="text-sm subtle">Avg Messages/Session</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-green-600">{{ stats.appointments.confirmation_rate }}%</div>
+      <div class="text-sm subtle">Confirmation Rate</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-purple-600">{{ stats.escalations.resolution_rate }}%</div>
+      <div class="text-sm subtle">Escalation Resolution</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-amber-600">{{ "{:,}".format(stats.messages.total) }}</div>
+      <div class="text-sm subtle">Total Messages</div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1: Trends -->
+  <div class="grid lg:grid-cols-3 gap-6">
+    <!-- Main Trend Chart -->
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold">Activity Over Time</h3>
+        <div class="flex gap-4 text-sm">
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Conversations</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-500"></span> Appointments</span>
+        </div>
+      </div>
+      <div class="h-72">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Conversion Funnel -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Conversion Funnel</h3>
+      <div class="space-y-3">
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span>Sessions Started</span>
+            <span class="font-medium">{{ "{:,}".format(funnel.sessions) }}</span>
+          </div>
+          <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full bg-blue-500 rounded-full" style="width: 100%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span>Engaged (2+ msgs)</span>
+            <span class="font-medium">{{ "{:,}".format(funnel.engaged) }}</span>
+          </div>
+          <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full bg-blue-400 rounded-full" style="width: {{ (funnel.engaged / max(funnel.sessions, 1) * 100)|round }}%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span>Bookings Made</span>
+            <span class="font-medium">{{ "{:,}".format(funnel.bookings) }}</span>
+          </div>
+          <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full bg-green-500 rounded-full" style="width: {{ (funnel.bookings / max(funnel.sessions, 1) * 100)|round }}%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span>Confirmed</span>
+            <span class="font-medium">{{ "{:,}".format(funnel.confirmed) }}</span>
+          </div>
+          <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full bg-green-600 rounded-full" style="width: {{ (funnel.confirmed / max(funnel.sessions, 1) * 100)|round }}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-4 pt-4 border-t text-center" style="border-color: var(--card-border)">
+        <div class="text-3xl font-bold text-green-600">
+          {{ ((funnel.bookings / max(funnel.sessions, 1)) * 100)|round(1) }}%
+        </div>
+        <div class="text-sm subtle">Booking Conversion</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2: Time Distribution -->
+  <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Hourly Distribution -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Busiest Hours</h3>
+      <div class="h-56">
+        <canvas id="hourlyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Daily Distribution -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Busiest Days</h3>
+      <div class="h-56">
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 3: Breakdowns -->
+  <div class="grid lg:grid-cols-3 gap-6">
+    <!-- Appointment Status -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Appointment Status</h3>
+      <div class="h-56 flex items-center justify-center">
+        <canvas id="appointmentStatusChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Top Services -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Top Services</h3>
+      {% if top_services %}
+      <div class="space-y-3">
+        {% for service in top_services %}
+        <div class="flex items-center gap-3">
+          <div class="flex-1">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="font-medium truncate" title="{{ service.name }}">{{ service.name }}</span>
+              <span class="subtle">{{ service.count }}</span>
+            </div>
+            <div class="h-2 rounded-full bg-gray-200 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"
+                   style="width: {{ (service.count / max(top_services[0].count, 1) * 100)|round }}%"></div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="h-48 flex items-center justify-center text-sm subtle">
+        No service data available
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Session Length Distribution -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Session Length</h3>
+      <div class="h-56">
+        <canvas id="sessionLengthChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 4: Customer Insights -->
+  <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Customer Types -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Customer Types</h3>
+      <div class="grid grid-cols-2 gap-6">
+        <div class="text-center">
+          <div class="w-24 h-24 mx-auto mb-3 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+            <span class="text-2xl font-bold text-white">{{ customer_insights.new_customers }}</span>
+          </div>
+          <div class="font-medium">New Customers</div>
+          <div class="text-sm subtle">First interaction</div>
+        </div>
+        <div class="text-center">
+          <div class="w-24 h-24 mx-auto mb-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+            <span class="text-2xl font-bold text-white">{{ customer_insights.returning_customers }}</span>
+          </div>
+          <div class="font-medium">Returning</div>
+          <div class="text-sm subtle">Multiple sessions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="card p-5">
+      <h3 class="font-semibold mb-4">Top Customers</h3>
+      {% if customer_insights.top_customers %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" style="border-color: var(--card-border)">
+              <th class="text-left py-2 font-medium">Customer</th>
+              <th class="text-right py-2 font-medium">Appointments</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for customer in customer_insights.top_customers %}
+            <tr class="border-b" style="border-color: var(--card-border)">
+              <td class="py-2">
+                <div class="font-medium">{{ customer.name or 'Unknown' }}</div>
+                <div class="text-xs subtle">{{ customer.email or customer.phone or '-' }}</div>
+              </td>
+              <td class="text-right py-2">
+                <span class="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                  {{ customer.appointment_count }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="h-32 flex items-center justify-center text-sm subtle">
+        No customer data available
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Escalation Insights (if any) -->
+  {% if stats.escalations.total > 0 %}
+  <div class="card p-5">
+    <h3 class="font-semibold mb-4">Escalation Reasons</h3>
+    <div class="h-64">
+      <canvas id="escalationChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+// Chart.js default configuration
+Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
+Chart.defaults.plugins.tooltip.padding = 12;
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+
+// Color palette
+const colors = {
+  primary: '#3b82f6',
+  primaryLight: 'rgba(59, 130, 246, 0.1)',
+  secondary: '#10b981',
+  secondaryLight: 'rgba(16, 185, 129, 0.1)',
+  purple: '#8b5cf6',
+  amber: '#f59e0b',
+  gray: '#6b7280'
+};
+
+// Trend Chart
+const trendCtx = document.getElementById('trendChart');
+if (trendCtx) {
+  new Chart(trendCtx, {
+    type: 'line',
+    data: {
+      labels: {{ trends.labels|tojson }},
+      datasets: [
+        {
+          label: 'Conversations',
+          data: {{ trends.conversations|tojson }},
+          borderColor: colors.primary,
+          backgroundColor: colors.primaryLight,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          borderWidth: 2
+        },
+        {
+          label: 'Appointments',
+          data: {{ trends.appointments|tojson }},
+          borderColor: colors.secondary,
+          backgroundColor: colors.secondaryLight,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          borderWidth: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      },
+      plugins: {
+        legend: { display: true, position: 'top', align: 'end' }
+      }
+    }
+  });
+}
+
+// Hourly Distribution Chart
+const hourlyCtx = document.getElementById('hourlyChart');
+if (hourlyCtx) {
+  const hourlyData = {{ hourly.counts|tojson }};
+  const maxHourly = Math.max(...hourlyData);
+
+  new Chart(hourlyCtx, {
+    type: 'bar',
+    data: {
+      labels: {{ hourly.labels|tojson }},
+      datasets: [{
+        data: hourlyData,
+        backgroundColor: hourlyData.map(v => v === maxHourly ? colors.primary : 'rgba(59, 130, 246, 0.3)'),
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { maxTicksLimit: 12 }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+// Daily Distribution Chart
+const dailyCtx = document.getElementById('dailyChart');
+if (dailyCtx) {
+  const dailyData = {{ daily.counts|tojson }};
+  const maxDaily = Math.max(...dailyData);
+
+  new Chart(dailyCtx, {
+    type: 'bar',
+    data: {
+      labels: {{ daily.labels|tojson }},
+      datasets: [{
+        data: dailyData,
+        backgroundColor: dailyData.map(v => v === maxDaily ? colors.secondary : 'rgba(16, 185, 129, 0.3)'),
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+// Appointment Status Doughnut
+const apptStatusCtx = document.getElementById('appointmentStatusChart');
+if (apptStatusCtx) {
+  new Chart(apptStatusCtx, {
+    type: 'doughnut',
+    data: {
+      labels: {{ appointment_status.labels|tojson }},
+      datasets: [{
+        data: {{ appointment_status.counts|tojson }},
+        backgroundColor: {{ appointment_status.colors|tojson }},
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { boxWidth: 12, padding: 15 }
+        }
+      }
+    }
+  });
+}
+
+// Session Length Distribution
+const sessionLengthCtx = document.getElementById('sessionLengthChart');
+if (sessionLengthCtx) {
+  new Chart(sessionLengthCtx, {
+    type: 'bar',
+    data: {
+      labels: {{ response_metrics.session_length_distribution.labels|tojson }},
+      datasets: [{
+        data: {{ response_metrics.session_length_distribution.counts|tojson }},
+        backgroundColor: [colors.primary, colors.secondary, colors.purple, colors.amber],
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// Escalation Reasons Chart (if exists)
+const escalationCtx = document.getElementById('escalationChart');
+if (escalationCtx) {
+  new Chart(escalationCtx, {
+    type: 'bar',
+    data: {
+      labels: {{ escalation_reasons.labels|tojson }},
+      datasets: [{
+        data: {{ escalation_reasons.counts|tojson }},
+        backgroundColor: colors.amber,
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// Auto-refresh every 60 seconds
+setInterval(async function() {
+  try {
+    const resp = await fetch('/api/analytics/overview?range={{ range_key }}');
+    if (resp.ok) {
+      // Could update KPI cards here without full page reload
+      console.log('Analytics data refreshed');
+    }
+  } catch (e) {
+    console.warn('Analytics refresh failed');
+  }
+}, 60000);
+</script>
+{% endblock %}

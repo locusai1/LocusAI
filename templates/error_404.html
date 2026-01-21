@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Not Found — AxisAI{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-lg text-center">
+  <div class="text-7xl font-black text-slate-300">404</div>
+  <h1 class="text-xl font-semibold mt-2">Page not found</h1>
+  <p class="text-slate-600 mt-2">The page you requested doesn’t exist.</p>
+  <p class="text-xs text-slate-400 mt-1">Request ID: {{ rid }}</p>
+  <a href="{{ url_for('dashboard') }}" class="inline-block mt-6 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Back to Dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Escalations - AxisAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Escalations</h1>
+      <p class="text-sm subtle mt-1">Customer interactions requiring human attention</p>
+    </div>
+    {% if counts.pending > 0 %}
+    <div class="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200">
+      <span class="text-amber-600 font-medium">{{ counts.pending }}</span>
+      <span class="text-amber-700 text-sm">pending escalation{{ 's' if counts.pending != 1 else '' }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Status Tabs -->
+  <div class="flex flex-wrap gap-2 border-b pb-3" style="border-color: var(--card-border)">
+    <a href="?status=pending"
+       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              {% if status_filter == 'pending' %}bg-amber-100 text-amber-800{% else %}hover:bg-gray-100{% endif %}">
+      Pending
+      {% if counts.pending > 0 %}
+      <span class="ml-1 px-2 py-0.5 text-xs rounded-full bg-amber-200 text-amber-800">{{ counts.pending }}</span>
+      {% endif %}
+    </a>
+    <a href="?status=acknowledged"
+       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              {% if status_filter == 'acknowledged' %}bg-blue-100 text-blue-800{% else %}hover:bg-gray-100{% endif %}">
+      Acknowledged
+      {% if counts.acknowledged > 0 %}
+      <span class="ml-1 px-2 py-0.5 text-xs rounded-full bg-blue-200 text-blue-800">{{ counts.acknowledged }}</span>
+      {% endif %}
+    </a>
+    <a href="?status=resolved"
+       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              {% if status_filter == 'resolved' %}bg-green-100 text-green-800{% else %}hover:bg-gray-100{% endif %}">
+      Resolved
+      {% if counts.resolved > 0 %}
+      <span class="ml-1 px-2 py-0.5 text-xs rounded-full bg-green-200 text-green-800">{{ counts.resolved }}</span>
+      {% endif %}
+    </a>
+    <a href="?status=all"
+       class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              {% if status_filter == 'all' %}bg-gray-200 text-gray-800{% else %}hover:bg-gray-100{% endif %}">
+      All
+      <span class="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-300 text-gray-700">{{ counts.all }}</span>
+    </a>
+  </div>
+
+  <!-- Escalations List -->
+  {% if escalations %}
+  <div class="space-y-3">
+    {% for esc in escalations %}
+    <div class="card p-4 hover:shadow-md transition-shadow">
+      <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+        <!-- Left: Main Info -->
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <!-- Priority Badge -->
+            <span class="px-2 py-1 text-xs font-medium rounded border {{ esc.priority|priority_badge }}">
+              {{ esc.priority|upper }}
+            </span>
+            <!-- Status Badge -->
+            <span class="px-2 py-1 text-xs font-medium rounded border {{ esc.status|status_badge }}">
+              {{ esc.status|capitalize }}
+            </span>
+            <!-- Timestamp -->
+            <span class="text-xs subtle">{{ esc.created_at[:16] if esc.created_at else 'Unknown' }}</span>
+          </div>
+
+          <!-- Reason -->
+          <p class="font-medium mb-1">{{ esc.reason or 'No reason specified' }}</p>
+
+          <!-- Customer Info -->
+          {% if esc.customer_name or esc.customer_email or esc.customer_phone %}
+          <div class="text-sm subtle flex flex-wrap gap-3 mt-2">
+            {% if esc.customer_name %}
+            <span>{{ esc.customer_name }}</span>
+            {% endif %}
+            {% if esc.customer_phone %}
+            <a href="tel:{{ esc.customer_phone }}" class="hover:underline">{{ esc.customer_phone }}</a>
+            {% endif %}
+            {% if esc.customer_email %}
+            <a href="mailto:{{ esc.customer_email }}" class="hover:underline">{{ esc.customer_email }}</a>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <!-- Notes Preview -->
+          {% if esc.notes %}
+          <div class="mt-3 text-sm p-3 rounded-lg" style="background: var(--page-bg)">
+            <pre class="whitespace-pre-wrap font-sans">{{ esc.notes[:300] }}{{ '...' if esc.notes|length > 300 else '' }}</pre>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="flex flex-row sm:flex-col gap-2">
+          {% if esc.status == 'pending' %}
+          <form method="post" action="{{ url_for('escalations.acknowledge_escalation', escalation_id=esc.id) }}">
+            <button type="submit" class="btn w-full text-sm">Acknowledge</button>
+          </form>
+          {% endif %}
+
+          {% if esc.status in ('pending', 'acknowledged') %}
+          <button type="button"
+                  onclick="openResolveModal({{ esc.id }})"
+                  class="btn btn-primary w-full text-sm">
+            Resolve
+          </button>
+          {% endif %}
+
+          {% if esc.customer_phone %}
+          <a href="tel:{{ esc.customer_phone }}" class="btn w-full text-sm text-center">
+            Call
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card p-12 text-center">
+    <div class="text-4xl mb-4">
+      {% if status_filter == 'pending' %}
+      &#10004;
+      {% else %}
+      &#128269;
+      {% endif %}
+    </div>
+    <h3 class="font-medium mb-2">
+      {% if status_filter == 'pending' %}
+      No pending escalations
+      {% else %}
+      No escalations found
+      {% endif %}
+    </h3>
+    <p class="text-sm subtle">
+      {% if status_filter == 'pending' %}
+      Great job! All customer issues have been addressed.
+      {% else %}
+      Try changing the filter to see different escalations.
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Resolve Modal -->
+<div id="resolve-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="display: none;">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" style="background: var(--card-bg)">
+    <h3 class="text-lg font-semibold mb-4">Resolve Escalation</h3>
+    <form id="resolve-form" method="post">
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">Resolution Notes</label>
+        <textarea name="resolution_notes" rows="4" class="input w-full"
+                  placeholder="Describe how this was resolved..."></textarea>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeResolveModal()" class="btn">Cancel</button>
+        <button type="submit" class="btn btn-primary">Mark Resolved</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openResolveModal(escalationId) {
+  const modal = document.getElementById('resolve-modal');
+  const form = document.getElementById('resolve-form');
+  form.action = `/escalations/${escalationId}/resolve`;
+  modal.style.display = 'flex';
+}
+
+function closeResolveModal() {
+  const modal = document.getElementById('resolve-modal');
+  modal.style.display = 'none';
+}
+
+// Close modal on backdrop click
+document.getElementById('resolve-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeResolveModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeResolveModal();
+});
+
+// Poll for new escalations (optional real-time updates)
+{% if status_filter == 'pending' %}
+setInterval(async function() {
+  try {
+    const resp = await fetch('/api/escalations/pending');
+    const data = await resp.json();
+    const currentCount = {{ counts.pending }};
+    if (data.count > currentCount) {
+      // New escalation - refresh the page
+      location.reload();
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+}, 30000); // Check every 30 seconds
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Escalation #{{ escalation.id }} - AxisAI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm">
+    <a href="{{ url_for('escalations.escalations_index') }}" class="subtle hover:underline">Escalations</a>
+    <span class="subtle">/</span>
+    <span class="font-medium">#{{ escalation.id }}</span>
+  </div>
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <h1 class="text-2xl font-bold">Escalation #{{ escalation.id }}</h1>
+        <span class="px-2 py-1 text-xs font-medium rounded border {{ escalation.priority|priority_badge }}">
+          {{ escalation.priority|upper }}
+        </span>
+        <span class="px-2 py-1 text-xs font-medium rounded border {{ escalation.status|status_badge }}">
+          {{ escalation.status|capitalize }}
+        </span>
+      </div>
+      <p class="text-sm subtle">Created {{ escalation.created_at[:16] if escalation.created_at else 'Unknown' }}</p>
+    </div>
+
+    <div class="flex gap-2">
+      {% if escalation.status == 'pending' %}
+      <form method="post" action="{{ url_for('escalations.acknowledge_escalation', escalation_id=escalation.id) }}">
+        <button type="submit" class="btn">Acknowledge</button>
+      </form>
+      {% endif %}
+
+      {% if escalation.status in ('pending', 'acknowledged') %}
+      <button type="button" onclick="openResolveModal({{ escalation.id }})" class="btn btn-primary">
+        Resolve
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <!-- Left Column: Details -->
+    <div class="space-y-6">
+      <!-- Reason -->
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Reason for Escalation</h3>
+        <p class="text-lg">{{ escalation.reason or 'No reason specified' }}</p>
+      </div>
+
+      <!-- Customer Info -->
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Customer Information</h3>
+        <dl class="space-y-3">
+          {% if escalation.customer_name %}
+          <div class="flex justify-between">
+            <dt class="subtle">Name</dt>
+            <dd class="font-medium">{{ escalation.customer_name }}</dd>
+          </div>
+          {% endif %}
+          {% if escalation.customer_phone %}
+          <div class="flex justify-between">
+            <dt class="subtle">Phone</dt>
+            <dd>
+              <a href="tel:{{ escalation.customer_phone }}" class="font-medium hover:underline text-blue-600">
+                {{ escalation.customer_phone }}
+              </a>
+            </dd>
+          </div>
+          {% endif %}
+          {% if escalation.customer_email %}
+          <div class="flex justify-between">
+            <dt class="subtle">Email</dt>
+            <dd>
+              <a href="mailto:{{ escalation.customer_email }}" class="font-medium hover:underline text-blue-600">
+                {{ escalation.customer_email }}
+              </a>
+            </dd>
+          </div>
+          {% endif %}
+          {% if not (escalation.customer_name or escalation.customer_phone or escalation.customer_email) %}
+          <p class="subtle italic">No customer information available</p>
+          {% endif %}
+        </dl>
+
+        <!-- Quick Actions -->
+        {% if escalation.customer_phone or escalation.customer_email %}
+        <div class="mt-4 pt-4 border-t flex gap-2" style="border-color: var(--card-border)">
+          {% if escalation.customer_phone %}
+          <a href="tel:{{ escalation.customer_phone }}" class="btn flex-1 text-center">
+            Call Customer
+          </a>
+          {% endif %}
+          {% if escalation.customer_email %}
+          <a href="mailto:{{ escalation.customer_email }}" class="btn flex-1 text-center">
+            Email Customer
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Timeline -->
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Timeline</h3>
+        <div class="space-y-3">
+          <div class="flex gap-3">
+            <div class="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
+            <div>
+              <p class="font-medium">Created</p>
+              <p class="text-sm subtle">{{ escalation.created_at or 'Unknown' }}</p>
+            </div>
+          </div>
+
+          {% if escalation.notified_at %}
+          <div class="flex gap-3">
+            <div class="w-2 h-2 rounded-full bg-amber-500 mt-2"></div>
+            <div>
+              <p class="font-medium">Notification Sent</p>
+              <p class="text-sm subtle">{{ escalation.notified_at }}</p>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if escalation.status == 'resolved' %}
+          <div class="flex gap-3">
+            <div class="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
+            <div>
+              <p class="font-medium">Resolved</p>
+              <p class="text-sm subtle">
+                {{ escalation.resolved_at or 'Unknown' }}
+                {% if escalation.resolved_by %}
+                by {{ escalation.resolved_by }}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Notes & Context -->
+    <div class="space-y-6">
+      <!-- Notes -->
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Conversation Summary & Notes</h3>
+        {% if escalation.notes %}
+        <div class="prose prose-sm max-w-none">
+          <pre class="whitespace-pre-wrap font-sans text-sm p-3 rounded-lg" style="background: var(--page-bg)">{{ escalation.notes }}</pre>
+        </div>
+        {% else %}
+        <p class="subtle italic">No notes available</p>
+        {% endif %}
+      </div>
+
+      <!-- Session Link -->
+      {% if escalation.session_id %}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Related Session</h3>
+        <p class="text-sm">Session ID: <span class="font-mono">{{ escalation.session_id }}</span></p>
+        <a href="{{ url_for('chat.chat_index') }}?session={{ escalation.session_id }}" class="btn mt-3 inline-block">
+          View Chat Session
+        </a>
+      </div>
+      {% endif %}
+
+      <!-- Customer Profile Link -->
+      {% if escalation.customer_id %}
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Customer Profile</h3>
+        <a href="{{ url_for('customers.customer_detail', customer_id=escalation.customer_id) }}" class="btn inline-block">
+          View Customer Profile
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Resolve Modal -->
+<div id="resolve-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="display: none;">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" style="background: var(--card-bg)">
+    <h3 class="text-lg font-semibold mb-4">Resolve Escalation</h3>
+    <form method="post" action="{{ url_for('escalations.resolve_escalation', escalation_id=escalation.id) }}">
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">Resolution Notes</label>
+        <textarea name="resolution_notes" rows="4" class="input w-full"
+                  placeholder="Describe how this was resolved..."></textarea>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeResolveModal()" class="btn">Cancel</button>
+        <button type="submit" class="btn btn-primary">Mark Resolved</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openResolveModal() {
+  document.getElementById('resolve-modal').style.display = 'flex';
+}
+
+function closeResolveModal() {
+  document.getElementById('resolve-modal').style.display = 'none';
+}
+
+document.getElementById('resolve-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeResolveModal();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeResolveModal();
+});
+</script>
+{% endblock %}

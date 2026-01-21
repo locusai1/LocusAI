@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#2f6fec"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="white"/>
+  <path d="M28 86c0-26 18-46 40-46 9 0 16 3 22 8l10-10c-8-8-20-13-32-13-31 0-56 26-56 61h16z" fill="url(#g)"/>
+  <circle cx="88" cy="88" r="20" fill="url(#g)"/>
+  <text x="64" y="118" font-family="Inter, system-ui" font-size="12" text-anchor="middle" fill="#64748b">AxisAI</text>
+</svg>

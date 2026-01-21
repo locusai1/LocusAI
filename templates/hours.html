@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}AxisAI — Hours{% endblock %}
+{% block content %}
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold">Business Hours</h1>
+    <div class="text-sm">
+      <a class="text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back</a>
+    </div>
+  </div>
+
+  <form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('services.hours_index') }}">
+    <div>
+      <label class="block text-xs text-slate-600 mb-1">Business</label>
+      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
+        <option value="">— Select —</option>
+        {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business_id==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Open</button>
+  </form>
+
+  {% if not business_id %}
+    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-slate-600">Select a business.</div>
+  {% else %}
+    <form method="post" action="{{ url_for('services.hours_index') }}" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="px-3 py-2 text-left">Day</th>
+            <th class="px-3 py-2 text-left">Open</th>
+            <th class="px-3 py-2 text-left">Close</th>
+            <th class="px-3 py-2 text-left">Closed</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% set days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+          {% for h in hours %}
+            <tr>
+              <td class="px-3 py-2">{{ days[h['weekday']] }}</td>
+              <td class="px-3 py-2"><input class="border rounded-lg px-2 py-1" type="time" name="open_{{ h['weekday'] }}" value="{{ h['open_time'] or '' }}"></td>
+              <td class="px-3 py-2"><input class="border rounded-lg px-2 py-1" type="time" name="close_{{ h['weekday'] }}" value="{{ h['close_time'] or '' }}"></td>
+              <td class="px-3 py-2"><input type="checkbox" name="closed_{{ h['weekday'] }}" {% if h['closed'] %}checked{% endif %}></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="mt-4">
+        <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Hours</button>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

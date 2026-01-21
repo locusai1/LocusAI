@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Appointments — AxisAI{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Appointments</h1>
+  <div class="flex items-center gap-2">
+    {% if business %}
+      <a class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" href="{{ url_for('appointments.appointments_new', business_id=business['id']) }}">+ New</a>
+      <a class="px-3 py-2 rounded-lg border hover:border-indigo-300" href="{{ url_for('appointments.appointments_index', business_id=business['id']) }}">Refresh</a>
+      <a class="px-3 py-2 rounded-lg border hover:border-indigo-300" href="{{ url_for('appointments.appointments_export_csv', business_id=business['id'], status=status) }}">Export CSV</a>
+    {% endif %}
+  </div>
+</div>
+
+<form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('appointments.appointments_index') }}">
+  <div>
+    <label class="block text-xs text-slate-600 mb-1">Business</label>
+    <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
+      <option value="">— Select —</option>
+      {% for b in businesses %}
+        <option value="{{ b['id'] }}" {% if business and business['id']==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-slate-600 mb-1">Status</label>
+    <select name="status" class="border rounded-lg px-3 py-2 bg-white">
+      <option value="" {% if not status %}selected{% endif %}>All</option>
+      {% for s in ['pending','confirmed','cancelled','completed'] %}
+        <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Open</button>
+</form>
+
+{% if not business %}
+  <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-slate-600">Select a business.</div>
+{% else %}
+  {% if not appts %}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">No appointments yet.</div>
+  {% else %}
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="px-3 py-2 text-left">When</th>
+            <th class="px-3 py-2 text-left">Customer</th>
+            <th class="px-3 py-2 text-left">Contact</th>
+            <th class="px-3 py-2 text-left">Service</th>
+            <th class="px-3 py-2 text-left">Status</th>
+            <th class="px-3 py-2 text-left">ICS</th>
+            <th class="px-3 py-2 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for a in appts %}
+            <tr>
+              <td class="px-3 py-2">{{ a['start_at'] or '—' }}</td>
+              <td class="px-3 py-2">{{ a['customer_name'] or '—' }}</td>
+              <td class="px-3 py-2">
+                <div>{{ a['phone'] or '' }}</div>
+                <div class="text-xs text-slate-500">{{ a['customer_email'] or '' }}</div>
+              </td>
+              <td class="px-3 py-2">{{ a['service'] or '—' }}</td>
+              <td class="px-3 py-2">{{ a['status'] }}</td>
+              <td class="px-3 py-2">
+                {% if a['start_at'] %}
+                  <a class="px-2 py-1 rounded-lg border hover:bg-slate-50" href="{{ url_for('appointments.appointments_ics', appt_id=a['id']) }}">Download</a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="px-3 py-2">
+                <form method="post" action="{{ url_for('appointments.appointments_set_status', appt_id=a['id']) }}">
+                  <input type="hidden" name="return_to" value="{{ url_for('appointments.appointments_index', business_id=business['id'], status=status) }}">
+                  <select class="border rounded-lg px-2 py-1 text-xs" name="status" onchange="this.form.submit()">
+                    {% for s in ['pending','confirmed','cancelled','completed'] %}
+                      <option value="{{ s }}" {% if a['status']==s %}selected{% endif %}>{{ s|capitalize }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

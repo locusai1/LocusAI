@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}AxisAI — Integrations{% endblock %}
+{% block content %}
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold">Integrations</h1>
+    <a class="text-sm text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back</a>
+  </div>
+
+  <form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('integrations.integrations_index') }}">
+    <div>
+      <label class="block text-xs text-slate-600 mb-1">Business</label>
+      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white" onchange="this.form.submit()">
+        <option value="">— Select —</option>
+        {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business_id==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  {% if business_id %}
+
+  <!-- Chat Widget Section -->
+  <div class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Chat Widget</h2>
+    <p class="text-sm text-slate-600 mb-4">Embed the AI chat on your website to let customers chat with your AI receptionist 24/7.</p>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Widget Settings -->
+      <form method="post" action="{{ url_for('integrations.widget_settings') }}" class="bg-white p-6 rounded-xl border">
+        <input type="hidden" name="business_id" value="{{ business_id }}">
+        <h3 class="font-medium mb-4">Widget Settings</h3>
+
+        <div class="space-y-4">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="enabled" {% if widget.enabled %}checked{% endif %} class="rounded">
+            <span class="text-sm">Enable widget</span>
+          </label>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Position</label>
+            <select name="position" class="border rounded-lg px-3 py-2 bg-white w-full">
+              <option value="bottom-right" {% if widget.position == 'bottom-right' %}selected{% endif %}>Bottom Right</option>
+              <option value="bottom-left" {% if widget.position == 'bottom-left' %}selected{% endif %}>Bottom Left</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Primary Color</label>
+            <div class="flex gap-2">
+              <input type="color" name="primary_color" value="{{ widget.primary_color or business.accent_color or '#2f6fec' }}" class="w-12 h-10 rounded border cursor-pointer">
+              <input type="text" value="{{ widget.primary_color or business.accent_color or '#2f6fec' }}" class="flex-1 border rounded-lg px-3 py-2" readonly>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Welcome Message</label>
+            <textarea name="welcome_message" class="w-full border rounded-lg px-3 py-2" rows="2" placeholder="Hi! How can I help you today?">{{ widget.welcome_message or 'Hi! How can I help you today?' }}</textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Input Placeholder</label>
+            <input type="text" name="placeholder_text" value="{{ widget.placeholder_text or 'Type a message...' }}" class="w-full border rounded-lg px-3 py-2">
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Allowed Domains (optional)</label>
+            <input type="text" name="allowed_domains" value="{{ widget.allowed_domains or '' }}" class="w-full border rounded-lg px-3 py-2" placeholder="example.com, app.example.com">
+            <p class="text-xs text-slate-500 mt-1">Comma-separated. Leave empty to allow all domains.</p>
+          </div>
+
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="show_branding" {% if widget.show_branding %}checked{% endif %} class="rounded">
+            <span class="text-sm">Show "Powered by AxisAI" branding</span>
+          </label>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Auto-open delay (seconds)</label>
+            <input type="number" name="auto_open_delay" value="{{ widget.auto_open_delay or '' }}" class="w-full border rounded-lg px-3 py-2" placeholder="Leave empty to disable" min="1" max="300">
+          </div>
+        </div>
+
+        <button class="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Settings</button>
+      </form>
+
+      <!-- Embed Code -->
+      <div class="bg-white p-6 rounded-xl border">
+        <h3 class="font-medium mb-4">Embed Code</h3>
+        <p class="text-sm text-slate-600 mb-4">Copy this code and paste it before the closing <code class="bg-slate-100 px-1 rounded">&lt;/body&gt;</code> tag of your website.</p>
+
+        <div class="relative">
+          <pre class="bg-slate-900 text-slate-100 p-4 rounded-lg text-sm overflow-x-auto"><code id="embed-code">&lt;script src="{{ request.host_url }}static/widget.js"
+        data-tenant="{{ tenant_key }}"&gt;&lt;/script&gt;</code></pre>
+          <button type="button" onclick="copyEmbedCode()" class="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">Copy</button>
+        </div>
+
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p class="text-sm text-blue-800"><strong>Tenant Key:</strong> <code class="bg-blue-100 px-1 rounded">{{ tenant_key }}</code></p>
+          <p class="text-xs text-blue-600 mt-1">Keep this key private. It identifies your business for widget API requests.</p>
+        </div>
+
+        <div class="mt-4">
+          <h4 class="text-sm font-medium mb-2">Alternative: iFrame Embed</h4>
+          <pre class="bg-slate-100 p-3 rounded-lg text-xs overflow-x-auto"><code>&lt;iframe src="{{ request.host_url }}api/widget/frame?tenant_key={{ tenant_key }}"
+        width="400" height="600"
+        style="border:none; position:fixed; bottom:20px; right:20px; z-index:9999;"&gt;
+&lt;/iframe&gt;</code></pre>
+        </div>
+
+        <div class="mt-4">
+          <h4 class="text-sm font-medium mb-2">Test Your Widget</h4>
+          <button type="button" onclick="testWidget()" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm">Preview Widget</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-8 border-slate-200">
+
+  <!-- Scheduling Provider Section -->
+  <div>
+    <h2 class="text-lg font-semibold mb-3">Scheduling Provider</h2>
+    <p class="text-sm text-slate-600 mb-4">Connect to external scheduling systems (Google Calendar, Calendly, etc.) or use the built-in local scheduler.</p>
+
+    <form method="post" action="{{ url_for('integrations.integrations_index') }}" class="grid gap-3 max-w-2xl bg-white p-6 rounded-xl border">
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      <div>
+        <label class="block text-xs text-slate-600 mb-1">Provider</label>
+        <select name="provider_key" class="border rounded-lg px-3 py-2 bg-white">
+          {% for p in providers %}
+            <option value="{{ p.key }}" {% if current==p.key %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-600 mb-1">Config (JSON)</label>
+        <textarea class="w-full border rounded-lg px-3 py-2 min-h-[160px]" name="config_json" placeholder='{"account_id":"..."}'>{{ cfg|tojson(indent=2) }}</textarea>
+        <p class="text-xs text-slate-500 mt-1">Leave default for Local/Dummy. Real providers will store OAuth tokens and account IDs here.</p>
+      </div>
+      <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Provider</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <script>
+    function copyEmbedCode() {
+      const code = document.getElementById('embed-code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Copied to clipboard!');
+      });
+    }
+
+    function testWidget() {
+      // Dynamically load the widget for testing
+      if (window.AxisAIWidget) {
+        window.AxisAIWidget.open();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = '{{ request.host_url }}static/widget.js';
+      script.setAttribute('data-tenant', '{{ tenant_key }}');
+      script.setAttribute('data-api-base', '{{ request.host_url.rstrip("/") }}');
+      document.body.appendChild(script);
+
+      script.onload = () => {
+        setTimeout(() => {
+          if (window.AxisAIWidget) {
+            window.AxisAIWidget.open();
+          }
+        }, 500);
+      };
+    }
+  </script>
+{% endblock %}
