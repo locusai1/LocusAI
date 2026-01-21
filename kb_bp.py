@@ -1,9 +1,23 @@
 # kb_bp.py — Knowledge Base management (RBAC-ready)
+import re
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from core.db import get_conn, list_businesses
 from core.authz import user_can_access_business
 
 bp = Blueprint("kb", __name__)
+
+
+def _sanitize_fts5_query(q: str) -> str:
+    """
+    Sanitize input for FTS5 MATCH to prevent query injection.
+    Escapes special FTS5 operators by wrapping the query in double quotes.
+    """
+    if not q:
+        return ""
+    # Escape double quotes by doubling them
+    escaped = q.replace('"', '""')
+    # Wrap in double quotes to treat as a literal phrase
+    return f'"{escaped}"'
 
 def _logged_in():
     return session.get("user") is not None
@@ -31,13 +45,15 @@ def kb_index():
         with get_conn() as con:
             if q:
                 try:
+                    # Sanitize query to prevent FTS5 injection
+                    safe_q = _sanitize_fts5_query(q)
                     entries = con.execute("""
                       SELECT e.id, e.question, e.answer, e.tags, e.active, e.updated_at
                       FROM kb_entries_fts f
                       JOIN kb_entries e ON e.id=f.rowid
                       WHERE e.business_id=? AND e.active IN (0,1) AND f MATCH ?
                       ORDER BY e.updated_at DESC LIMIT 200;
-                    """,(business_id, q)).fetchall()
+                    """,(business_id, safe_q)).fetchall()
                 except Exception:
                     entries = con.execute("""
                       SELECT id, question, answer, tags, active, updated_at

@@ -1,9 +1,10 @@
 # auth_bp.py — Authentication with security best practices
-# Includes session fixation protection and proper error handling
+# Includes session fixation protection, account lockout, and proper error handling
 
 import logging
 import secrets
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Tuple
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -15,6 +16,141 @@ logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('security')
 
 bp = Blueprint("auth", __name__)
+
+
+def _mask_email(email: str) -> str:
+    """Mask email for logging to protect PII.
+
+    Example: 'john.doe@example.com' -> 'j***@e***.com'
+    """
+    if not email or '@' not in email:
+        return '***'
+
+    local, domain = email.rsplit('@', 1)
+    parts = domain.rsplit('.', 1)
+
+    masked_local = local[0] + '***' if local else '***'
+    if len(parts) == 2:
+        masked_domain = parts[0][0] + '***.' + parts[1] if parts[0] else '***.' + parts[1]
+    else:
+        masked_domain = '***'
+
+    return f"{masked_local}@{masked_domain}"
+
+# ============================================================================
+# Account Lockout Configuration
+# ============================================================================
+
+# In-memory store for failed attempts (use Redis in production for multi-instance)
+# Structure: {"email:ip": {"count": int, "first_attempt": datetime, "locked_until": datetime}}
+_failed_attempts: Dict[str, Dict] = {}
+
+# Lockout settings
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+ATTEMPT_WINDOW_MINUTES = 30  # Reset counter after this period of no attempts
+
+
+def _get_lockout_key(email: str, ip: str) -> str:
+    """Generate a key for tracking failed attempts."""
+    return f"{email.lower().strip()}:{ip}"
+
+
+def _cleanup_old_attempts() -> None:
+    """Remove expired lockout entries to prevent memory bloat."""
+    now = datetime.now()
+    cutoff = now - timedelta(minutes=ATTEMPT_WINDOW_MINUTES * 2)
+    keys_to_remove = []
+
+    for key, data in _failed_attempts.items():
+        # Remove if locked_until has passed AND first_attempt is old
+        locked_until = data.get("locked_until")
+        first_attempt = data.get("first_attempt")
+
+        if locked_until and now > locked_until:
+            if first_attempt and first_attempt < cutoff:
+                keys_to_remove.append(key)
+        elif first_attempt and first_attempt < cutoff:
+            keys_to_remove.append(key)
+
+    for key in keys_to_remove:
+        del _failed_attempts[key]
+
+
+def check_account_lockout(email: str, ip: str) -> Tuple[bool, Optional[int]]:
+    """Check if an account/IP is locked out.
+
+    Returns:
+        (is_locked, seconds_remaining) - seconds_remaining is None if not locked
+    """
+    _cleanup_old_attempts()
+
+    key = _get_lockout_key(email, ip)
+    data = _failed_attempts.get(key)
+
+    if not data:
+        return False, None
+
+    locked_until = data.get("locked_until")
+    if locked_until and datetime.now() < locked_until:
+        remaining = int((locked_until - datetime.now()).total_seconds())
+        return True, remaining
+
+    return False, None
+
+
+def record_failed_attempt(email: str, ip: str) -> Tuple[int, bool]:
+    """Record a failed login attempt.
+
+    Returns:
+        (attempt_count, is_now_locked)
+    """
+    _cleanup_old_attempts()
+
+    key = _get_lockout_key(email, ip)
+    now = datetime.now()
+
+    data = _failed_attempts.get(key)
+
+    if not data:
+        # First failed attempt
+        _failed_attempts[key] = {
+            "count": 1,
+            "first_attempt": now,
+            "locked_until": None
+        }
+        return 1, False
+
+    # Check if we should reset the counter (window expired)
+    first_attempt = data.get("first_attempt")
+    if first_attempt and now - first_attempt > timedelta(minutes=ATTEMPT_WINDOW_MINUTES):
+        # Reset counter
+        _failed_attempts[key] = {
+            "count": 1,
+            "first_attempt": now,
+            "locked_until": None
+        }
+        return 1, False
+
+    # Increment counter
+    data["count"] = data.get("count", 0) + 1
+
+    # Check if we should lock
+    if data["count"] >= MAX_FAILED_ATTEMPTS:
+        data["locked_until"] = now + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+        security_logger.warning(
+            f"Account locked due to {data['count']} failed attempts: {email} from {ip}"
+        )
+        return data["count"], True
+
+    return data["count"], False
+
+
+def clear_failed_attempts(email: str, ip: str) -> None:
+    """Clear failed attempts after successful login."""
+    key = _get_lockout_key(email, ip)
+    if key in _failed_attempts:
+        del _failed_attempts[key]
 
 
 def _regenerate_session() -> None:
@@ -34,7 +170,7 @@ def _regenerate_session() -> None:
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    """Handle user login with security protections."""
+    """Handle user login with security protections including account lockout."""
     if request.method == "GET":
         # If already logged in, redirect to dashboard
         if session.get("user"):
@@ -46,11 +182,26 @@ def login():
         request.form.get("email") or request.form.get("username") or ""
     ).strip().lower()
     password = request.form.get("password") or ""
+    client_ip = request.remote_addr or "unknown"
 
     # Basic validation
     if not email_or_username or not password:
         flash("Please enter your email and password.", "err")
         return render_template("login.html"), 400
+
+    # Check for account lockout BEFORE attempting authentication
+    is_locked, remaining_seconds = check_account_lockout(email_or_username, client_ip)
+    if is_locked:
+        remaining_minutes = (remaining_seconds or 0) // 60 + 1
+        security_logger.warning(
+            f"Login blocked (account locked) for '{email_or_username}' from {client_ip}"
+        )
+        flash(
+            f"Account temporarily locked due to too many failed attempts. "
+            f"Please try again in {remaining_minutes} minute(s).",
+            "err"
+        )
+        return render_template("login.html"), 429
 
     # Look up user
     with get_conn() as con:
@@ -65,12 +216,32 @@ def login():
 
     # Verify credentials
     if not row or not check_password_hash(row["password_hash"], password):
+        # Record the failed attempt
+        attempt_count, is_now_locked = record_failed_attempt(email_or_username, client_ip)
+
         # Log failed attempt (without revealing which part failed)
         security_logger.warning(
-            f"Failed login attempt for '{email_or_username}' from {request.remote_addr}"
+            f"Failed login attempt ({attempt_count}/{MAX_FAILED_ATTEMPTS}) "
+            f"for '{email_or_username}' from {client_ip}"
         )
-        flash("Invalid credentials.", "err")
+
+        if is_now_locked:
+            flash(
+                f"Account temporarily locked due to too many failed attempts. "
+                f"Please try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                "err"
+            )
+            return render_template("login.html"), 429
+
+        remaining = MAX_FAILED_ATTEMPTS - attempt_count
+        if remaining <= 2:
+            flash(f"Invalid credentials. {remaining} attempt(s) remaining before lockout.", "err")
+        else:
+            flash("Invalid credentials.", "err")
         return render_template("login.html"), 401
+
+    # Successful login - clear any failed attempts
+    clear_failed_attempts(email_or_username, client_ip)
 
     # Regenerate session to prevent session fixation
     _regenerate_session()
@@ -84,7 +255,6 @@ def login():
     }
 
     # Set login timestamp for session timeout checks
-    from datetime import datetime
     session["login_time"] = datetime.now().isoformat()
 
     # For non-admins, select their first business automatically
@@ -98,8 +268,8 @@ def login():
     else:
         session.setdefault("active_business_id", None)
 
-    # Log successful login
-    logger.info(f"User {row['id']} ({row['email']}) logged in from {request.remote_addr}")
+    # Log successful login (email masked for privacy)
+    logger.info(f"User {row['id']} ({_mask_email(row['email'])}) logged in from {client_ip}")
 
     flash(f"Welcome back, {row['name']}.", "ok")
     return redirect(url_for("dashboard"))
@@ -110,7 +280,7 @@ def logout():
     """Handle user logout."""
     user = session.get("user")
     if user:
-        logger.info(f"User {user.get('id')} ({user.get('email')}) logged out")
+        logger.info(f"User {user.get('id')} ({_mask_email(user.get('email', ''))}) logged out")
 
     session.clear()
     flash("You have been logged out.", "ok")
@@ -156,10 +326,10 @@ def create_user(email: str, name: str, password: str, role: str = "owner") -> Op
                 (email, name, password_hash, role)
             )
             user_id = cur.lastrowid
-            logger.info(f"Created user {user_id} ({email}) with role {role}")
+            logger.info(f"Created user {user_id} ({_mask_email(email)}) with role {role}")
             return user_id
     except Exception as e:
-        logger.error(f"Failed to create user {email}: {e}")
+        logger.error(f"Failed to create user {_mask_email(email)}: {e}")
         return None
 
 

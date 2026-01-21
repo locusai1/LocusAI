@@ -164,51 +164,108 @@ def _get_overview_stats(business_id: int, start_date: str, end_date: str) -> Dic
 
 def _get_trend_data(business_id: int, start_date: str, end_date: str, granularity: str = "day") -> Dict[str, List]:
     """Get time-series data for trend charts."""
-    # Determine date grouping
-    if granularity == "hour":
-        date_format = "%Y-%m-%d %H:00"
-        sqlite_format = "%Y-%m-%d %H:00"
-    elif granularity == "week":
-        date_format = "%Y-W%W"
-        sqlite_format = "%Y-W%W"
-    else:  # day
-        date_format = "%Y-%m-%d"
-        sqlite_format = "%Y-%m-%d"
+    # SECURITY: Use pre-defined queries to avoid SQL injection
+    # Each granularity has its own safe query - no string interpolation
 
     with get_conn() as con:
-        # Conversations over time
-        conversations = con.execute(f"""
-            SELECT strftime('{sqlite_format}', created_at) as period,
-                   COUNT(*) as count
-            FROM sessions
-            WHERE business_id = ?
-              AND date(created_at) BETWEEN ? AND ?
-            GROUP BY period
-            ORDER BY period
-        """, (business_id, start_date, end_date)).fetchall()
+        if granularity == "hour":
+            # Hourly grouping
+            conversations = con.execute("""
+                SELECT strftime('%Y-%m-%d %H:00', created_at) as period,
+                       COUNT(*) as count
+                FROM sessions
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d %H:00', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
 
-        # Appointments over time
-        appointments = con.execute(f"""
-            SELECT strftime('{sqlite_format}', created_at) as period,
-                   COUNT(*) as count
-            FROM appointments
-            WHERE business_id = ?
-              AND date(created_at) BETWEEN ? AND ?
-            GROUP BY period
-            ORDER BY period
-        """, (business_id, start_date, end_date)).fetchall()
+            appointments = con.execute("""
+                SELECT strftime('%Y-%m-%d %H:00', created_at) as period,
+                       COUNT(*) as count
+                FROM appointments
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d %H:00', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
 
-        # Messages over time
-        messages = con.execute(f"""
-            SELECT strftime('{sqlite_format}', m.timestamp) as period,
-                   COUNT(*) as count
-            FROM messages m
-            JOIN sessions s ON m.session_id = s.id
-            WHERE s.business_id = ?
-              AND date(m.timestamp) BETWEEN ? AND ?
-            GROUP BY period
-            ORDER BY period
-        """, (business_id, start_date, end_date)).fetchall()
+            messages = con.execute("""
+                SELECT strftime('%Y-%m-%d %H:00', m.timestamp) as period,
+                       COUNT(*) as count
+                FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                WHERE s.business_id = ?
+                  AND date(m.timestamp) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d %H:00', m.timestamp)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+        elif granularity == "week":
+            # Weekly grouping
+            conversations = con.execute("""
+                SELECT strftime('%Y-W%W', created_at) as period,
+                       COUNT(*) as count
+                FROM sessions
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-W%W', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+            appointments = con.execute("""
+                SELECT strftime('%Y-W%W', created_at) as period,
+                       COUNT(*) as count
+                FROM appointments
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-W%W', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+            messages = con.execute("""
+                SELECT strftime('%Y-W%W', m.timestamp) as period,
+                       COUNT(*) as count
+                FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                WHERE s.business_id = ?
+                  AND date(m.timestamp) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-W%W', m.timestamp)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+        else:
+            # Daily grouping (default)
+            conversations = con.execute("""
+                SELECT strftime('%Y-%m-%d', created_at) as period,
+                       COUNT(*) as count
+                FROM sessions
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+            appointments = con.execute("""
+                SELECT strftime('%Y-%m-%d', created_at) as period,
+                       COUNT(*) as count
+                FROM appointments
+                WHERE business_id = ?
+                  AND date(created_at) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d', created_at)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
+
+            messages = con.execute("""
+                SELECT strftime('%Y-%m-%d', m.timestamp) as period,
+                       COUNT(*) as count
+                FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                WHERE s.business_id = ?
+                  AND date(m.timestamp) BETWEEN ? AND ?
+                GROUP BY strftime('%Y-%m-%d', m.timestamp)
+                ORDER BY period
+            """, (business_id, start_date, end_date)).fetchall()
 
         return {
             "labels": [r["period"] for r in conversations] or [r["period"] for r in appointments],
@@ -480,7 +537,7 @@ def analytics_index():
     if redir:
         return redir
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         flash("Please select a business first.", "err")
         return redirect(url_for("dashboard"))
@@ -553,7 +610,7 @@ def api_overview():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -570,7 +627,7 @@ def api_trends():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -588,7 +645,7 @@ def api_export():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 

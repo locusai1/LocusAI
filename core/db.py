@@ -601,11 +601,13 @@ def check_slot_available(
     business_id: int,
     start_at: str,
     duration_min: int,
-    exclude_appointment_id: Optional[int] = None
+    exclude_appointment_id: Optional[int] = None,
+    con: Optional[sqlite3.Connection] = None
 ) -> bool:
     """Check if a time slot is available (no conflicting appointments).
 
     Uses database locking to prevent race conditions.
+    Can be called with or without an existing connection for atomic operations.
     """
     from datetime import datetime, timedelta
 
@@ -616,7 +618,7 @@ def check_slot_available(
         logger.warning(f"Invalid datetime format: {start_at}")
         return False
 
-    with get_conn() as con:
+    def _check(conn: sqlite3.Connection) -> bool:
         # Check for overlapping appointments
         query = """
             SELECT COUNT(*) as cnt FROM appointments
@@ -634,8 +636,75 @@ def check_slot_available(
             query += " AND id != ?"
             params.append(exclude_appointment_id)
 
-        row = con.execute(query, params).fetchone()
+        row = conn.execute(query, params).fetchone()
         return row["cnt"] == 0
+
+    if con is not None:
+        return _check(con)
+    else:
+        with get_conn() as new_con:
+            return _check(new_con)
+
+
+def create_appointment_atomic(
+    business_id: int,
+    start_at: str,
+    duration_min: int,
+    customer_name: str,
+    phone: str,
+    service: str,
+    status: str = "pending",
+    session_id: Optional[int] = None,
+    external_provider_key: Optional[str] = None,
+    external_id: Optional[str] = None,
+    source: Optional[str] = None,
+    notes: Optional[str] = None,
+    customer_email: Optional[str] = None,
+    customer_id: Optional[int] = None
+) -> tuple:
+    """Atomically check slot availability and create appointment.
+
+    Uses BEGIN IMMEDIATE to lock the database and prevent race conditions
+    between checking availability and creating the appointment.
+
+    Returns:
+        (appointment_id, None) on success
+        (None, error_message) on failure
+    """
+    con = sqlite3.connect(DB_PATH, timeout=30.0, isolation_level="IMMEDIATE")
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys = ON;")
+
+    try:
+        # Check availability within the locked transaction
+        if not check_slot_available(business_id, start_at, duration_min, con=con):
+            con.rollback()
+            con.close()
+            return (None, "Slot is no longer available")
+
+        # Create the appointment
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO appointments(
+                business_id, customer_name, phone, customer_email, service,
+                start_at, status, session_id, external_provider_key,
+                external_id, source, notes, customer_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            business_id, customer_name, phone, customer_email, service,
+            start_at, status, session_id, external_provider_key,
+            external_id, source, notes, customer_id
+        ))
+        appt_id = cur.lastrowid
+        con.commit()
+        con.close()
+        return (appt_id, None)
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        logger.error(f"Atomic appointment creation failed: {e}")
+        return (None, str(e))
 
 
 # ============================================================================

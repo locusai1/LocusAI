@@ -87,9 +87,14 @@ def escalations_index():
     if redir:
         return redir
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         flash("Please select a business first.", "err")
+        return redirect(url_for("dashboard"))
+
+    # Explicit authorization check (defense in depth)
+    if not _owner_can_access(business_id):
+        flash("Access denied.", "err")
         return redirect(url_for("dashboard"))
 
     business = get_business_by_id(business_id)
@@ -134,9 +139,14 @@ def escalation_detail(escalation_id: int):
     if redir:
         return redir
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         flash("Please select a business first.", "err")
+        return redirect(url_for("dashboard"))
+
+    # Explicit authorization check (defense in depth)
+    if not _owner_can_access(business_id):
+        flash("Access denied.", "err")
         return redirect(url_for("dashboard"))
 
     escalation = get_escalation(escalation_id)
@@ -164,7 +174,7 @@ def acknowledge_escalation(escalation_id: int):
     if redir:
         return redir
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
 
     escalation = get_escalation(escalation_id)
     if not escalation or escalation.get("business_id") != business_id:
@@ -186,7 +196,7 @@ def resolve_escalation(escalation_id: int):
     if redir:
         return redir
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     user_email = g.user.get("email", "staff") if hasattr(g, "user") and g.user else "staff"
 
     escalation = get_escalation(escalation_id)
@@ -219,9 +229,13 @@ def api_pending_escalations():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
+
+    # Explicit authorization check (defense in depth)
+    if not _owner_can_access(business_id):
+        return jsonify({"error": "Access denied"}), 403
 
     escalations = get_pending_escalations(business_id, limit=20)
     return jsonify({
@@ -236,7 +250,11 @@ def api_update_status(escalation_id: int):
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = g.active_business_id
+    business_id = getattr(g, 'active_business_id', None)
+
+    # Explicit authorization check (defense in depth)
+    if not _owner_can_access(business_id):
+        return jsonify({"error": "Access denied"}), 403
 
     escalation = get_escalation(escalation_id)
     if not escalation or escalation.get("business_id") != business_id:

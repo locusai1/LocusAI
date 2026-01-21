@@ -1,5 +1,11 @@
 import os
 import secrets
+from pathlib import Path
+
+# Load .env file from project root
+from dotenv import load_dotenv
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_path, override=True)
 
 # ===== Flask / App =====
 # Generate a secure random key if not provided via environment variable

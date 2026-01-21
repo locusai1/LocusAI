@@ -200,7 +200,7 @@
             <span class="font-medium">{{ "{:,}".format(funnel.engaged) }}</span>
           </div>
           <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
-            <div class="h-full bg-blue-400 rounded-full" style="width: {{ (funnel.engaged / max(funnel.sessions, 1) * 100)|round }}%"></div>
+            <div class="h-full bg-blue-400 rounded-full" style="width: {{ (funnel.engaged / [funnel.sessions, 1]|max * 100)|round }}%"></div>
           </div>
         </div>
         <div>
@@ -209,7 +209,7 @@
             <span class="font-medium">{{ "{:,}".format(funnel.bookings) }}</span>
           </div>
           <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
-            <div class="h-full bg-green-500 rounded-full" style="width: {{ (funnel.bookings / max(funnel.sessions, 1) * 100)|round }}%"></div>
+            <div class="h-full bg-green-500 rounded-full" style="width: {{ (funnel.bookings / [funnel.sessions, 1]|max * 100)|round }}%"></div>
           </div>
         </div>
         <div>
@@ -218,13 +218,13 @@
             <span class="font-medium">{{ "{:,}".format(funnel.confirmed) }}</span>
           </div>
           <div class="h-3 rounded-full bg-gray-200 overflow-hidden">
-            <div class="h-full bg-green-600 rounded-full" style="width: {{ (funnel.confirmed / max(funnel.sessions, 1) * 100)|round }}%"></div>
+            <div class="h-full bg-green-600 rounded-full" style="width: {{ (funnel.confirmed / [funnel.sessions, 1]|max * 100)|round }}%"></div>
           </div>
         </div>
       </div>
       <div class="mt-4 pt-4 border-t text-center" style="border-color: var(--card-border)">
         <div class="text-3xl font-bold text-green-600">
-          {{ ((funnel.bookings / max(funnel.sessions, 1)) * 100)|round(1) }}%
+          {{ ((funnel.bookings / [funnel.sessions, 1]|max) * 100)|round(1) }}%
         </div>
         <div class="text-sm subtle">Booking Conversion</div>
       </div>
@@ -274,7 +274,7 @@
             </div>
             <div class="h-2 rounded-full bg-gray-200 overflow-hidden">
               <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"
-                   style="width: {{ (service.count / max(top_services[0].count, 1) * 100)|round }}%"></div>
+                   style="width: {{ (service.count / [top_services[0].count, 1]|max * 100)|round }}%"></div>
             </div>
           </div>
         </div>

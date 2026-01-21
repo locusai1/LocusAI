@@ -10,6 +10,13 @@ from core.db import init_db, create_session, log_message, create_appointment
 from core.knowledge import load_business_from_db
 from core.ai import process_message
 
+# Import reminders module (optional)
+try:
+    from core.reminders import schedule_reminders_for_appointment
+    REMINDERS_AVAILABLE = True
+except ImportError:
+    REMINDERS_AVAILABLE = False
+
 # Configure logging for CLI
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +103,20 @@ def run():
                     booking_msg = f"(Booking request captured as #{appt_id}. We'll confirm shortly.)"
                     reply = f"{reply}\n{booking_msg}" if reply else booking_msg
                     logger.info(f"Created appointment {appt_id} from AI booking")
+
+                    # Schedule reminders
+                    if REMINDERS_AVAILABLE:
+                        try:
+                            reminder_ids = schedule_reminders_for_appointment(
+                                appointment_id=appt_id,
+                                start_at=payload.get("datetime", ""),
+                                customer_email=payload.get("email"),
+                                customer_phone=payload.get("phone")
+                            )
+                            if reminder_ids:
+                                logger.info(f"Scheduled {len(reminder_ids)} reminders for appointment {appt_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to schedule reminders: {e}")
                 else:
                     reply += "\n[Note: Booking could not be saved. Please try again.]"
 

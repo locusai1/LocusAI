@@ -1,7 +1,9 @@
-# core/ai.py — Enhanced AI with sentiment awareness and human handoff
-# Production-grade AI receptionist with escalation capabilities
+# core/ai.py — Enhanced AI with sentiment awareness, human handoff, and resilience
+# Production-grade AI receptionist with escalation capabilities and circuit breaker
 
 import logging
+import time
+import os
 from typing import Optional, Dict, Any, List, Tuple
 
 from openai import OpenAI
@@ -25,10 +27,39 @@ try:
 except Exception:
     ESCALATION_AVAILABLE = False
 
+try:
+    from core.circuit_breaker import get_ai_circuit_breaker, CircuitOpenError
+    CIRCUIT_BREAKER_AVAILABLE = True
+except Exception:
+    CIRCUIT_BREAKER_AVAILABLE = False
+
+try:
+    from core.observability import get_metrics, Metrics
+    OBSERVABILITY_AVAILABLE = True
+except Exception:
+    OBSERVABILITY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Model Configuration
+# ============================================================================
+
+# Model fallback chain (primary -> secondary -> emergency)
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+FALLBACK_MODELS = [
+    ("openai", OPENAI_MODEL),
+    ("openai", "gpt-3.5-turbo"),
+]
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY or None)
+
+# Fallback response when all AI models fail
+FALLBACK_RESPONSE = (
+    "I'm having a little trouble right now. "
+    "Could I take your name and number so we can call you back shortly?"
+)
 
 def _row_to_dict(row):
     """Accepts dict or sqlite3.Row and returns a plain dict."""
@@ -133,6 +164,108 @@ def _kb_snippets(business_id: int, query: str, limit: int = 3):
         return snips
     except Exception:
         return []
+
+
+def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
+    """Call AI model with circuit breaker and fallback chain.
+
+    Implements:
+    1. Circuit breaker to prevent cascading failures
+    2. Model fallback (primary -> secondary models)
+    3. Retry with exponential backoff
+    4. Metrics collection
+
+    Returns:
+        AI response string, or empty string on complete failure
+    """
+    circuit_breaker = get_ai_circuit_breaker() if CIRCUIT_BREAKER_AVAILABLE else None
+    metrics = get_metrics() if OBSERVABILITY_AVAILABLE else None
+
+    for provider, model in FALLBACK_MODELS:
+        service_key = f"{provider}:{model}"
+
+        # Check circuit breaker
+        if circuit_breaker and circuit_breaker.is_open(service_key):
+            logger.warning(f"Circuit open for {service_key}, trying next model")
+            continue
+
+        # Try with retries
+        for attempt in range(max_retries + 1):
+            start_time = time.time()
+
+            try:
+                # Record attempt
+                if metrics:
+                    metrics.inc_counter(Metrics.AI_REQUESTS_TOTAL, {"model": model})
+
+                # Make API call
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=300,
+                    temperature=0.6,
+                    timeout=30,  # 30 second timeout
+                )
+
+                reply = resp.choices[0].message.content or ""
+                duration = time.time() - start_time
+
+                # Record success metrics
+                if metrics:
+                    metrics.observe_histogram(
+                        Metrics.AI_REQUEST_DURATION,
+                        duration,
+                        {"model": model}
+                    )
+                    if hasattr(resp, 'usage') and resp.usage:
+                        metrics.inc_counter(
+                            Metrics.AI_TOKENS_USED,
+                            {"model": model},
+                            resp.usage.total_tokens
+                        )
+
+                # Record circuit breaker success
+                if circuit_breaker:
+                    circuit_breaker.record_success(service_key)
+
+                logger.debug(f"AI response from {model} in {duration:.2f}s")
+                return reply
+
+            except Exception as e:
+                duration = time.time() - start_time
+
+                # Record failure metrics
+                if metrics:
+                    metrics.inc_counter(
+                        Metrics.AI_ERRORS_TOTAL,
+                        {"model": model, "error_type": type(e).__name__}
+                    )
+                    metrics.observe_histogram(
+                        Metrics.AI_REQUEST_DURATION,
+                        duration,
+                        {"model": model, "status": "error"}
+                    )
+
+                # Record circuit breaker failure
+                if circuit_breaker:
+                    circuit_breaker.record_failure(service_key, str(e))
+
+                logger.warning(
+                    f"AI call to {model} failed (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
+
+                # Retry with backoff
+                if attempt < max_retries:
+                    backoff = 2 ** attempt  # 1s, 2s, 4s...
+                    time.sleep(min(backoff, 10))
+                    continue
+
+                # Move to next model in fallback chain
+                break
+
+    # All models failed
+    logger.error("All AI models failed, returning fallback response")
+    return ""
 
 def process_message(
     user_input: str,
@@ -265,22 +398,11 @@ def process_message(
     messages.append({"role": "user", "content": user_text})
 
     # =========================================================================
-    # Generate AI Response
+    # Generate AI Response (with circuit breaker and fallback)
     # =========================================================================
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=300,
-            temperature=0.6,
-        )
-        reply = resp.choices[0].message.content or ""
-    except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
-        reply = (
-            "Sorry, I'm having a little trouble right now. "
-            "Could I take your name and number and we'll call you back shortly?"
-        )
+    reply = _call_ai_with_resilience(messages)
+    if not reply:
+        reply = FALLBACK_RESPONSE
 
     # =========================================================================
     # Update State

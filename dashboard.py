@@ -46,6 +46,17 @@ app.config.update(
 )
 
 # ============================================================================
+# Request Size Limits (Security)
+# ============================================================================
+
+# Maximum request body size: 16MB (adjust as needed)
+# This prevents denial-of-service attacks via large uploads
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
+# Note: For file upload endpoints that need larger limits,
+# use @app.route decorators with specific limits or validate in the route
+
+# ============================================================================
 # Provider Registration
 # ============================================================================
 
@@ -69,6 +80,13 @@ from customers_bp import bp as customers_bp
 from escalations_bp import escalations_bp
 from analytics_bp import analytics_bp
 
+# SMS Blueprint (optional, requires Twilio or alternative provider)
+try:
+    from sms_bp import bp as sms_bp
+    SMS_AVAILABLE = True
+except ImportError:
+    SMS_AVAILABLE = False
+
 app.register_blueprint(auth_bp)
 app.register_blueprint(appointments_bp)
 app.register_blueprint(chat_bp)
@@ -81,6 +99,10 @@ app.register_blueprint(widget_bp)
 app.register_blueprint(customers_bp)
 app.register_blueprint(escalations_bp)
 app.register_blueprint(analytics_bp)
+
+# Register SMS blueprint if available
+if SMS_AVAILABLE:
+    app.register_blueprint(sms_bp)
 
 # ============================================================================
 # Logging Configuration
@@ -177,6 +199,9 @@ def _req_start():
                 g.allowed_business_ids[0] if g.allowed_business_ids else None
             )
 
+    # Set g.active_business_id for use in blueprints
+    g.active_business_id = session.get("active_business_id")
+
 
 def _extract_business_id() -> int:
     """Extract business_id from request context."""
@@ -265,6 +290,27 @@ def bad_request(e):
     """Handle 400 Bad Request errors."""
     app.logger.warning(f"Bad request: {request.path} - {e}")
     return render_template("error_400.html", error=str(e)), 400
+
+
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    """Handle 413 Request Entity Too Large errors."""
+    max_size_mb = app.config.get('MAX_CONTENT_LENGTH', 0) // (1024 * 1024)
+    app.logger.warning(f"Request too large: {request.path}")
+    return render_template(
+        "error_400.html",
+        error=f"File too large. Maximum upload size is {max_size_mb}MB."
+    ), 413
+
+
+@app.errorhandler(429)
+def too_many_requests(e):
+    """Handle 429 Too Many Requests errors (rate limiting)."""
+    app.logger.warning(f"Rate limit exceeded: {request.path} from {request.remote_addr}")
+    return render_template(
+        "error_400.html",
+        error="Too many requests. Please wait a moment and try again."
+    ), 429
 
 
 @app.errorhandler(403)
@@ -536,10 +582,70 @@ def edit_business(business_id: int):
 
 @app.route("/health")
 def health():
-    """Health check endpoint for load balancers."""
+    """Basic health check endpoint for load balancers."""
     return Response(
         json.dumps({"status": "ok", "timestamp": datetime.now().isoformat()}),
         mimetype="application/json"
+    )
+
+
+@app.route("/health/live")
+def health_live():
+    """Liveness probe - simple check that the process is alive."""
+    return Response(
+        json.dumps({"status": "alive", "timestamp": datetime.now().isoformat()}),
+        mimetype="application/json"
+    )
+
+
+@app.route("/health/ready")
+def health_ready():
+    """Readiness probe - deep health check for dependencies."""
+    checks = {}
+    all_healthy = True
+
+    # Check database connectivity
+    try:
+        with get_conn() as con:
+            con.execute("SELECT 1").fetchone()
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)[:50]}"
+        all_healthy = False
+        app.logger.error(f"Health check - database failed: {e}")
+
+    # Check OpenAI API key is configured
+    from core.settings import OPENAI_API_KEY
+    if OPENAI_API_KEY and len(OPENAI_API_KEY) > 10:
+        checks["openai_configured"] = "ok"
+    else:
+        checks["openai_configured"] = "warning: not configured"
+        # Don't mark as unhealthy - some features work without AI
+
+    # Check disk space (logs directory)
+    try:
+        import shutil
+        total, used, free = shutil.disk_usage(".")
+        free_gb = free / (1024 ** 3)
+        if free_gb < 1:
+            checks["disk_space"] = f"warning: {free_gb:.1f}GB free"
+        else:
+            checks["disk_space"] = "ok"
+    except Exception:
+        checks["disk_space"] = "unknown"
+
+    status_code = 200 if all_healthy else 503
+    status = "ready" if all_healthy else "degraded"
+
+    return Response(
+        json.dumps({
+            "status": status,
+            "checks": checks,
+            "timestamp": datetime.now().isoformat(),
+            "environment": APP_ENV
+        }),
+        mimetype="application/json",
+        status=status_code
     )
 
 

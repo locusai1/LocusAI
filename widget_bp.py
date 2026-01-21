@@ -14,7 +14,12 @@ from core.db import (
     log_message, get_session_messages, transaction
 )
 from core.ai import process_message
-from core.booking import maybe_commit_booking
+from core.booking import (
+    extract_pending_booking,
+    confirm_pending_booking,
+    cancel_pending_booking,
+    maybe_commit_booking,  # Keep for backward compatibility
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,14 +78,28 @@ def _get_widget_settings(business_id: int) -> Dict[str, Any]:
 
 
 def _check_origin(settings: Dict, origin: str) -> bool:
-    """Check if the request origin is allowed."""
+    """Check if the request origin is allowed.
+
+    SECURITY: Defaults to DENY if no allowed_domains configured.
+    This prevents open CORS vulnerabilities.
+    """
     allowed = settings.get("allowed_domains")
+
+    # SECURITY: Default to DENY if not explicitly configured
     if not allowed:
-        return True  # No restrictions
+        logger.warning(f"Widget CORS: No allowed_domains configured, denying origin: {origin}")
+        return False
 
     try:
         domains = json.loads(allowed) if isinstance(allowed, str) else allowed
-        if not domains or "*" in domains:
+
+        # Empty list means deny all
+        if not domains:
+            logger.warning(f"Widget CORS: Empty allowed_domains list, denying origin: {origin}")
+            return False
+
+        # Wildcard explicitly allows all origins (must be intentional)
+        if "*" in domains:
             return True
 
         # Extract hostname from origin
@@ -88,9 +107,15 @@ def _check_origin(settings: Dict, origin: str) -> bool:
         parsed = urlparse(origin)
         hostname = parsed.netloc.split(":")[0]  # Remove port
 
-        return hostname in domains or origin in domains
-    except (json.JSONDecodeError, Exception):
-        return True
+        is_allowed = hostname in domains or origin in domains
+        if not is_allowed:
+            logger.warning(f"Widget CORS: Origin {origin} not in allowed list: {domains}")
+        return is_allowed
+
+    except (json.JSONDecodeError, Exception) as e:
+        # SECURITY: Deny on parsing errors
+        logger.error(f"Widget CORS: Error parsing allowed_domains, denying: {e}")
+        return False
 
 
 def _rate_limit_check(key: str) -> bool:
@@ -110,17 +135,46 @@ def _rate_limit_check(key: str) -> bool:
     return True
 
 
+def _validate_cors_origin(origin: str, tenant_key: str) -> str:
+    """Validate origin against widget settings. Returns origin if valid, None otherwise."""
+    if not origin:
+        return None
+
+    if not tenant_key:
+        return None
+
+    business = _get_business_by_tenant_key(tenant_key)
+    if not business:
+        return None
+
+    settings = _get_widget_settings(business["id"])
+    if _check_origin(settings, origin):
+        return origin
+
+    return None
+
+
 def cors_headers(f):
-    """Decorator to add CORS headers to responses."""
+    """Decorator to add CORS headers to responses.
+
+    Only reflects Origin if it passes validation against allowed_domains.
+    Falls back to not setting CORS headers if origin is invalid.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Get origin from request
-        origin = request.headers.get("Origin", "*")
+        # Get origin and tenant key from request
+        origin = request.headers.get("Origin", "")
+        tenant_key = request.headers.get("X-Tenant-Key") or request.args.get("tenant_key")
+
+        # Validate origin against widget settings
+        validated_origin = _validate_cors_origin(origin, tenant_key)
 
         # Handle preflight
         if request.method == "OPTIONS":
             response = jsonify({"status": "ok"})
-            response.headers["Access-Control-Allow-Origin"] = origin
+            if validated_origin:
+                response.headers["Access-Control-Allow-Origin"] = validated_origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Tenant-Key, X-Session-ID"
             response.headers["Access-Control-Max-Age"] = "86400"
@@ -129,9 +183,9 @@ def cors_headers(f):
         # Call the actual function
         result = f(*args, **kwargs)
 
-        # Add CORS headers to response
-        if hasattr(result, "headers"):
-            result.headers["Access-Control-Allow-Origin"] = origin
+        # Add CORS headers to response only if origin is validated
+        if hasattr(result, "headers") and validated_origin:
+            result.headers["Access-Control-Allow-Origin"] = validated_origin
             result.headers["Access-Control-Allow-Credentials"] = "true"
 
         return result
@@ -233,7 +287,15 @@ def create_widget_session():
 @cors_headers
 @require_tenant
 def widget_chat():
-    """Send a message and get AI response."""
+    """Send a message and get AI response.
+
+    Response includes:
+    - reply: The AI's text response
+    - pending_booking: If AI suggested a booking, contains details for user to confirm
+      - token: Unique token to confirm/cancel this booking
+      - customer_name, phone, email, service, datetime: Booking details
+      - expires_in: Seconds until this pending booking expires
+    """
     business = g.business
 
     # Get session ID
@@ -274,25 +336,141 @@ def widget_chat():
     log_message(session_id, "user", user_text)
 
     # Get AI response
+    pending_booking = None
     try:
         state = {"session_id": session_id}
         reply = process_message(user_text, business, state)
         reply = (reply or "").strip()
 
-        # Handle booking extraction
-        reply, booking_created = maybe_commit_booking(reply, business, session_id)
+        # Extract booking data WITHOUT auto-committing
+        # User must explicitly confirm before booking is saved
+        reply, pending_booking = extract_pending_booking(reply, business, session_id)
 
     except Exception as e:
         logger.error(f"Widget chat error: {e}")
         reply = "I'm having a little trouble right now. Could I take your name and number so we can call you back?"
-        booking_created = False
 
     # Log bot response
     log_message(session_id, "bot", reply)
 
+    response = {"reply": reply}
+
+    # Include pending booking data if AI suggested a booking
+    if pending_booking:
+        response["pending_booking"] = pending_booking
+        logger.info(f"Pending booking returned to widget for session {session_id}")
+
+    return jsonify(response)
+
+
+# ============================================================================
+# Booking Confirmation Endpoints
+# ============================================================================
+
+@bp.route("/booking/confirm", methods=["POST", "OPTIONS"])
+@cors_headers
+@require_tenant
+def confirm_booking():
+    """Confirm a pending booking.
+
+    Request body:
+        - token: The pending booking token from the chat response
+
+    Response:
+        - success: Boolean indicating if booking was confirmed
+        - message: Confirmation message or error description
+        - appointment_id: ID of the created appointment (if successful)
+    """
+    business = g.business
+
+    # Get session ID for logging
+    session_id = request.headers.get("X-Session-ID")
+    if not session_id:
+        data = request.get_json(silent=True) or {}
+        session_id = data.get("session_id")
+
+    # Get token from request
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+
+    if not token:
+        return jsonify({
+            "success": False,
+            "message": "Missing booking token"
+        }), 400
+
+    # Confirm the booking
+    success, message, appointment_id = confirm_pending_booking(token)
+
+    if success:
+        # Log the confirmation message
+        if session_id:
+            try:
+                log_message(int(session_id), "bot", f"✅ {message}")
+            except (ValueError, TypeError):
+                pass
+
+        logger.info(f"Booking confirmed via widget: appointment {appointment_id}")
+        return jsonify({
+            "success": True,
+            "message": message,
+            "appointment_id": appointment_id
+        })
+    else:
+        logger.warning(f"Booking confirmation failed: {message}")
+        return jsonify({
+            "success": False,
+            "message": message
+        }), 400
+
+
+@bp.route("/booking/cancel", methods=["POST", "OPTIONS"])
+@cors_headers
+@require_tenant
+def cancel_booking():
+    """Cancel a pending booking (before confirmation).
+
+    Request body:
+        - token: The pending booking token from the chat response
+
+    Response:
+        - success: Boolean indicating if cancellation was processed
+        - message: Status message
+    """
+    business = g.business
+
+    # Get session ID for logging
+    session_id = request.headers.get("X-Session-ID")
+    if not session_id:
+        data = request.get_json(silent=True) or {}
+        session_id = data.get("session_id")
+
+    # Get token from request
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+
+    if not token:
+        return jsonify({
+            "success": False,
+            "message": "Missing booking token"
+        }), 400
+
+    # Cancel the pending booking
+    success, message = cancel_pending_booking(token)
+
+    if success:
+        # Log the cancellation
+        if session_id:
+            try:
+                log_message(int(session_id), "bot", message)
+            except (ValueError, TypeError):
+                pass
+
+        logger.info(f"Pending booking cancelled via widget")
+
     return jsonify({
-        "reply": reply,
-        "booking_created": booking_created
+        "success": success,
+        "message": message
     })
 
 

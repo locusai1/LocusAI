@@ -49,6 +49,7 @@
     sessionId: null,
     messages: [],
     config: null,
+    pendingBooking: null,  // Current pending booking awaiting confirmation
   };
 
   // Storage key for session persistence
@@ -319,6 +320,123 @@
         bottom: 70px;
       }
     }
+
+    /* Booking Confirmation Card Styles */
+    .axisai-booking-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid var(--axisai-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 8px 0;
+      max-width: 100%;
+    }
+
+    .axisai-booking-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: var(--axisai-text);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .axisai-booking-card-header svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--axisai-primary);
+    }
+
+    .axisai-booking-details {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .axisai-booking-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13px;
+    }
+
+    .axisai-booking-row:last-child {
+      border-bottom: none;
+    }
+
+    .axisai-booking-label {
+      color: var(--axisai-text-muted);
+    }
+
+    .axisai-booking-value {
+      color: var(--axisai-text);
+      font-weight: 500;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+
+    .axisai-booking-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .axisai-booking-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .axisai-booking-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .axisai-booking-btn-confirm {
+      background: var(--axisai-primary);
+      color: white;
+    }
+
+    .axisai-booking-btn-confirm:hover:not(:disabled) {
+      background: var(--axisai-primary-hover);
+    }
+
+    .axisai-booking-btn-cancel {
+      background: white;
+      color: var(--axisai-text);
+      border: 1px solid var(--axisai-border);
+    }
+
+    .axisai-booking-btn-cancel:hover:not(:disabled) {
+      background: #f9fafb;
+    }
+
+    .axisai-booking-timer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--axisai-text-muted);
+      margin-top: 8px;
+    }
+
+    .axisai-booking-confirmed {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+    }
+
+    .axisai-booking-confirmed .axisai-booking-card-header {
+      color: #059669;
+    }
+
+    .axisai-booking-confirmed .axisai-booking-card-header svg {
+      fill: #059669;
+    }
   `;
 
   // ============================================================================
@@ -332,6 +450,10 @@
   const sendIcon = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
 
   const avatarIcon = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`;
+
+  const calendarIcon = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>`;
+
+  const checkIcon = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
 
   // ============================================================================
   // API Functions
@@ -433,6 +555,9 @@
   async function sendMessage(text) {
     if (!text.trim()) return;
 
+    // Clear any existing pending booking when user sends a new message
+    state.pendingBooking = null;
+
     // Add user message to UI immediately
     state.messages.push({ role: 'user', text: text.trim() });
     renderMessages();
@@ -454,13 +579,128 @@
       // Add bot response
       if (data.reply) {
         state.messages.push({ role: 'assistant', text: data.reply });
-        renderMessages();
       }
+
+      // Check for pending booking that needs confirmation
+      if (data.pending_booking) {
+        state.pendingBooking = data.pending_booking;
+        // Add a special message indicating booking needs confirmation
+        state.messages.push({
+          role: 'booking_confirmation',
+          booking: data.pending_booking
+        });
+      }
+
+      renderMessages();
+
     } catch (error) {
       hideTyping();
       state.messages.push({
         role: 'assistant',
         text: "I'm having trouble connecting right now. Please try again.",
+      });
+      renderMessages();
+    }
+  }
+
+  async function confirmBooking() {
+    if (!state.pendingBooking) return;
+
+    const token = state.pendingBooking.token;
+    const confirmBtn = document.getElementById('axisai-booking-confirm');
+    const cancelBtn = document.getElementById('axisai-booking-cancel');
+
+    // Disable buttons during request
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    try {
+      const data = await apiRequest('/booking/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: token,
+          session_id: state.sessionId,
+        }),
+      });
+
+      if (data.success) {
+        // Update the booking card to show confirmed state
+        const bookingCard = document.getElementById('axisai-booking-card');
+        if (bookingCard) {
+          bookingCard.classList.add('axisai-booking-confirmed');
+          bookingCard.innerHTML = `
+            <div class="axisai-booking-card-header">
+              ${checkIcon}
+              <span>Booking Confirmed!</span>
+            </div>
+            <div class="axisai-booking-details">
+              <p style="margin: 0; color: var(--axisai-text); font-size: 13px;">
+                ${escapeHtml(data.message)}
+              </p>
+            </div>
+          `;
+        }
+
+        // Add confirmation message to chat
+        state.messages.push({
+          role: 'assistant',
+          text: `✅ ${data.message}`
+        });
+
+        state.pendingBooking = null;
+      } else {
+        // Show error
+        state.messages.push({
+          role: 'assistant',
+          text: data.message || 'Failed to confirm booking. Please try again.'
+        });
+        renderMessages();
+      }
+    } catch (error) {
+      state.messages.push({
+        role: 'assistant',
+        text: "I couldn't confirm your booking. Please try again."
+      });
+      renderMessages();
+    }
+  }
+
+  async function cancelBooking() {
+    if (!state.pendingBooking) return;
+
+    const token = state.pendingBooking.token;
+
+    try {
+      const data = await apiRequest('/booking/cancel', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: token,
+          session_id: state.sessionId,
+        }),
+      });
+
+      // Remove the booking card
+      const bookingCard = document.getElementById('axisai-booking-card');
+      if (bookingCard) {
+        bookingCard.remove();
+      }
+
+      // Remove the booking confirmation from messages
+      state.messages = state.messages.filter(m => m.role !== 'booking_confirmation');
+
+      // Add cancellation message
+      state.messages.push({
+        role: 'assistant',
+        text: data.message || "No problem! Let me know if you'd like to book a different time."
+      });
+
+      state.pendingBooking = null;
+      renderMessages();
+
+    } catch (error) {
+      state.messages.push({
+        role: 'assistant',
+        text: "I couldn't cancel the booking request. Please try again."
       });
       renderMessages();
     }
@@ -588,12 +828,95 @@
     const container = document.getElementById('axisai-messages');
     if (!container) return;
 
-    container.innerHTML = state.messages.map(msg => `
-      <div class="axisai-message ${msg.role}">${escapeHtml(msg.text)}</div>
-    `).join('');
+    container.innerHTML = state.messages.map(msg => {
+      // Handle booking confirmation card
+      if (msg.role === 'booking_confirmation' && msg.booking) {
+        return renderBookingCard(msg.booking);
+      }
+
+      // Handle regular messages
+      const roleClass = msg.role === 'assistant' ? 'assistant' : msg.role;
+      return `<div class="axisai-message ${roleClass}">${escapeHtml(msg.text || '')}</div>`;
+    }).join('');
+
+    // Bind booking button events after rendering
+    const confirmBtn = document.getElementById('axisai-booking-confirm');
+    const cancelBtn = document.getElementById('axisai-booking-cancel');
+
+    if (confirmBtn) {
+      confirmBtn.onclick = confirmBooking;
+    }
+    if (cancelBtn) {
+      cancelBtn.onclick = cancelBooking;
+    }
 
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
+  }
+
+  function renderBookingCard(booking) {
+    const formatDateTime = (dt) => {
+      if (!dt) return 'Not specified';
+      try {
+        const date = new Date(dt.replace(' ', 'T'));
+        return date.toLocaleString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return dt;
+      }
+    };
+
+    const details = [];
+    if (booking.service) {
+      details.push({ label: 'Service', value: booking.service });
+    }
+    if (booking.datetime) {
+      details.push({ label: 'Date & Time', value: formatDateTime(booking.datetime) });
+    }
+    if (booking.customer_name) {
+      details.push({ label: 'Name', value: booking.customer_name });
+    }
+    if (booking.phone) {
+      details.push({ label: 'Phone', value: booking.phone });
+    }
+    if (booking.email) {
+      details.push({ label: 'Email', value: booking.email });
+    }
+
+    const detailsHtml = details.map(d => `
+      <div class="axisai-booking-row">
+        <span class="axisai-booking-label">${escapeHtml(d.label)}</span>
+        <span class="axisai-booking-value">${escapeHtml(d.value)}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div id="axisai-booking-card" class="axisai-booking-card">
+        <div class="axisai-booking-card-header">
+          ${calendarIcon}
+          <span>Confirm Your Booking</span>
+        </div>
+        <div class="axisai-booking-details">
+          ${detailsHtml}
+        </div>
+        <div class="axisai-booking-actions">
+          <button id="axisai-booking-cancel" class="axisai-booking-btn axisai-booking-btn-cancel">
+            Cancel
+          </button>
+          <button id="axisai-booking-confirm" class="axisai-booking-btn axisai-booking-btn-confirm">
+            Confirm Booking
+          </button>
+        </div>
+        <div class="axisai-booking-timer">
+          This booking will expire in 5 minutes
+        </div>
+      </div>
+    `;
   }
 
   function showTyping() {

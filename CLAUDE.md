@@ -2,6 +2,9 @@
 
 > **This file is automatically read by Claude at the start of each session.**
 > Last updated: January 21, 2026
+>
+> **IMPORTANT**: This file contains EVERYTHING about the codebase, strategic plan, and project state.
+> Read this entire file to have full context equivalent to the developer who wrote it.
 
 ---
 
@@ -14,6 +17,12 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 
 # Access at: http://127.0.0.1:5050
 # Login: admin / admin (dev credentials)
+
+# Run tests (once)
+.venv/bin/python -m pytest tests/ -v
+
+# Run tests continuously (watches for file changes)
+.venv/bin/ptw tests/ --clear
 ```
 
 ---
@@ -22,7 +31,7 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 
 **AxisAI** is a multi-tenant AI receptionist SaaS platform for small-to-medium businesses. It handles:
 - Automated customer conversations via chat/widget
-- Natural language appointment booking
+- Natural language appointment booking with confirmation flow
 - Sentiment analysis with automatic human handoff
 - Customer relationship management
 - Business analytics and reporting
@@ -45,7 +54,8 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 | Database | SQLite (`receptionist.db`) with WAL mode |
 | Frontend | Jinja2 templates, Tailwind CSS (CDN), Chart.js |
 | AI | OpenAI GPT-4o-mini via API |
-| Auth | Session-based with bcrypt password hashing |
+| Auth | Session-based with bcrypt/pbkdf2 password hashing |
+| Testing | pytest (284 tests), pytest-watch for continuous testing |
 | Virtual Env | `.venv/` |
 
 ---
@@ -55,6 +65,7 @@ cd "/Users/paulomartinez/AI Business Utility Agent R&D"
 ```bash
 OPENAI_API_KEY=sk-proj-...          # OpenAI API key for AI conversations
 FLASK_SECRET_KEY=bb0a1993...        # Session encryption key
+ENCRYPTION_KEY=...                   # Optional: Fernet key for PII encryption
 ENV=dev                              # Environment (dev/prod)
 DASHBOARD_USERNAME=admin             # Default admin username
 DASHBOARD_PASSWORD=admin             # Default admin password
@@ -83,8 +94,12 @@ AI Business Utility Agent R&D/
 │   ├── auth_bp.py            # Authentication
 │   │   - GET/POST /login     # Login form & handler
 │   │   - GET /logout         # Logout (clears session)
-│   │   - Uses bcrypt for password verification
+│   │   - Account lockout after 5 failed attempts (15 min)
+│   │   - Uses bcrypt/pbkdf2 for password verification
 │   │   - Session: user dict with id, email, role
+│   │   - PII masking in logs (_mask_email function)
+│   │   - Functions: check_account_lockout(), record_failed_attempt(), clear_failed_attempts()
+│   │   - Functions: create_user(), change_password()
 │   │
 │   ├── appointments_bp.py    # Appointment management
 │   │   - GET /appointments                    # List appointments
@@ -142,9 +157,15 @@ AI Business Utility Agent R&D/
 │   │
 │   ├── widget_bp.py          # Embeddable chat widget
 │   │   - GET /api/widget/frame                # Widget iframe HTML
+│   │   - GET /api/widget/config               # Widget configuration
+│   │   - POST /api/widget/session             # Create new session
 │   │   - POST /api/widget/chat                # Chat API (CORS-enabled)
-│   │   - GET /api/widget/settings             # Widget settings
+│   │   - GET /api/widget/history              # Get conversation history
+│   │   - POST /api/widget/booking/confirm     # Confirm pending booking
+│   │   - POST /api/widget/booking/cancel      # Cancel pending booking
 │   │   - Uses tenant_key for authentication
+│   │   - Rate limiting per tenant
+│   │   - CORS validation via _check_origin()
 │   │
 │   ├── integrations_bp.py    # Third-party integrations
 │   │   - GET /integrations                    # Integration settings page
@@ -169,7 +190,7 @@ AI Business Utility Agent R&D/
 │   │   - Booking detection via <BOOKING>{json}</BOOKING> tags
 │   │   - RAG: Injects relevant KB snippets
 │   │
-│   ├── sentiment.py          # Sentiment analysis engine
+│   ├── sentiment.py          # Sentiment analysis engine (35 tests)
 │   │   - analyze_sentiment(text, history, failed_attempts) -> SentimentResult
 │   │   - SentimentType enum: POSITIVE, NEUTRAL, NEGATIVE, FRUSTRATED, ANGRY, CONFUSED, URGENT, SATISFIED
 │   │   - IntentType enum: BOOKING, INQUIRY, COMPLAINT, HUMAN_REQUEST, CANCELLATION, GREETING, FAREWELL, GRATITUDE, UNKNOWN
@@ -177,12 +198,17 @@ AI Business Utility Agent R&D/
 │   │   - Word-level analysis: negative words, intensifiers, negations
 │   │   - Punctuation analysis: caps, exclamation marks
 │   │   - Frustration score: 0.0-1.0 (triggers escalation >0.7)
+│   │   - get_sentiment_emoji(sentiment_type) -> emoji string
+│   │   - summarize_conversation(messages) -> summary string
 │   │   - Escalation triggers:
 │   │     * Customer explicitly requests human
 │   │     * High frustration score (>0.7)
 │   │     * Complaint with 2+ negative indicators
 │   │     * 3+ failed booking attempts
 │   │     * Emergency/urgent keywords
+│   │   - Intent detection order: COMPLAINT > BOOKING > CANCELLATION > GRATITUDE/FAREWELL > GREETING > INQUIRY
+│   │   - BOOKING triggers on: "book", "appointment", "schedule"
+│   │   - CANCELLATION triggers on: "cancel", "reschedule", "change" (without booking keywords)
 │   │
 │   ├── escalation.py         # Human handoff system
 │   │   - create_escalation(business_id, session_id, ...) -> escalation_id
@@ -191,6 +217,22 @@ AI Business Utility Agent R&D/
 │   │   - get_escalation_response() - Standard handoff message
 │   │   - Priority levels: low, normal, high, urgent
 │   │   - Status: pending, acknowledged, resolved
+│   │
+│   ├── booking.py            # Booking logic with confirmation flow (22 tests)
+│   │   - Slot availability checking
+│   │   - Conflict detection
+│   │   - Duration calculations
+│   │   - BOOKING CONFIRMATION FLOW:
+│   │     * _generate_booking_token() - Creates 32-char hex token
+│   │     * extract_pending_booking(ai_response, business_id, session_id) -> {token, booking_data, expires_in}
+│   │     * confirm_pending_booking(token) -> {success, appointment_id, message}
+│   │     * cancel_pending_booking(token) -> {success, message}
+│   │     * get_pending_booking(token) -> booking_data or None
+│   │     * cleanup_expired_bookings() - Removes expired pending bookings
+│   │   - _PENDING_BOOKINGS dict stores pending bookings in memory
+│   │   - Bookings expire after 5 minutes (BOOKING_EXPIRY_MINUTES)
+│   │   - AI outputs <BOOKING>{json}</BOOKING>, widget shows confirmation UI
+│   │   - User must explicitly confirm before booking is committed
 │   │
 │   ├── db.py                 # Database layer (696 lines)
 │   │   - get_conn() -> sqlite3.Connection (with WAL mode)
@@ -201,21 +243,68 @@ AI Business Utility Agent R&D/
 │   │   - Appointment operations: create_appointment, update_appointment_status, check_slot_available
 │   │   - Data retention: cleanup_old_data()
 │   │
-│   ├── booking.py            # Booking logic
-│   │   - Slot availability checking
-│   │   - Conflict detection
-│   │   - Duration calculations
+│   ├── circuit_breaker.py    # Resilience patterns (23 tests)
+│   │   - CircuitBreaker class with states: CLOSED, OPEN, HALF_OPEN
+│   │   - CircuitState enum
+│   │   - CircuitOpenError exception
+│   │   - Configuration: failure_threshold, recovery_timeout, half_open_requests
+│   │   - Methods:
+│   │     * is_open(service) -> bool
+│   │     * record_failure(service) -> bool (True if circuit just opened)
+│   │     * record_success(service) -> None
+│   │     * reset(service) -> None
+│   │     * get_state(service) -> {service, state, failures}
+│   │     * get_stats() -> {service: {failure_count, success_count}}
+│   │   - Decorators:
+│   │     * @with_circuit_breaker(service, breaker, fallback) - Wraps function with circuit breaker
+│   │     * @retry_with_backoff(max_attempts, initial_delay, exceptions) - Retries with exponential backoff
+│   │     * @resilient_call(service, max_retries, retry_delay, breaker, fallback) - Combined breaker + retry
+│   │   - get_ai_circuit_breaker() -> singleton CircuitBreaker for AI calls
+│   │   - Thread-safe with threading.Lock
+│   │
+│   ├── encryption.py         # Field-level encryption for PII (32 tests)
+│   │   - Uses Fernet symmetric encryption (or XOR fallback if cryptography not installed)
+│   │   - ENCRYPTION_AVAILABLE flag indicates which backend is in use
+│   │   - Functions:
+│   │     * encrypt_field(value) -> "ENC:..." or "OBF:..." prefixed string
+│   │     * decrypt_field(value) -> original string
+│   │     * is_encrypted(value) -> bool (checks for ENC: or OBF: prefix)
+│   │     * encrypt_dict_fields(data, fields) -> new dict with encrypted fields
+│   │     * decrypt_dict_fields(data, fields) -> new dict with decrypted fields
+│   │     * hash_token(token, salt) -> hex string (SHA-256)
+│   │     * verify_token_hash(token, hash, salt) -> bool
+│   │     * generate_encryption_key() -> Fernet key string
+│   │   - PII field constants:
+│   │     * CUSTOMER_PII_FIELDS = ['name', 'email', 'phone']
+│   │     * APPOINTMENT_PII_FIELDS = ['customer_name', 'phone', 'customer_email']
+│   │     * SESSION_PII_FIELDS = ['phone']
+│   │   - Double-encryption prevented (checks prefix before encrypting)
+│   │   - Decrypting unencrypted values returns them unchanged
+│   │
+│   ├── validators.py         # Input validation (68 tests)
+│   │   - validate_email(email) -> (is_valid, normalized_email, error_msg)
+│   │   - validate_phone(phone) -> (is_valid, normalized_phone, error_msg)
+│   │   - validate_name(name, field_name, required) -> (is_valid, cleaned_name, error_msg)
+│   │   - validate_date(date_str) -> (is_valid, parsed_date, error_msg)
+│   │   - validate_datetime(dt_str) -> (is_valid, parsed_datetime, error_msg)
+│   │   - format_datetime(dt) -> "Jan 21, 2026 at 2:30 PM"
+│   │   - format_date(dt) -> "Jan 21, 2026"
+│   │   - validate_slug(slug) -> (is_valid, normalized_slug, error_msg)
+│   │   - slugify(text) -> url-safe-slug
+│   │   - validate_redirect_url(url, default) -> safe_url (prevents open redirect)
+│   │   - validate_password(password) -> (is_valid, error_msg)
+│   │     * Min 8 chars, max 128 chars
+│   │     * Must contain letter and number
+│   │   - safe_int(value, default, min_val, max_val) -> clamped int
+│   │   - csv_escape(value) -> escaped CSV value (prevents formula injection)
+│   │   - build_csv_row(values) -> "val1,val2,val3"
+│   │   - validate_json_config(json_str, required_keys) -> (is_valid, parsed_dict, error_msg)
+│   │   - Reserved slugs: admin, api, login, logout, static, dashboard, etc.
 │   │
 │   ├── knowledge.py          # Knowledge base utilities
 │   │   - kb_search(business_id, query, limit) - FTS5 search
 │   │
 │   ├── kb.py                 # Additional KB functions
-│   │
-│   ├── validators.py         # Input validation
-│   │   - slugify(text) - URL-safe slug generation
-│   │   - validate_redirect_url() - Prevents open redirect
-│   │   - safe_int() - Safe integer parsing
-│   │   - Input sanitization
 │   │
 │   ├── settings.py           # Configuration loading
 │   │   - OPENAI_API_KEY
@@ -336,9 +425,106 @@ AI Business Utility Agent R&D/
 │   ├── backup_axis.py        # Create backups
 │   └── restore_axis.py       # Restore from backup
 │
-├── tests/                    # Test files
-│   ├── conftest.py           # Pytest fixtures
-│   └── test_booking.py       # Booking tests
+├── tests/                    # Test suite (284 tests total)
+│   ├── conftest.py           # Pytest fixtures and configuration
+│   │   - test_db fixture (temporary SQLite database)
+│   │   - db_conn fixture (database connection)
+│   │   - sample_business fixture (creates test business with services, hours)
+│   │   - sample_session fixture (creates chat session)
+│   │   - sample_user fixture (creates test user with password)
+│   │   - admin_user fixture (creates admin user)
+│   │   - app fixture (Flask test app)
+│   │   - client fixture (Flask test client)
+│   │   - authenticated_client fixture (logged-in test client)
+│   │   - mock_openai fixture (mocks OpenAI API)
+│   │   - mock_mailer fixture (mocks email sending)
+│   │   - future_datetime fixture (next Monday at 10:00)
+│   │   - booking_json fixture (sample booking data)
+│   │   - Auto-cleanup fixtures for pending bookings and circuit breaker
+│   │
+│   ├── test_validators.py    # 68 tests for core/validators.py
+│   │   - Email validation (valid, invalid, normalized, too long)
+│   │   - Phone validation (digits, formatting, international)
+│   │   - Name validation (required, length, control chars)
+│   │   - Date/datetime validation and formatting
+│   │   - Slug validation and slugify function
+│   │   - Redirect URL validation (prevents open redirect)
+│   │   - Password validation (length, complexity)
+│   │   - safe_int with clamping
+│   │   - CSV escaping (formula injection prevention)
+│   │   - JSON config validation
+│   │
+│   ├── test_encryption.py    # 32 tests for core/encryption.py
+│   │   - Field encryption/decryption
+│   │   - Empty/None handling
+│   │   - Double-encryption prevention
+│   │   - Unicode and special characters
+│   │   - is_encrypted detection
+│   │   - Dict field encryption
+│   │   - Token hashing and verification
+│   │   - Key generation
+│   │   - PII field constants
+│   │
+│   ├── test_circuit_breaker.py # 23 tests for core/circuit_breaker.py
+│   │   - Initial state (closed)
+│   │   - Circuit opens after threshold failures
+│   │   - Circuit blocks requests when open
+│   │   - Half-open state after recovery timeout
+│   │   - Success in half-open closes circuit
+│   │   - Failure in half-open reopens circuit
+│   │   - Multiple services tracked independently
+│   │   - @with_circuit_breaker decorator
+│   │   - @retry_with_backoff decorator
+│   │   - @resilient_call decorator
+│   │   - Global AI circuit breaker singleton
+│   │   - Thread safety
+│   │
+│   ├── test_sentiment.py     # 35 tests for core/sentiment.py
+│   │   - Basic sentiment detection (positive, neutral, negative)
+│   │   - Confusion and urgency detection
+│   │   - Frustration detection (words, exclamation, CAPS)
+│   │   - Human request detection ("speak to human", "real person")
+│   │   - Intent detection (booking, cancellation, complaint, greeting)
+│   │   - Escalation triggers
+│   │   - Conversation history impact
+│   │   - SentimentResult structure
+│   │   - Helper functions (emoji, summarize)
+│   │   - Edge cases (long messages, unicode, special chars)
+│   │
+│   ├── test_booking_confirmation.py # 22 tests for booking confirmation flow
+│   │   - Token generation (length, uniqueness, hex format)
+│   │   - Extract pending booking from AI response
+│   │   - Booking tag removal from text
+│   │   - Pending booking storage and expiration
+│   │   - Confirm valid booking
+│   │   - Confirm expired booking (fails)
+│   │   - Confirm nonexistent booking (fails)
+│   │   - Cancel booking
+│   │   - Cleanup expired bookings
+│   │   - Full flow integration tests
+│   │
+│   ├── test_auth.py          # 21 tests for authentication
+│   │   - Email masking (_mask_email)
+│   │   - Account lockout (threshold, timing, per-IP/email)
+│   │   - Failed attempt counter
+│   │   - User creation (valid, invalid email, weak password, invalid role)
+│   │   - Password change validation
+│   │   - Login integration (page load, credentials, redirect)
+│   │   - Logout functionality
+│   │   - Session security (dashboard requires auth)
+│   │
+│   ├── test_widget_api.py    # 21 tests for widget API
+│   │   - /api/widget/config (requires tenant key, returns business info)
+│   │   - /api/widget/session (creates session, returns welcome message)
+│   │   - /api/widget/chat (requires session, message length limit)
+│   │   - /api/widget/booking/confirm (requires token)
+│   │   - /api/widget/booking/cancel (requires token)
+│   │   - /api/widget/history (requires session)
+│   │   - CORS handling (OPTIONS, headers)
+│   │   - Rate limiting
+│   │   - /api/widget/frame (requires tenant key)
+│   │
+│   └── test_booking.py       # 1 smoke test for booking commit
 │
 ├── logs/                     # Application logs
 │   ├── app.log               # General app log (10MB rotation)
@@ -348,6 +534,54 @@ AI Business Utility Agent R&D/
 ├── .env                      # Environment variables
 ├── .gitignore
 └── .git/                     # Git repository
+```
+
+---
+
+## Test Suite
+
+### Running Tests
+
+```bash
+# Run all tests once
+.venv/bin/python -m pytest tests/ -v
+
+# Run specific test file
+.venv/bin/python -m pytest tests/test_auth.py -v
+
+# Run with coverage
+.venv/bin/python -m pytest tests/ --cov=core --cov-report=html
+
+# Run continuously (auto-reruns on file save)
+.venv/bin/ptw tests/ --clear
+```
+
+### Test Summary (284 tests)
+
+| Test File | Tests | Module Tested |
+|-----------|-------|---------------|
+| `test_validators.py` | 68 | Input validation, sanitization, CSV escaping |
+| `test_sentiment.py` | 35 | Sentiment analysis, intent detection, escalation |
+| `test_encryption.py` | 32 | Field encryption, token hashing, PII protection |
+| `test_circuit_breaker.py` | 23 | Circuit breaker states, decorators, resilience |
+| `test_booking_confirmation.py` | 22 | Booking tokens, confirm/cancel flow, expiration |
+| `test_auth.py` | 21 | Login, lockout, user creation, password validation |
+| `test_widget_api.py` | 21 | Widget endpoints, CORS, rate limiting |
+| `test_booking.py` | 1 | Booking commit smoke test |
+
+### Continuous Testing with pytest-watch
+
+pytest-watch monitors files and automatically reruns tests when you save:
+
+```bash
+# Start continuous testing
+.venv/bin/ptw tests/ --clear
+
+# Check if watcher is running
+ps aux | grep ptw
+
+# Stop the watcher
+pkill -f "ptw tests/"
 ```
 
 ---
@@ -384,7 +618,7 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
     name TEXT NOT NULL,
-    password_hash TEXT NOT NULL,  -- bcrypt hashed
+    password_hash TEXT NOT NULL,  -- bcrypt/pbkdf2 hashed
     role TEXT NOT NULL CHECK(role IN ('admin','owner')) DEFAULT 'owner',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -609,6 +843,328 @@ CREATE TABLE integrations (
 
 ---
 
+## Complete Python Files List
+
+All Python files in the project (excluding .venv):
+
+```
+# Main entry points
+dashboard.py              # Flask app, registers all blueprints
+main.py                   # Alternative entry point
+
+# Blueprints (HTTP route handlers)
+auth_bp.py                # /login, /logout, lockout
+analytics_bp.py           # /analytics, /analytics/api/*
+appointments_bp.py        # /appointments/*, /hours, /closures
+chat_bp.py                # /chat, /chat/<session_id>
+customers_bp.py           # /customers/*
+escalations_bp.py         # /escalations/*
+integrations_bp.py        # /integrations/*
+kb_bp.py                  # /kb/* (knowledge base)
+onboard_bp.py             # /onboard
+search_bp.py              # /search
+services_bp.py            # /services/*
+sms_bp.py                 # SMS webhook handler (Twilio)
+widget_bp.py              # /api/widget/* (embeddable widget API)
+
+# Core modules (business logic)
+core/__init__.py
+core/ai.py                # AI conversation with sentiment, escalation, circuit breaker
+core/authz.py             # Authorization helpers
+core/booking.py           # Booking confirmation flow, slot management
+core/circuit_breaker.py   # Circuit breaker pattern for resilience
+core/csrf.py              # CSRF protection
+core/db.py                # Database layer (SQLite with WAL)
+core/encryption.py        # Field-level encryption for PII
+core/escalation.py        # Human handoff system
+core/ics.py               # iCalendar generation
+core/integrations.py      # Integration provider registry
+core/kb.py                # Knowledge base helpers
+core/knowledge.py         # KB search (FTS5)
+core/logger.py            # Logging configuration
+core/mailer.py            # Email sending
+core/observability.py     # Metrics collection, performance tracking
+core/reminders.py         # Appointment reminder scheduling/sending
+core/security.py          # Security utilities
+core/sentiment.py         # Sentiment analysis, intent detection
+core/settings.py          # Environment configuration
+core/sms.py               # SMS sending via Twilio
+core/tenantfs.py          # Tenant filesystem management
+core/utils.py             # General utilities
+core/validators.py        # Input validation, sanitization
+
+# Adapters (external service interfaces)
+adapters/__init__.py
+adapters/local.py         # Local adapter
+adapters/twilio.py        # Twilio SMS/voice adapter
+
+# Providers (booking system providers)
+providers/__init__.py
+providers/dummy_provider.py    # Testing provider
+providers/local_provider.py    # Built-in local booking
+
+# Tools (utility scripts)
+tools/backup_axis.py      # Create backups
+tools/reminder_worker.py  # Background reminder daemon
+tools/restore_axis.py     # Restore from backup
+tools/sync_businesses.py  # Sync DB to filesystem
+
+# Tests (284 tests total)
+tests/conftest.py              # Fixtures
+tests/test_auth.py             # 21 tests
+tests/test_booking.py          # 1 test
+tests/test_booking_confirmation.py  # 22 tests
+tests/test_circuit_breaker.py  # 23 tests
+tests/test_encryption.py       # 32 tests
+tests/test_sentiment.py        # 35 tests
+tests/test_validators.py       # 68 tests
+tests/test_widget_api.py       # 21 tests
+
+# Standalone scripts
+add_kb_doc.py             # Add KB document
+view_logs.py              # View application logs
+view_logs_db.py           # View logs from database
+```
+
+---
+
+## Core Module Deep Dive
+
+### core/ai.py — AI Conversation Engine (488 lines)
+
+**Purpose**: Generates AI receptionist responses with sentiment awareness, escalation triggers, and resilience.
+
+**Key Features**:
+- **Model Fallback Chain**: Primary (gpt-4o-mini) → Secondary (gpt-3.5-turbo)
+- **Circuit Breaker Integration**: Prevents cascading failures when OpenAI is down
+- **Sentiment-Aware Prompts**: Adjusts tone based on detected customer emotion
+- **Automatic Escalation**: Hands off to human when triggers detected
+- **RAG Integration**: Injects relevant KB snippets into prompts
+
+**Key Functions**:
+```python
+process_message(user_input, business_data, state, customer_id, customer_info) -> str
+# Main entry point. Returns AI reply. Updates state with history, sentiment.
+
+process_message_with_metadata(...) -> Dict
+# Same as above but returns {reply, sentiment, intent, escalated, escalation_id}
+
+_call_ai_with_resilience(messages, max_retries=2) -> str
+# Calls OpenAI with circuit breaker and model fallback
+
+_business_prompt(bd, sentiment_context) -> str
+# Builds system prompt with business info and sentiment-adaptive guidance
+
+_kb_snippets(business_id, query, limit=3) -> List[str]
+# Fetches relevant KB entries for RAG
+
+increment_failed_attempts(state) -> int
+reset_failed_attempts(state) -> None
+```
+
+**Configuration**:
+```python
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+FALLBACK_MODELS = [("openai", OPENAI_MODEL), ("openai", "gpt-3.5-turbo")]
+FALLBACK_RESPONSE = "I'm having a little trouble right now..."
+```
+
+**Flow**:
+1. Analyze sentiment of user message
+2. Check if escalation should trigger
+3. If escalating: create escalation, return handoff message
+4. Build prompt with business info + sentiment adjustments + KB snippets
+5. Call AI with circuit breaker protection
+6. Return reply, update state
+
+---
+
+### core/booking.py — Booking Confirmation Flow (484 lines)
+
+**Purpose**: Detects AI booking suggestions, manages pending bookings, handles confirmation/cancellation.
+
+**Key Features**:
+- **Pending Booking Store**: In-memory dict (use Redis in production)
+- **Token-Based Confirmation**: Unique 32-char hex tokens
+- **5-Minute Expiry**: Bookings expire if not confirmed
+- **Slot Verification**: Re-verifies availability at confirmation time
+- **Reminder Integration**: Schedules reminders after confirmation
+
+**Key Functions**:
+```python
+# New Confirmation Flow (recommended)
+extract_pending_booking(text, business, session_id) -> (cleaned_text, pending_data)
+confirm_pending_booking(token) -> (success, message, appointment_id)
+cancel_pending_booking(token) -> (success, message)
+get_pending_booking(token) -> booking_data or None
+
+# Legacy Auto-Commit (backward compatibility)
+maybe_commit_booking(text, business, session_id) -> (updated_text, committed)
+```
+
+**Data Structures**:
+```python
+_PENDING_BOOKINGS: Dict[str, Dict] = {}  # token -> booking_data
+PENDING_BOOKING_TTL = 300  # 5 minutes
+
+# pending_data structure:
+{
+    "token": "abc123...",
+    "business_id": 1,
+    "session_id": 42,
+    "customer_name": "John Doe",
+    "phone": "555-1234",
+    "email": "john@example.com",
+    "service_name": "Haircut",
+    "slot": "2026-01-25 14:00",
+    "created_at": 1737500000.0,
+    "expires_at": 1737500300.0,
+}
+```
+
+---
+
+### core/reminders.py — Appointment Reminders (556 lines) ✅ IMPLEMENTED
+
+**Purpose**: Schedules and sends automated appointment reminders via email/SMS.
+
+**Key Classes**:
+```python
+class ReminderType(Enum):
+    TWENTY_FOUR_HOURS = "24h"
+    ONE_HOUR = "1h"
+    FIFTEEN_MINUTES = "15m"
+
+class ReminderChannel(Enum):
+    EMAIL = "email"
+    SMS = "sms"
+
+class ReminderStatus(Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+```
+
+**Key Functions**:
+```python
+schedule_reminders_for_appointment(appt_id, start_at, email, phone) -> List[int]
+cancel_reminders_for_appointment(appointment_id) -> int
+reschedule_reminders_for_appointment(appt_id, new_start_at, email, phone) -> List[int]
+get_due_reminders(limit=100) -> List[Dict]
+process_due_reminders(batch_size=50) -> Dict[str, int]  # For worker
+send_reminder(reminder) -> (success, error_message)
+generate_email_reminder(reminder) -> {subject, body}
+generate_sms_reminder(reminder) -> str  # Max 160 chars
+```
+
+**Default Schedule**:
+```python
+DEFAULT_REMINDER_SCHEDULE = [
+    (ReminderType.TWENTY_FOUR_HOURS, ReminderChannel.EMAIL),
+    (ReminderType.ONE_HOUR, ReminderChannel.SMS),
+]
+```
+
+---
+
+### core/observability.py — Metrics & Monitoring (424 lines) ✅ IMPLEMENTED
+
+**Purpose**: In-memory metrics collection for monitoring performance.
+
+**Key Class**:
+```python
+class MetricsCollector:
+    def inc_counter(name, labels, value=1)
+    def observe_histogram(name, value, labels)
+    def set_gauge(name, value, labels)
+    def get_counter(name, labels) -> int
+    def get_histogram_stats(name, labels) -> Dict  # count, sum, avg, min, max, p50, p95, p99
+    def get_gauge(name, labels) -> float
+    def get_all_metrics() -> Dict
+```
+
+**Standard Metric Names** (Metrics class):
+```python
+HTTP_REQUESTS_TOTAL, HTTP_REQUEST_DURATION, HTTP_ERRORS_TOTAL
+AI_REQUESTS_TOTAL, AI_REQUEST_DURATION, AI_TOKENS_USED, AI_ERRORS_TOTAL
+CONVERSATIONS_TOTAL, BOOKINGS_TOTAL, ESCALATIONS_TOTAL
+ACTIVE_SESSIONS
+JOBS_PROCESSED, JOBS_FAILED, JOB_DURATION
+```
+
+**Decorators**:
+```python
+@timed(metric_name, labels)  # Time function execution
+@counted(metric_name, labels)  # Count function calls
+@instrumented(counter, histogram, error_counter, labels)  # Full instrumentation
+```
+
+**Context Manager**:
+```python
+with RequestTracker("GET", "/api/chat") as tracker:
+    # handle request
+    tracker.set_status(200)
+```
+
+---
+
+### widget_bp.py — Widget API (595 lines)
+
+**Purpose**: Embeddable chat widget API with CORS, rate limiting, tenant auth.
+
+**Endpoints**:
+```
+GET  /api/widget/config       # Widget configuration
+POST /api/widget/session      # Create chat session
+POST /api/widget/chat         # Send message, get AI reply
+POST /api/widget/booking/confirm  # Confirm pending booking
+POST /api/widget/booking/cancel   # Cancel pending booking
+GET  /api/widget/history      # Get conversation history
+GET  /api/widget/frame        # Widget iframe HTML
+```
+
+**Security**:
+- **Tenant Key Auth**: `X-Tenant-Key` header required
+- **CORS Validation**: Only allowed_domains can access
+- **Rate Limiting**: 30 requests per 60 seconds per tenant+IP
+- **Message Limit**: Max 2000 characters
+
+**Chat Response Format**:
+```json
+{
+  "reply": "AI response text",
+  "pending_booking": {
+    "token": "abc123...",
+    "customer_name": "John",
+    "phone": "555-1234",
+    "service": "Haircut",
+    "datetime": "2026-01-25 14:00",
+    "expires_in": 300
+  }
+}
+```
+
+---
+
+### tools/reminder_worker.py — Background Worker
+
+**Purpose**: Daemon that processes due reminders periodically.
+
+**Usage**:
+```bash
+.venv/bin/python tools/reminder_worker.py
+```
+
+**Behavior**:
+- Runs every 60 seconds
+- Processes up to 50 due reminders per batch
+- Sends via email/SMS
+- Marks as sent or failed
+- Logs statistics
+
+---
+
 ## AI System Architecture
 
 ### Conversation Flow
@@ -647,17 +1203,39 @@ User Message
 │  OpenAI GPT-4o-mini                     │
 │  - max_tokens=300                       │
 │  - temperature=0.6                      │
+│  - Circuit breaker protection           │
 └─────────────────────────────────────────┘
     │
     ▼
 AI Response (may contain <BOOKING> tag)
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  Booking Confirmation Flow              │
+│  - If <BOOKING> tag detected:           │
+│    → Extract booking data               │
+│    → Generate confirmation token        │
+│    → Store in _PENDING_BOOKINGS         │
+│    → Return pending_booking to widget   │
+│  - Widget shows confirmation UI         │
+│  - User confirms → commit to database   │
+│  - User cancels → discard booking       │
+│  - Expires after 5 minutes              │
+└─────────────────────────────────────────┘
 ```
 
-### Booking Detection
-The AI outputs bookings in this format:
-```
-<BOOKING>{"name":"John Doe","phone":"555-1234","service":"Cleaning","datetime":"2026-01-25 14:00","notes":""}</BOOKING>
-```
+### Booking Confirmation Flow (Implemented)
+
+The AI no longer auto-commits bookings. Instead:
+
+1. **AI outputs booking tag**: `<BOOKING>{"name":"John","phone":"555-1234",...}</BOOKING>`
+2. **extract_pending_booking()** parses the tag and stores booking in memory with a token
+3. **Widget receives** `{reply: "...", pending_booking: {token, data, expires_in}}`
+4. **Widget shows confirmation UI** with booking details
+5. **User confirms** → `POST /api/widget/booking/confirm` with token
+6. **confirm_pending_booking()** validates token, checks slot, commits to database
+7. **Or user cancels** → `POST /api/widget/booking/cancel` with token
+8. **Bookings expire** after 5 minutes if not confirmed
 
 ### Sentiment Patterns
 ```python
@@ -685,15 +1263,45 @@ URGENCY_PATTERNS = [
 ]
 ```
 
+### Intent Detection Order
+
+The sentiment module checks intents in this order (first match wins):
+1. COMPLAINT - if complaint patterns match
+2. BOOKING - if "book", "appointment", or "schedule" in message
+3. CANCELLATION - if "cancel", "reschedule", or "change" (without booking keywords)
+4. GRATITUDE/FAREWELL - if positive + thank/bye words
+5. GREETING - if hello/hi/hey words
+6. INQUIRY - default for questions
+
 ---
 
 ## Security Features
 
 ### Authentication
 - Session-based authentication
-- bcrypt password hashing
+- bcrypt/pbkdf2 password hashing (Python 3.9 compatible)
 - 4-hour session timeout
 - CSRF protection on all forms
+- **Account lockout**: 5 failed attempts → 15 minute lockout
+- Per-email AND per-IP tracking for lockout
+
+### Account Lockout System (auth_bp.py)
+```python
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+
+# Functions:
+check_account_lockout(email, ip) -> (is_locked, remaining_seconds)
+record_failed_attempt(email, ip) -> (attempt_count, is_now_locked)
+clear_failed_attempts(email, ip) -> None
+```
+
+### PII Protection
+- **Email masking in logs**: `_mask_email("john@example.com")` → `j***@e***.com`
+- **Field-level encryption** (core/encryption.py):
+  - Encrypt customer names, emails, phones before storage
+  - Decrypt on retrieval
+  - Uses Fernet (AES-128) or XOR fallback
 
 ### Tenant Isolation
 - `before_request` hook enforces tenant boundaries
@@ -713,9 +1321,33 @@ Strict-Transport-Security: (production only)
 
 ### Widget Security
 - Tenant key authentication (UUID)
-- CORS-enabled for allowed domains
+- CORS-enabled for allowed domains only
 - Separate CSP for iframe embedding
 - Rate limiting per tenant key
+- Message length limit (2000 chars)
+
+### Input Validation (core/validators.py)
+- Email format validation and normalization
+- Phone number validation (7-20 digits)
+- Name validation (2-100 chars, no control chars)
+- Slug validation (reserved words blocked)
+- **Open redirect prevention**: `validate_redirect_url()` only allows relative URLs
+- **CSV formula injection prevention**: `csv_escape()` prefixes dangerous chars
+- **Password complexity**: min 8 chars, must have letter + number
+
+### Circuit Breaker (core/circuit_breaker.py)
+Prevents cascading failures when external services (like OpenAI) are down:
+- **CLOSED**: Normal operation, requests pass through
+- **OPEN**: Service failing, requests blocked (returns fallback)
+- **HALF_OPEN**: Testing if service recovered
+
+```python
+breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
+
+@with_circuit_breaker("openai", breaker=breaker, fallback=lambda: "Service unavailable")
+def call_openai():
+    ...
+```
 
 ---
 
@@ -756,18 +1388,44 @@ Add `data-theme="dark"` to `<html>` element.
 ```
 
 ### Widget API Endpoints
-- `GET /api/widget/frame` - Returns iframe HTML
-- `POST /api/widget/chat` - Chat API
-  - Body: `{"message": "...", "session_id": "..."}`
-  - Response: `{"reply": "...", "session_id": "...", "sentiment": "..."}`
+- `GET /api/widget/config` - Returns widget configuration and business info
+- `POST /api/widget/session` - Creates new chat session, returns session_id and welcome message
+- `POST /api/widget/chat` - Send message, get AI reply
+  - Headers: `X-Tenant-Key`, `X-Session-ID`
+  - Body: `{"message": "..."}`
+  - Response: `{"reply": "...", "sentiment": "...", "pending_booking": {...}}`
+- `POST /api/widget/booking/confirm` - Confirm pending booking
+  - Body: `{"token": "..."}`
+  - Response: `{"success": true, "appointment_id": 123}`
+- `POST /api/widget/booking/cancel` - Cancel pending booking
+  - Body: `{"token": "..."}`
+  - Response: `{"success": true}`
+- `GET /api/widget/history` - Get conversation history
+- `GET /api/widget/frame` - Widget iframe HTML
 
 ---
 
 ## Development Notes
 
+### Running the Server
+```bash
+cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+.venv/bin/python -m flask --app dashboard run --host=0.0.0.0 --port=5050
+```
+
 ### Running Tests
 ```bash
-.venv/bin/pytest tests/ -v
+# All tests
+.venv/bin/python -m pytest tests/ -v
+
+# Specific file
+.venv/bin/python -m pytest tests/test_sentiment.py -v
+
+# With coverage
+.venv/bin/python -m pytest tests/ --cov=core
+
+# Continuous (watches for changes)
+.venv/bin/ptw tests/ --clear
 ```
 
 ### Database Access
@@ -837,6 +1495,26 @@ kill -9 <PID>
 ### AI not responding
 - Check OPENAI_API_KEY in .env
 - Check logs/app.log for errors
+- Check circuit breaker state (may be open after failures)
+
+### Tests failing
+```bash
+# Run with verbose output
+.venv/bin/python -m pytest tests/ -v --tb=long
+
+# Run specific failing test
+.venv/bin/python -m pytest tests/test_auth.py::TestLoginIntegration -v
+```
+
+### pytest-watch not running
+```bash
+# Check if running
+ps aux | grep ptw
+
+# Kill and restart
+pkill -f "ptw tests/"
+.venv/bin/ptw tests/ --clear
+```
 
 ---
 
@@ -850,6 +1528,12 @@ kill -9 <PID>
 6. **Widget** - Embeddable chat widget for external websites
 7. **Project Rename** - Renamed from `dentist-ai` to `AI Business Utility Agent R&D`
 8. **Cleanup** - Removed all .bak files, old backups, temporary files
+9. **Booking Confirmation Flow** - AI no longer auto-commits bookings; user must confirm
+10. **Account Lockout** - 5 failed login attempts → 15 minute lockout
+11. **Circuit Breaker** - Resilience pattern for external API calls
+12. **Field Encryption** - PII fields can be encrypted at rest
+13. **Comprehensive Test Suite** - 284 tests covering all core modules
+14. **Continuous Testing** - pytest-watch for auto-running tests on file save
 
 ---
 
@@ -879,8 +1563,796 @@ The platform is designed to work with any appointment-based or inquiry-based bus
 
 ---
 
+## Strategic Roadmap (18 Months)
+
+> This roadmap transforms AxisAI from a chat-only MVP into a comprehensive, multi-channel AI receptionist platform capable of competing with market leaders like Smith.ai, Ruby, and Synthflow.
+
+### Market Opportunity
+
+**Market Size**:
+- AI receptionist market: $10.4B (2024) → $154.8B (2034)
+- Growth rate: 31% CAGR
+- AI can reduce agent labor costs by $80 billion globally (Gartner)
+
+**Customer Expectations (2026)**:
+- 51% of customers prefer AI for immediate service
+- 41% say 24/7 availability is top benefit
+- Hybrid AI+human preferred for complex issues
+- Calendar integration is critical (7.7% of calls are scheduling)
+- Appointment reminders reduce no-shows by 20-40%
+
+### Current State vs Competition
+
+**What We Have (Strengths)**:
+| Feature | Status | Quality |
+|---------|--------|---------|
+| Multi-tenant architecture | ✅ Done | Production-ready |
+| Chat widget (embeddable) | ✅ Done | Good |
+| AI conversation (GPT-4o-mini) | ✅ Done | Basic |
+| Sentiment analysis + escalation | ✅ Done | Good |
+| Knowledge base (RAG) | ✅ Done | Good |
+| Appointment booking | ✅ Done | Needs improvement |
+| Customer CRM | ✅ Done | Basic |
+| Analytics dashboard | ✅ Done | Basic |
+| Human handoff system | ✅ Done | Good |
+| Booking confirmation flow | ✅ Done | Good |
+| Circuit breaker resilience | ✅ Done | Good |
+| Field encryption for PII | ✅ Done | Good |
+| Account lockout security | ✅ Done | Good |
+| Comprehensive test suite | ✅ Done | 284 tests |
+
+**Critical Gaps (vs Competitors)**:
+| Gap | Competitor Standard | Priority |
+|-----|---------------------|----------|
+| Voice/phone calls | All top competitors | Critical |
+| SMS/text channel | Smith.ai, Ruby | Critical |
+| Calendar sync (Google/Outlook) | Universal | Critical |
+| Automated reminders | Standard | High |
+| Payment processing | Smith.ai, Ruby | Medium |
+| CRM integrations | All enterprise | Medium |
+| Multi-language | Growing demand | Medium |
+| WhatsApp/social | Emerging | Lower |
+
+---
+
+### Phase 1: Foundation Strengthening (Months 1-3)
+
+#### 1.1 Booking Confirmation Loop ✅ COMPLETED
+- AI outputs `<CONFIRM_BOOKING>` instead of auto-committing
+- Widget shows confirmation UI, user must explicitly confirm
+- 5-minute cancellation window
+- **Success Metric**: Booking completion rate > 85%
+
+#### 1.2 Automated Reminder System (TODO)
+**Problem**: `reminders` table exists but no worker process
+
+**New Files**:
+- `core/reminders.py` - Reminder scheduling logic
+- `tools/reminder_worker.py` - Background daemon
+- `core/sms.py` - SMS sending via Twilio
+
+**Send at**: 24h, 2h, 15m before appointment (Email + SMS)
+**Success Metric**: No-show rate < 10%
+
+#### 1.3 Multi-Model Support & Fallback (TODO)
+**Problem**: Hardcoded to GPT-4o-mini only
+
+**Solution**:
+- Use `OPENAI_MODEL` setting (already defined)
+- Fallback chain: Primary → Backup → Emergency
+- Support Claude, GPT-4, GPT-4-mini
+- Model-specific prompt tuning
+
+**Success Metric**: AI availability > 99.9%
+
+#### 1.4 Enhanced Analytics (TODO)
+- Conversation resolution rate
+- Average turns to booking
+- Top unanswered questions (KB gaps)
+- Sentiment trends over time
+
+---
+
+### Phase 2: Channel Expansion (Months 3-6)
+
+#### 2.1 SMS/Text Channel (Twilio)
+**New Files**:
+- `sms_bp.py` - Incoming webhook handler
+- `core/sms.py` - Twilio SMS client wrapper
+
+**Settings Required**:
+```python
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+```
+
+**Success Metric**: SMS response rate > 40%
+
+#### 2.2 Voice AI Channel
+**Recommended Approach**: Retell AI Integration ($0.07/minute)
+- Pre-built templates, real-time voice
+- Much faster than building from scratch
+
+**Alternative (Build Later)**: Twilio Voice + OpenAI Whisper + ElevenLabs
+
+**New Files**:
+- `voice_bp.py` - Voice webhook handler
+- `core/voice.py` - Voice session management
+- `providers/retell_provider.py` - Retell AI integration
+
+**Success Metric**: Voice call resolution rate > 60%
+
+#### 2.3 WhatsApp Business Channel
+- Via Twilio WhatsApp API (same account as SMS)
+- Rich messages support (buttons, images)
+
+**New Files**: `whatsapp_bp.py`
+
+---
+
+### Phase 3: Integration Ecosystem (Months 6-9)
+
+#### 3.1 Google Calendar 2-Way Sync
+**#1 Requested Feature** - Prevents double-booking
+
+**New Files**:
+- `providers/google_calendar.py` - Calendar provider
+- `gcal_bp.py` - OAuth callback routes
+
+**Success Metric**: Zero double-bookings from sync failures
+
+#### 3.2 Outlook Calendar Sync
+Same architecture as Google, different API.
+
+#### 3.3 CRM Integrations
+**Priority**: HubSpot, Salesforce, Zoho
+
+**Capabilities**:
+- Auto-create contacts from conversations
+- Log activities (calls, chats, bookings)
+- Sync appointment status
+
+**New Files**:
+- `core/crm.py` - CRM provider interface
+- `providers/hubspot.py`, `providers/salesforce.py`, `providers/zoho.py`
+
+#### 3.4 Payment Processing (Stripe/Square)
+Collect deposits at booking (reduces no-shows by 50%+)
+
+**Schema Changes**:
+```sql
+ALTER TABLE appointments ADD COLUMN deposit_amount TEXT;
+ALTER TABLE appointments ADD COLUMN payment_status TEXT;
+ALTER TABLE appointments ADD COLUMN payment_id TEXT;
+```
+
+**New Files**: `core/payments.py`, `payments_bp.py`
+
+---
+
+### Phase 4: AI Enhancement (Months 9-12)
+
+#### 4.1 Multi-Language Support
+**Languages**: Spanish, French, Portuguese, Mandarin
+
+- Language detection on first message
+- Translate system prompts
+- Store `language` preference on session
+
+#### 4.2 Industry-Specific Templates
+**Pre-built configurations for**:
+- Hair Salons / Spas
+- Real Estate Agencies
+- Medical/Dental Clinics
+- Auto Repair Shops
+- Legal Services
+- Fitness Studios
+
+**Each Template Includes**:
+- Industry-specific system prompts
+- Pre-populated KB entries
+- Common service catalog
+- Typical business hours
+
+**New Files**: `businesses/templates/{industry}.json`
+
+#### 4.3 Advanced Intent Classification
+- OpenAI function calling for structured extraction
+- Better booking intent detection
+- Train on real conversation data
+
+#### 4.4 Conversation Intelligence Dashboard
+- Resolution rate (booking vs escalation)
+- Common unanswered questions (auto-suggest KB)
+- Weekly email reports
+
+---
+
+### Phase 5: Enterprise & Monetization (Months 12-18)
+
+#### 5.1 Usage-Based Billing Infrastructure
+**New Tables**:
+```sql
+CREATE TABLE usage_records (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL,
+    period TEXT NOT NULL,          -- "2026-01"
+    conversations INTEGER DEFAULT 0,
+    voice_minutes INTEGER DEFAULT 0,
+    sms_count INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE subscriptions (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL,
+    tier TEXT NOT NULL,
+    stripe_subscription_id TEXT,
+    status TEXT NOT NULL,
+    current_period_end TEXT
+);
+```
+
+**New Files**: `core/billing.py`, `billing_bp.py`, `tools/billing_worker.py`
+
+#### 5.2 Pricing Tiers
+
+| Tier | Price | Conversations | Voice | SMS | Key Features |
+|------|-------|---------------|-------|-----|--------------|
+| **Starter** | $49/mo | 500 | - | - | Chat widget, Email alerts |
+| **Professional** | $149/mo | 2,000 | 100 min | 200 | + SMS, Calendar sync |
+| **Business** | $349/mo | 5,000 | 500 min | 1,000 | + Voice AI, CRM, Payments |
+| **Enterprise** | Custom | Unlimited | Unlimited | Unlimited | + Custom training, SLA, API |
+
+#### 5.3 White-Label Program
+For agencies to resell under their brand:
+- Custom branding (logo, colors, domain)
+- Reseller dashboard for sub-accounts
+- Revenue sharing via Stripe Connect
+
+#### 5.4 Public API
+```
+POST /api/v1/conversations - Start conversation
+GET  /api/v1/conversations/{id}/messages - Get messages
+POST /api/v1/appointments - Create appointment
+GET  /api/v1/customers - List customers
+POST /api/v1/kb - Add knowledge entry
+```
+
+**New File**: `api_v1_bp.py`
+
+---
+
+### Success Metrics by Phase
+
+| Phase | Key Metric | Target |
+|-------|-----------|--------|
+| 1 | Booking completion rate | > 85% |
+| 1 | No-show rate | < 10% |
+| 2 | Voice resolution rate | > 60% |
+| 2 | SMS response rate | > 40% |
+| 3 | Calendar sync adoption | > 70% of businesses |
+| 3 | Double-booking incidents | 0 |
+| 4 | Multi-language coverage | 5 languages |
+| 4 | Escalation rate | < 8% |
+| 5 | MRR growth | > 15% MoM |
+| 5 | Enterprise retention | > 95% |
+
+---
+
+## Security & Compliance Framework
+
+### Regulatory Landscape (2026)
+
+**Why This Matters**:
+- GDPR fines exceeded €2 billion in 2025
+- CCPA 2026 introduces enhanced requirements for automated decision-making
+- 12 US states now require honoring Opt-Out Preference Signals
+- SOC 2 certification is baseline for B2B SaaS
+
+### Compliance Requirements by Customer Type
+
+| Customer Type | Required Compliance | Priority |
+|---------------|---------------------|----------|
+| All Businesses | GDPR, CCPA, Basic Security | Immediate |
+| US Healthcare | HIPAA + BAA | Phase 2 |
+| Financial Services | SOC 2 Type 2 | Phase 3 |
+| EU Businesses | GDPR, EU AI Act | Phase 2 |
+| Enterprise | SOC 2 + Custom Audits | Phase 4 |
+
+### GDPR Compliance Checklist
+
+| Requirement | Implementation | Status |
+|-------------|----------------|--------|
+| **Right to Access** | Export all user data as JSON | TODO |
+| **Right to Erasure** | Delete user + cascade all data | TODO |
+| **Right to Portability** | Export in machine-readable format | TODO |
+| **Consent Management** | Explicit consent before AI processing | TODO |
+| **Data Minimization** | Only collect necessary data | PARTIAL |
+| **Privacy Policy** | Clear disclosure of AI use | TODO |
+| **Data Breach Notification** | 72-hour notification process | TODO |
+
+**New Files Required**:
+- `privacy_bp.py` - Data export, deletion endpoints
+- `core/gdpr.py` - Data export/deletion logic
+- `templates/privacy_settings.html` - User privacy controls
+
+**New Tables**:
+```sql
+CREATE TABLE consent_records (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER,
+    customer_id INTEGER,
+    consent_type TEXT,      -- 'ai_processing', 'marketing', 'data_retention'
+    granted INTEGER,
+    granted_at TEXT,
+    ip_address TEXT,
+    user_agent TEXT
+);
+
+CREATE TABLE data_requests (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER,
+    customer_email TEXT,
+    request_type TEXT,      -- 'export', 'delete'
+    status TEXT,            -- 'pending', 'processing', 'completed'
+    completed_at TEXT,
+    created_at TEXT
+);
+```
+
+### HIPAA Compliance (For Healthcare Customers)
+
+| Requirement | Implementation |
+|-------------|----------------|
+| **BAA with Vendors** | Require from OpenAI, Twilio, Retell, hosting |
+| **PHI Encryption** | AES-256 at rest, TLS 1.3 in transit |
+| **Access Controls** | Role-based, audit all PHI access |
+| **Audit Logs** | Immutable, 6-year retention |
+| **Breach Notification** | 60-day notification to HHS |
+
+### Security Audit Checklist (Existing Code)
+
+| Item | Current State | Action Required |
+|------|---------------|-----------------|
+| Password hashing | ✅ bcrypt/pbkdf2 | None |
+| Session timeout | ✅ 4hr enforced | None |
+| CSRF protection | ✅ All forms | Verify API endpoints |
+| Account lockout | ✅ 5 attempts | None |
+| Password complexity | ✅ validate_password() | None |
+| SQL injection | ✅ Parameterized queries | Audit all queries |
+| XSS prevention | ⚠️ Jinja2 auto-escapes | Verify |safe usage |
+| PII in logs | ✅ Partial masking | Audit all log calls |
+| API rate limiting | ✅ Widget API | Add to all endpoints |
+| CORS | ✅ Whitelist per tenant | None |
+| Webhook verification | ❌ Missing | Add for Twilio/Stripe |
+| Request size limits | ❌ Missing | Add 1MB limit |
+
+### Pre-Production Security Checklist
+
+Before going live with real customers:
+- [ ] Run `pip-audit` - fix any vulnerable dependencies
+- [ ] Run `bandit -r .` - fix any code security issues
+- [ ] Change all default passwords
+- [ ] Generate new FLASK_SECRET_KEY (production-only)
+- [ ] Enable HTTPS (SSL certificate)
+- [ ] Disable debug mode
+- [ ] Set up automated backups
+- [ ] Configure firewall rules
+- [ ] Test account lockout works
+- [ ] Test session timeout works
+- [ ] Test CSRF protection works
+- [ ] Test rate limiting works
+- [ ] Verify no PII in logs
+- [ ] Verify error pages don't leak info
+
+---
+
+## Production Reliability & Resilience
+
+### Observability Stack
+
+| Pillar | Tool Options | Purpose |
+|--------|--------------|---------|
+| **Metrics** | Prometheus + Grafana, Datadog | CPU, memory, latency, error rates |
+| **Logs** | ELK Stack, Loki, Datadog | Structured JSON logs, error tracking |
+| **Traces** | Jaeger, Datadog APM | Request flow through services |
+
+### Dashboard Alerts to Configure
+
+- Error rate > 1% for 5 minutes → Page on-call
+- AI API latency > 5s → Warning
+- AI API failures > 3 in 1 minute → Critical
+- Database connections > 80% capacity → Warning
+- Memory usage > 90% → Critical
+- Background job queue > 100 items → Warning
+
+### Graceful Degradation Hierarchy
+
+When things fail, degrade gracefully:
+
+1. **AI Model Unavailable**
+   → Fall back to simpler model
+   → Fall back to scripted responses
+   → Collect contact info for callback
+
+2. **Database Unavailable**
+   → Return cached responses
+   → Queue writes for later
+   → Show "maintenance mode" message
+
+3. **Third-Party Unavailable**
+   → Queue operations for retry
+   → Notify user of delay
+   → Continue with available features
+
+### Disaster Recovery Plan
+
+| Scenario | RTO | RPO | Recovery Procedure |
+|----------|-----|-----|-------------------|
+| Database corruption | 1 hour | 15 min | Restore from automated backup |
+| API key compromised | 30 min | 0 | Rotate keys, revoke old |
+| Full service outage | 4 hours | 1 hour | Failover to backup region |
+| Data breach | 24 hours | N/A | Incident response plan |
+
+---
+
+## External Services Required
+
+| Service | Purpose | Est. Cost |
+|---------|---------|-----------|
+| Twilio | SMS, Voice, WhatsApp | Pay-per-use |
+| Retell AI | Voice AI platform | $0.07/min |
+| Stripe | Payments, billing | 2.9% + $0.30 |
+| Google APIs | Calendar sync | Free tier |
+| DeepL/Google | Translation | Pay-per-use |
+| Sentry | Error tracking | Free tier |
+
+### Infrastructure Upgrades (As We Scale)
+
+- **Database**: SQLite → PostgreSQL when >50 tenants
+- **Background Jobs**: Add Celery or APScheduler
+- **Caching**: Add Redis for sessions, rate limiting
+- **Hosting**: Move from dev to production (Railway, Render, or AWS)
+
+---
+
+## Implementation Priority Matrix
+
+### Do First (Highest ROI)
+1. ✅ Booking confirmation loop - Builds trust, reduces errors
+2. Automated reminders - 20-40% no-show reduction
+3. SMS channel - Many customers prefer text
+4. Google Calendar sync - #1 requested integration
+
+### Do Next (Months 3-6)
+5. Voice AI (Retell integration)
+6. Multi-model fallback
+7. Outlook Calendar sync
+8. Payment processing
+
+### Do Later (Months 6-12)
+9. CRM integrations
+10. Multi-language support
+11. Industry templates
+12. WhatsApp channel
+
+### Enterprise (Months 12-18)
+13. Usage-based billing
+14. White-label program
+15. Public API
+16. Advanced analytics
+
+---
+
 ## Contacts
 
 **Project Owner**: Paulo Martinez
 **Project Name**: AI Business Utility Agent (AxisAI)
 **Target Markets**: Hairdressers, Real Estate Agencies (initial), expandable to any SMB
+**Competitive Positioning**: SMB-first simplicity, multi-channel coverage, seamless integrations, enterprise-grade security
+
+---
+
+## Module Interaction Map
+
+### How Modules Work Together
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              HTTP REQUEST                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  dashboard.py (Flask App)                                                    │
+│  - before_request: tenant isolation, session validation                     │
+│  - after_request: security headers, logging                                 │
+│  - Registers all blueprints                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
+│   widget_bp.py    │   │    auth_bp.py     │   │  Other Blueprints │
+│   (Widget API)    │   │   (Login/Logout)  │   │                   │
+└───────────────────┘   └───────────────────┘   └───────────────────┘
+        │                                                │
+        │  POST /api/widget/chat                        │
+        ▼                                                │
+┌───────────────────┐                                   │
+│   core/ai.py      │◄──────────────────────────────────┘
+│  (AI Processing)  │
+└───────────────────┘
+        │
+        ├────────────────────┬────────────────────┬────────────────────┐
+        ▼                    ▼                    ▼                    ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│core/sentiment│    │ core/kb.py   │    │core/circuit_ │    │core/escalat- │
+│    .py       │    │(KB Search)   │    │  breaker.py  │    │   ion.py     │
+└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+        │                                                           │
+        │ (triggers_escalation=True)                               │
+        └──────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                        Creates escalation record
+                        Sends notification email
+                        Returns handoff message
+
+
+AI Response Flow (with booking):
+───────────────────────────────────
+core/ai.py
+    │ (returns reply with <BOOKING> tag)
+    ▼
+widget_bp.py
+    │ calls extract_pending_booking()
+    ▼
+core/booking.py
+    │ stores in _PENDING_BOOKINGS
+    │ returns {token, booking_data}
+    ▼
+Widget (frontend)
+    │ shows confirmation UI
+    ▼
+User confirms → POST /api/widget/booking/confirm
+    │
+    ▼
+core/booking.py::confirm_pending_booking()
+    │ validates token
+    │ re-verifies slot availability
+    │ creates appointment in DB
+    │ links to customer (customers_bp.find_or_create_customer)
+    │
+    ├─► core/reminders.py::schedule_reminders_for_appointment()
+    │       schedules 24h email + 1h SMS reminders
+    │
+    └─► Returns success + appointment_id
+
+
+Reminder Processing Flow:
+─────────────────────────
+tools/reminder_worker.py (daemon)
+    │ runs every 60 seconds
+    ▼
+core/reminders.py::process_due_reminders()
+    │ gets reminders where scheduled_for <= now
+    ▼
+core/reminders.py::send_reminder()
+    │
+    ├─► core/mailer.py::send_email()  (for email channel)
+    │
+    └─► core/sms.py::send_sms()  (for sms channel)
+```
+
+### Key Integration Points
+
+| Module A | Module B | Integration |
+|----------|----------|-------------|
+| `ai.py` | `sentiment.py` | Analyzes user message before AI call |
+| `ai.py` | `escalation.py` | Creates escalation when triggers detected |
+| `ai.py` | `circuit_breaker.py` | Protects OpenAI calls from cascading failures |
+| `ai.py` | `kb.py` | Fetches relevant KB entries for RAG |
+| `ai.py` | `observability.py` | Records metrics (latency, tokens, errors) |
+| `widget_bp.py` | `booking.py` | Extracts pending bookings from AI response |
+| `booking.py` | `reminders.py` | Schedules reminders after confirmation |
+| `booking.py` | `customers_bp.py` | Links bookings to customer records |
+| `reminders.py` | `mailer.py` | Sends email reminders |
+| `reminders.py` | `sms.py` | Sends SMS reminders |
+| `auth_bp.py` | `encryption.py` | Could encrypt PII fields |
+| All blueprints | `validators.py` | Input validation/sanitization |
+| All blueprints | `db.py` | Database operations |
+
+---
+
+## Current Development State
+
+### What's Running
+- **pytest-watch**: Continuous testing daemon (if started with `ptw tests/ --clear`)
+- **Check status**: `ps aux | grep ptw`
+- **Stop**: `pkill -f "ptw tests/"`
+
+### Test Results (as of last run)
+- **Total Tests**: 284
+- **Pass Rate**: 100%
+- **Time**: ~7 seconds
+
+### Known Issues / TODOs
+1. **SMS sending**: `core/sms.py` exists but needs Twilio credentials configured
+2. **Email sending**: `core/mailer.py` needs SMTP configuration
+3. **Reminder worker**: Not running by default, needs manual start
+4. **Voice AI**: Not implemented (planned for Phase 2)
+5. **Calendar sync**: Not implemented (planned for Phase 3)
+
+### Environment Setup Checklist
+```bash
+# 1. Navigate to project
+cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+
+# 2. Activate virtual environment
+source .venv/bin/activate
+
+# 3. Ensure dependencies installed
+pip install -r requirements.txt 2>/dev/null || echo "No requirements.txt"
+
+# 4. Check .env has required keys
+cat .env | grep -E "OPENAI_API_KEY|FLASK_SECRET_KEY"
+
+# 5. Initialize database (if needed)
+.venv/bin/python -c "from core.db import init_db; init_db()"
+
+# 6. Run tests
+.venv/bin/python -m pytest tests/ -v
+
+# 7. Start server
+.venv/bin/python -m flask --app dashboard run --host=0.0.0.0 --port=5050
+
+# 8. (Optional) Start continuous testing
+.venv/bin/ptw tests/ --clear
+```
+
+---
+
+## Code Patterns & Conventions
+
+### Database Access Pattern
+```python
+from core.db import get_conn, transaction
+
+# Read operations
+with get_conn() as con:
+    row = con.execute("SELECT * FROM table WHERE id = ?", (id,)).fetchone()
+    return dict(row) if row else None
+
+# Write operations (with transaction)
+with transaction() as con:
+    cur = con.cursor()
+    cur.execute("INSERT INTO table (col) VALUES (?)", (value,))
+    new_id = cur.lastrowid
+```
+
+### Blueprint Pattern
+```python
+from flask import Blueprint, request, jsonify, g
+
+bp = Blueprint("name", __name__, url_prefix="/prefix")
+
+@bp.route("/endpoint", methods=["GET", "POST"])
+def handler():
+    # Access current business via g.business (set by dashboard.py)
+    business_id = g.get("active_business_id")
+    # ...
+```
+
+### Input Validation Pattern
+```python
+from core.validators import validate_email, validate_phone, safe_int
+
+# Validate and normalize
+is_valid, normalized, error = validate_email(email)
+if not is_valid:
+    return jsonify({"error": error}), 400
+
+# Safe integer with bounds
+page = safe_int(request.args.get("page"), default=1, min_val=1, max_val=100)
+```
+
+### Error Handling Pattern
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+try:
+    result = some_operation()
+except SpecificError as e:
+    logger.warning(f"Expected error: {e}")
+    return fallback_value
+except Exception as e:
+    logger.error(f"Unexpected error: {e}")
+    raise  # or return error response
+```
+
+### Testing Pattern
+```python
+import pytest
+from unittest.mock import patch
+
+class TestFeatureName:
+    """Tests for specific feature."""
+
+    def test_happy_path(self, client, sample_business):
+        """Should succeed with valid input."""
+        response = client.post("/endpoint", json={"key": "value"})
+        assert response.status_code == 200
+
+    def test_invalid_input(self, client):
+        """Should reject invalid input."""
+        response = client.post("/endpoint", json={})
+        assert response.status_code == 400
+
+# Use fixtures from conftest.py:
+# - test_db: temporary database
+# - sample_business: test business with services, hours
+# - sample_user: test user with password
+# - client: Flask test client
+# - authenticated_client: logged-in client
+# - mock_openai: mocked OpenAI API
+```
+
+---
+
+## Quick Debugging Guide
+
+### Check logs
+```bash
+# Application logs
+tail -f logs/app.log
+
+# Security logs
+tail -f logs/security.log
+```
+
+### Database inspection
+```bash
+sqlite3 receptionist.db
+.tables
+.schema appointments
+SELECT * FROM appointments ORDER BY created_at DESC LIMIT 5;
+```
+
+### Check circuit breaker state
+```python
+from core.circuit_breaker import get_ai_circuit_breaker
+breaker = get_ai_circuit_breaker()
+print(breaker.get_stats())
+```
+
+### Check pending bookings
+```python
+from core.booking import _PENDING_BOOKINGS
+print(_PENDING_BOOKINGS)
+```
+
+### Test AI response
+```python
+from core.ai import process_message
+from core.db import get_business_by_id
+
+business = get_business_by_id(1)
+state = {}
+reply = process_message("I want to book an appointment", business, state)
+print(reply)
+print(state)  # Contains history, sentiment_history
+```
+
+### Test sentiment analysis
+```python
+from core.sentiment import analyze_sentiment
+result = analyze_sentiment("I'm so frustrated with this terrible service!")
+print(f"Sentiment: {result.sentiment.value}")
+print(f"Intent: {result.intent.value}")
+print(f"Escalation: {result.triggers_escalation}")
+print(f"Frustration: {result.details['frustration_score']}")
+```

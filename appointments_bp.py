@@ -1,4 +1,4 @@
-# appointments_bp.py — Appointment management with CSV export, ICS, and email
+# appointments_bp.py — Appointment management with CSV export, ICS, email, and reminders
 # Production-grade with proper validation, error handling, and security
 
 import logging
@@ -7,7 +7,7 @@ from typing import Optional
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response
 
-from core.db import get_conn, list_businesses, create_appointment
+from core.db import get_conn, list_businesses, create_appointment, create_appointment_atomic
 from core.integrations import get_business_provider
 from core.ics import make_ics
 from core.mailer import send_email
@@ -15,6 +15,16 @@ from core.validators import (
     safe_int, validate_email, validate_phone, validate_name,
     validate_datetime, format_datetime, csv_escape, build_csv_row
 )
+
+# Import reminders module (optional - graceful fallback if not available)
+try:
+    from core.reminders import (
+        schedule_reminders_for_appointment,
+        cancel_reminders_for_appointment
+    )
+    REMINDERS_AVAILABLE = True
+except ImportError:
+    REMINDERS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +136,15 @@ def appointments_set_status(appt_id: int):
 
         con.execute("UPDATE appointments SET status=? WHERE id=?", (new_status, appt_id))
         con.commit()
+
+    # Cancel reminders if appointment was cancelled
+    if new_status == "cancelled" and REMINDERS_AVAILABLE:
+        try:
+            cancelled_count = cancel_reminders_for_appointment(appt_id)
+            if cancelled_count:
+                logger.info(f"Cancelled {cancelled_count} reminders for appointment {appt_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cancel reminders for appointment {appt_id}: {e}")
 
     logger.info(f"Appointment {appt_id} status changed to {new_status} by user {_user().get('id')}")
     flash("Status updated.", "ok")
@@ -286,26 +305,6 @@ def appointments_new():
                 values=request.form
             )
 
-        # Re-validate slot availability (race condition protection)
-        try:
-            valid_slots = set(provider.fetch_slots(sid, date_str) or [])
-        except Exception as e:
-            logger.error(f"Slot validation failed: {e}")
-            valid_slots = set()
-
-        if slot not in valid_slots:
-            flash("Selected slot is no longer available. Please pick another.", "err")
-            return render_template(
-                "appointments_new.html",
-                business_id=bid,
-                services=services,
-                local_mode=local_mode,
-                slots=list(valid_slots),
-                date=date_str,
-                service_id=sid,
-                values=request.form
-            )
-
         # Get service details
         svc_name = ""
         duration_min = 60
@@ -341,29 +340,37 @@ def appointments_new():
             logger.warning(f"External booking creation failed (continuing): {e}")
             ext_id = None
 
-        # Save to local database
-        appt_id = create_appointment(
+        # Atomically check slot availability and create appointment
+        # This prevents race conditions where two users book the same slot
+        appt_id, error = create_appointment_atomic(
             business_id=bid,
+            start_at=slot,
+            duration_min=duration_min,
             customer_name=name,
             phone=phone,
-            customer_email=email,
             service=svc_name,
-            start_at=slot,
             status="confirmed",
             external_provider_key=provider.key,
             external_id=ext_id,
             source="owner",
-            notes=notes
+            notes=notes,
+            customer_email=email
         )
 
-        if not appt_id:
-            flash("Failed to create appointment. Please try again.", "err")
+        if error or not appt_id:
+            # Re-fetch available slots for the user
+            try:
+                valid_slots = provider.fetch_slots(sid, date_str) or []
+            except Exception:
+                valid_slots = []
+
+            flash(error or "Failed to create appointment. The slot may no longer be available.", "err")
             return render_template(
                 "appointments_new.html",
                 business_id=bid,
                 services=services,
                 local_mode=local_mode,
-                slots=slots,
+                slots=valid_slots,
                 date=date_str,
                 service_id=sid,
                 values=request.form
@@ -396,6 +403,21 @@ def appointments_new():
         except Exception as e:
             logger.error(f"Failed to generate ICS or send email: {e}")
             # Don't fail the appointment creation
+
+        # Schedule reminders for this appointment
+        if REMINDERS_AVAILABLE and appt_id:
+            try:
+                reminder_ids = schedule_reminders_for_appointment(
+                    appointment_id=appt_id,
+                    start_at=slot,
+                    customer_email=email,
+                    customer_phone=phone
+                )
+                if reminder_ids:
+                    logger.info(f"Scheduled {len(reminder_ids)} reminders for appointment {appt_id}")
+            except Exception as e:
+                logger.warning(f"Failed to schedule reminders for appointment {appt_id}: {e}")
+                # Don't fail the appointment creation
 
         logger.info(f"Appointment {appt_id} created by user {_user().get('id')} for business {bid}")
         flash("Appointment created successfully.", "ok")
