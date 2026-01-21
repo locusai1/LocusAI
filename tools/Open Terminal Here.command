@@ -1,3 +1,3 @@
 #!/bin/bash
-cd "/Users/paulomartinez/AI Business Utility Agent R&D"
+cd "/Users/paulomartinez/AxisAI"
 exec $SHELL

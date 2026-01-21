@@ -2,7 +2,7 @@
 # Autosave script for AxisAI project
 # Automatically commits changes if there are any
 
-PROJECT_DIR="/Users/paulomartinez/AI Business Utility Agent R&D"
+PROJECT_DIR="/Users/paulomartinez/AxisAI"
 cd "$PROJECT_DIR" || exit 1
 
 # Check if there are any changes to commit
