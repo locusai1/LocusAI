@@ -1718,6 +1718,30 @@ TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 **New Files**: `whatsapp_bp.py`
 
+#### 2.4 Social Media Channels
+**Instagram DMs** and **Facebook Messenger** integration for businesses with social presence.
+
+**Capabilities**:
+- Receive and respond to DMs via Meta Business API
+- Rich media support (images, carousels, quick replies)
+- Appointment booking directly from social
+- Lead capture from social inquiries
+
+**New Files**:
+- `social_bp.py` - Webhook handler for Meta platforms
+- `core/social.py` - Social media message handling
+- `providers/meta_provider.py` - Meta Business API integration
+
+**Settings Required**:
+```python
+META_APP_ID = os.getenv("META_APP_ID")
+META_APP_SECRET = os.getenv("META_APP_SECRET")
+META_PAGE_ACCESS_TOKEN = os.getenv("META_PAGE_ACCESS_TOKEN")
+INSTAGRAM_BUSINESS_ID = os.getenv("INSTAGRAM_BUSINESS_ID")
+```
+
+**Success Metric**: Social channel engagement rate > 25%
+
 ---
 
 ### Phase 3: Integration Ecosystem (Months 6-9)
@@ -1758,6 +1782,115 @@ ALTER TABLE appointments ADD COLUMN payment_id TEXT;
 
 **New Files**: `core/payments.py`, `payments_bp.py`
 
+#### 3.5 Proactive Outreach & Engagement System
+**Transforms AI from reactive to proactive** - the key differentiator vs basic chatbots.
+
+**Capabilities**:
+- **Post-Appointment Follow-ups**: "How was your visit?" 24h after appointment
+- **Re-engagement Campaigns**: "We haven't seen you in 3 months" for lapsed customers
+- **Birthday/Anniversary Messages**: Automated greetings with optional offers
+- **Review Solicitation**: Request Google/Yelp reviews at optimal moments (after positive interactions)
+- **Appointment Reminders with Upsell**: "Your haircut is tomorrow - want to add a treatment?"
+
+**New Files**:
+- `core/outreach.py` - Outreach campaign logic
+- `outreach_bp.py` - Campaign management UI
+- `tools/outreach_worker.py` - Background campaign processor
+
+**New Tables**:
+```sql
+CREATE TABLE outreach_campaigns (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,  -- 'follow_up', 're_engagement', 'birthday', 'review_request', 'custom'
+    trigger_config TEXT,  -- JSON: conditions to trigger
+    message_template TEXT NOT NULL,
+    channel TEXT NOT NULL,  -- 'email', 'sms', 'whatsapp'
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE outreach_sends (
+    id INTEGER PRIMARY KEY,
+    campaign_id INTEGER NOT NULL,
+    customer_id INTEGER NOT NULL,
+    scheduled_for TEXT NOT NULL,
+    sent_at TEXT,
+    status TEXT DEFAULT 'pending',  -- 'pending', 'sent', 'failed', 'opened', 'clicked'
+    response TEXT,  -- customer reply if any
+    created_at TEXT NOT NULL
+);
+```
+
+**Success Metrics**:
+- Re-engagement conversion rate > 15%
+- Review request response rate > 10%
+- Repeat booking rate increase > 20%
+
+#### 3.6 Workflow Automation Engine
+**Custom triggers and actions** for business-specific automation needs.
+
+**Capabilities**:
+- **If-Then Rules**: "If customer mentions 'urgent', escalate immediately"
+- **Zapier/Make Integration**: Connect to 5000+ apps
+- **Intake Forms**: Collect information before appointments
+- **Post-Appointment Surveys**: NPS, satisfaction ratings
+- **Custom Webhooks**: Trigger external systems on events
+
+**New Files**:
+- `core/workflows.py` - Workflow engine
+- `workflows_bp.py` - Workflow builder UI
+- `core/webhooks.py` - Outbound webhook delivery
+
+**New Tables**:
+```sql
+CREATE TABLE workflows (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    trigger_type TEXT NOT NULL,  -- 'message_contains', 'booking_created', 'sentiment_negative', 'custom'
+    trigger_config TEXT,  -- JSON: trigger conditions
+    actions TEXT NOT NULL,  -- JSON array of actions
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE workflow_logs (
+    id INTEGER PRIMARY KEY,
+    workflow_id INTEGER NOT NULL,
+    triggered_at TEXT NOT NULL,
+    trigger_data TEXT,
+    actions_executed TEXT,
+    success INTEGER
+);
+
+CREATE TABLE intake_forms (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL,
+    service_id INTEGER,  -- optional: form for specific service
+    fields TEXT NOT NULL,  -- JSON array of form fields
+    required_before_booking INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE form_submissions (
+    id INTEGER PRIMARY KEY,
+    form_id INTEGER NOT NULL,
+    appointment_id INTEGER,
+    customer_id INTEGER,
+    responses TEXT NOT NULL,  -- JSON
+    submitted_at TEXT NOT NULL
+);
+```
+
+**Integration Points**:
+- Zapier: `POST /api/webhooks/zapier` - Trigger Zaps from AxisAI events
+- Make: `POST /api/webhooks/make` - Similar for Make scenarios
+- Custom: Configurable webhook URLs per event type
+
+**Success Metric**: 50%+ of businesses create at least one custom workflow
+
 ---
 
 ### Phase 4: AI Enhancement (Months 9-12)
@@ -1795,6 +1928,150 @@ ALTER TABLE appointments ADD COLUMN payment_id TEXT;
 - Resolution rate (booking vs escalation)
 - Common unanswered questions (auto-suggest KB)
 - Weekly email reports
+
+#### 4.5 Business Intelligence & Predictive Analytics
+**Move from descriptive to predictive analytics** - help businesses make data-driven decisions.
+
+**Capabilities**:
+- **Churn Prediction**: Identify customers likely to leave based on visit patterns, sentiment trends
+- **Demand Forecasting**: Predict busy periods, suggest staffing adjustments
+- **Revenue Attribution**: Track which conversations/channels lead to bookings
+- **Customer Lifetime Value (CLV)**: Calculate and predict per-customer value
+- **KB Gap Analysis**: Auto-identify frequently asked but unanswered questions
+
+**New Files**:
+- `core/analytics_engine.py` - Advanced analytics calculations
+- `core/predictions.py` - ML-based predictions (churn, demand)
+- `analytics_api_bp.py` - API for analytics data
+
+**Key Metrics Dashboard**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Business Health Score: 87/100                              │
+├─────────────────────────────────────────────────────────────┤
+│  At-Risk Customers: 12 (down from 18 last month)            │
+│  Predicted Revenue (30d): $4,250                            │
+│  Top KB Gaps: "parking", "cancellation policy", "pricing"   │
+│  Best Performing Channel: SMS (42% conversion)              │
+│  Peak Hours: Tue 10am, Thu 2pm, Sat 11am                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Success Metric**: 80% of businesses check analytics weekly
+
+#### 4.6 Agentic AI Capabilities
+**AI that can DO things, not just talk** - the next evolution of AI assistants.
+
+**Level 1 - Simple Actions** (Months 9-10):
+- Reschedule appointments (with confirmation)
+- Cancel appointments (with confirmation)
+- Update customer contact info
+- Add notes to customer profiles
+
+**Level 2 - Complex Actions** (Months 10-11):
+- Process simple refunds (with limits)
+- Check real-time availability across services
+- Query external systems (inventory, pricing)
+- Create follow-up tasks for staff
+
+**Level 3 - Autonomous Workflows** (Months 11-12):
+- Multi-step task completion (book + send confirmation + create reminder)
+- Conditional logic ("If no response in 24h, send follow-up")
+- Self-healing (retry failed actions, notify on persistent failures)
+
+**Architecture**:
+```python
+# Tool use pattern for agentic AI
+AVAILABLE_TOOLS = [
+    {
+        "name": "reschedule_appointment",
+        "description": "Reschedule an existing appointment to a new time",
+        "parameters": {
+            "appointment_id": "int",
+            "new_datetime": "ISO datetime string",
+            "reason": "optional string"
+        },
+        "requires_confirmation": True,
+        "risk_level": "low"
+    },
+    {
+        "name": "process_refund",
+        "description": "Process a refund for a cancelled appointment",
+        "parameters": {
+            "appointment_id": "int",
+            "amount": "decimal",
+            "reason": "string"
+        },
+        "requires_confirmation": True,
+        "risk_level": "medium",
+        "max_amount": 100.00  # Safety limit
+    },
+    # ... more tools
+]
+```
+
+**New Files**:
+- `core/agent_tools.py` - Tool definitions and execution
+- `core/agent_executor.py` - Safe tool execution with confirmations
+- `core/agent_memory.py` - Context and state management
+
+**Safety Guardrails**:
+- All destructive actions require user confirmation
+- Monetary actions have configurable limits
+- Audit log for all agent actions
+- Ability to disable specific tools per business
+
+**Success Metric**: 30% of conversations include at least one agent action
+
+#### 4.7 Personalization at Scale
+**Every customer interaction should feel personalized** - not generic chatbot responses.
+
+**Capabilities**:
+- **Customer Memory**: Remember preferences across conversations ("You usually prefer afternoon appointments")
+- **Tone Adaptation**: Adjust communication style based on customer history (formal for new, casual for regulars)
+- **Smart Upselling**: Suggest relevant services based on past bookings
+- **Loyalty Recognition**: Acknowledge returning customers, offer loyalty perks
+- **Preference Learning**: Track and apply preferences (preferred stylist, appointment times, communication channel)
+
+**New Tables**:
+```sql
+CREATE TABLE customer_preferences (
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER NOT NULL,
+    business_id INTEGER NOT NULL,
+    preference_key TEXT NOT NULL,  -- 'preferred_time', 'preferred_stylist', 'communication_style'
+    preference_value TEXT NOT NULL,
+    confidence REAL DEFAULT 1.0,  -- 0.0-1.0, higher = more certain
+    source TEXT,  -- 'explicit' (customer said), 'inferred' (AI learned)
+    updated_at TEXT NOT NULL,
+    UNIQUE(customer_id, business_id, preference_key)
+);
+
+CREATE TABLE customer_interactions (
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER NOT NULL,
+    business_id INTEGER NOT NULL,
+    interaction_type TEXT NOT NULL,  -- 'booking', 'inquiry', 'complaint', 'feedback'
+    sentiment TEXT,
+    summary TEXT,
+    created_at TEXT NOT NULL
+);
+```
+
+**Personalization in AI Prompts**:
+```python
+# Example personalized context injection
+customer_context = f"""
+Customer: {customer.name} (returning customer, {customer.total_appointments} visits)
+Preferences: Prefers {prefs.get('preferred_time', 'morning')} appointments
+            Usually books {prefs.get('usual_service', 'standard service')}
+            Communication style: {prefs.get('style', 'friendly')}
+Last visit: {customer.last_seen_at} for {last_appointment.service}
+Notes: {customer.notes or 'None'}
+"""
+```
+
+**Success Metric**: Customer satisfaction scores increase 15%+ with personalization
 
 ---
 
@@ -1851,6 +2128,135 @@ POST /api/v1/kb - Add knowledge entry
 
 **New File**: `api_v1_bp.py`
 
+#### 5.5 Enterprise Security & Access Control
+**Requirements for enterprise customers** - SSO, granular permissions, audit trails.
+
+**Single Sign-On (SSO)**:
+- Google Workspace SSO
+- Microsoft 365 / Azure AD SSO
+- Okta integration
+- Generic SAML 2.0 support
+
+**New Files**:
+- `core/sso.py` - SSO provider abstraction
+- `sso_bp.py` - SSO callback routes
+- `providers/google_sso.py`, `providers/microsoft_sso.py`, `providers/okta_sso.py`
+
+**Settings**:
+```python
+SSO_ENABLED = os.getenv("SSO_ENABLED", "false")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
+```
+
+**Role-Based Access Control (RBAC)**:
+```sql
+-- Enhanced roles beyond admin/owner
+CREATE TABLE roles (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER,  -- NULL for system roles
+    name TEXT NOT NULL,
+    permissions TEXT NOT NULL,  -- JSON array of permission strings
+    created_at TEXT NOT NULL
+);
+
+-- Default roles:
+-- 'admin': Full system access
+-- 'owner': Full business access
+-- 'manager': Can manage appointments, customers, view analytics
+-- 'receptionist': Can manage appointments, view customers
+-- 'viewer': Read-only access to dashboard
+
+CREATE TABLE user_roles (
+    user_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    business_id INTEGER NOT NULL,
+    granted_by INTEGER,
+    granted_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, role_id, business_id)
+);
+```
+
+**Permission Strings**:
+```python
+PERMISSIONS = {
+    # Appointments
+    "appointments:read",
+    "appointments:create",
+    "appointments:update",
+    "appointments:delete",
+
+    # Customers
+    "customers:read",
+    "customers:create",
+    "customers:update",
+    "customers:delete",
+    "customers:export",  # GDPR data export
+
+    # Conversations
+    "conversations:read",
+    "conversations:respond",  # Manual responses
+
+    # Analytics
+    "analytics:view",
+    "analytics:export",
+
+    # Settings
+    "settings:read",
+    "settings:update",
+    "integrations:manage",
+
+    # Admin
+    "users:manage",
+    "billing:manage",
+    "audit:view",
+}
+```
+
+**Audit Logging**:
+```sql
+CREATE TABLE audit_log (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER,
+    user_id INTEGER,
+    action TEXT NOT NULL,  -- 'customer.created', 'appointment.deleted', 'settings.updated'
+    resource_type TEXT,
+    resource_id INTEGER,
+    old_value TEXT,  -- JSON of previous state
+    new_value TEXT,  -- JSON of new state
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL
+);
+-- Index on (business_id, created_at) for efficient queries
+-- Retention: 2 years minimum for compliance
+```
+
+**Success Metric**: Enterprise customer retention > 95%
+
+#### 5.6 Multi-Location & Franchise Support
+**For businesses with multiple locations** - centralized management with location-specific customization.
+
+**Capabilities**:
+- Parent/child business hierarchy
+- Centralized KB with location overrides
+- Cross-location customer profiles
+- Consolidated analytics across locations
+- Location-specific services and hours
+
+**Schema Changes**:
+```sql
+ALTER TABLE businesses ADD COLUMN parent_business_id INTEGER REFERENCES businesses(id);
+ALTER TABLE businesses ADD COLUMN location_type TEXT CHECK(location_type IN ('single', 'parent', 'child'));
+
+-- Customers can be shared across locations
+ALTER TABLE customers ADD COLUMN is_global INTEGER DEFAULT 0;
+```
+
+**Success Metric**: 20% of paying customers are multi-location
+
 ---
 
 ### Success Metrics by Phase
@@ -1861,12 +2267,20 @@ POST /api/v1/kb - Add knowledge entry
 | 1 | No-show rate | < 10% |
 | 2 | Voice resolution rate | > 60% |
 | 2 | SMS response rate | > 40% |
+| 2 | Social channel engagement | > 25% |
 | 3 | Calendar sync adoption | > 70% of businesses |
 | 3 | Double-booking incidents | 0 |
+| 3 | Re-engagement conversion | > 15% |
+| 3 | Review request response | > 10% |
+| 3 | Workflow adoption | > 50% create workflows |
 | 4 | Multi-language coverage | 5 languages |
 | 4 | Escalation rate | < 8% |
+| 4 | Analytics weekly usage | > 80% |
+| 4 | Agent action rate | > 30% of conversations |
+| 4 | Customer satisfaction lift | > 15% |
 | 5 | MRR growth | > 15% MoM |
 | 5 | Enterprise retention | > 95% |
+| 5 | Multi-location customers | > 20% |
 
 ---
 
