@@ -122,7 +122,7 @@ AxisAI/
 │
 ├── main.py                   # Alternative entry point
 │
-├── BLUEPRINTS (13 total):
+├── BLUEPRINTS (14 total):
 │   │
 │   ├── auth_bp.py            # Authentication
 │   │   - GET/POST /login     # Login form & handler
@@ -209,8 +209,30 @@ AxisAI/
 │   │   - GET /onboard                         # Onboarding wizard
 │   │   - POST /onboard/create                 # Create new business
 │   │
-│   └── search_bp.py          # Global search
-│       - GET /search                          # Search results page
+│   ├── search_bp.py          # Global search
+│   │   - GET /search                          # Search results page
+│   │
+│   └── voice_bp.py           # Voice AI (Retell integration)
+│       - POST /api/voice/webhook              # Retell webhook (call events)
+│       - POST /api/voice/webhook/response     # Real-time AI responses
+│       - POST /api/voice/outbound             # Initiate outbound call
+│       - GET /api/voice/calls                 # List voice calls
+│       - GET /api/voice/calls/<id>            # Call details + transcript
+│       - POST /api/voice/calls/<id>/transfer  # Transfer to human
+│       - GET/POST /api/voice/settings         # Voice settings
+│       - GET /api/voice/status                # Voice system status
+│
+├── voice_ws.py               # WebSocket server for Retell Custom LLM
+│   - RetellLLMWebSocket class for real-time voice AI
+│   - Handles: call_details, response_required, reminder_required, ping_pong
+│   - Streams AI responses for natural speech pacing
+│   - Integrates with AxisAI KB and booking system
+│   - Run with: python voice_ws.py (port 8080)
+│
+├── start_voice.sh            # Startup script for voice servers
+│   - Starts Flask on port 5050
+│   - Starts WebSocket server on port 8080
+│   - Usage: ./start_voice.sh
 │
 ├── core/                     # Core business logic modules
 │   │
@@ -364,6 +386,26 @@ AxisAI/
 │   │   - write_meta_from_db() - Syncs business data to filesystem
 │   │
 │   ├── utils.py              # General utilities
+│   │
+│   ├── voice.py              # Voice AI system (Retell integration, 886 lines)
+│   │   - RetellClient class - API client for Retell AI
+│   │   - get_voice_circuit_breaker() - Separate circuit breaker for voice
+│   │   - Voice call management:
+│   │     * create_voice_call_record() - Log new call
+│   │     * update_voice_call() - Update call status/transcript
+│   │     * get_voice_call() - Retrieve call details
+│   │   - Voice booking flow:
+│   │     * store_voice_pending_booking() - Store booking for confirmation
+│   │     * get_voice_pending_booking() - Retrieve pending booking
+│   │     * extract_voice_booking() - Parse <VOICE_BOOKING> from AI response
+│   │     * detect_booking_response() - Detect "yes"/"no" confirmation
+│   │     * confirm_voice_booking() - Commit booking to database
+│   │     * cancel_voice_booking() - Discard pending booking
+│   │   - Webhook handlers:
+│   │     * handle_call_started() - Create session, log call
+│   │     * handle_call_ended() - Store transcript, finalize bookings
+│   │     * handle_call_analyzed() - Store sentiment/summary
+│   │   - Voice settings per business
 │   │
 │   └── logger.py             # Logging configuration
 │
@@ -1477,6 +1519,64 @@ zip -r backup.zip . -x ".venv/*" -x ".git/*"
 
 ---
 
+## Voice AI Integration (Retell) — IN PROGRESS
+
+### Current Status: Code Complete, Connection Pending
+
+All voice AI code is written and tested. The remaining issue is getting Retell to connect to our custom LLM WebSocket server.
+
+### What's Built
+
+| Component | File | Status |
+|-----------|------|--------|
+| WebSocket Server | `voice_ws.py` (343 lines) | ✅ Complete |
+| Voice Core Module | `core/voice.py` (886 lines) | ✅ Complete |
+| Webhook Endpoints | `voice_bp.py` (515 lines) | ✅ Complete |
+| Startup Script | `start_voice.sh` (68 lines) | ✅ Complete |
+| Voice Tests | `tests/test_voice.py` (25+ tests) | ✅ Passing |
+| Voice AI Prompts | `core/ai.py` (enhanced) | ✅ Complete |
+
+### Voice Features Implemented
+
+1. **Custom LLM Integration**: WebSocket server that lets Retell use AxisAI's KB and AI
+2. **Voice Booking Flow**: `<VOICE_BOOKING>` tag extraction, verbal confirmation detection
+3. **Call Management**: Start/end handlers, transcript storage, call records
+4. **Voice Settings**: Per-business voice configuration
+5. **Circuit Breaker**: Separate resilience for voice calls
+6. **Premium Voice Prompts**: Natural, conversational, brevity-focused
+
+### Pending Issue
+
+Retell doesn't connect to our WebSocket server. Our tests pass but Retell never initiates connection.
+
+**Possible solutions to try:**
+1. Contact Retell support about custom LLM connections
+2. Deploy to a real server instead of tunnel (ngrok/cloudflared)
+3. Check if there are undocumented protocol requirements
+4. Try Retell's test call feature from their dashboard
+
+### How to Run Voice Servers
+
+```bash
+# Start both Flask and WebSocket servers
+./start_voice.sh
+
+# Or manually:
+python voice_ws.py  # WebSocket on port 8080
+flask --app dashboard run --port 5050  # Flask on port 5050
+
+# Expose WebSocket for Retell (dev only)
+cloudflared tunnel --url http://localhost:8080
+```
+
+### Phone Number Status
+
+- **Provider**: Telnyx (SIP trunking for UK numbers)
+- **Status**: Account created, UK number purchased, verification pending (24-48 hours)
+- **Number**: Will be connected to Retell agent once verification completes
+
+---
+
 ## Planned Features (Not Yet Implemented)
 
 From the plan file, these features are designed but not built:
@@ -1567,6 +1667,15 @@ pkill -f "ptw tests/"
 12. **Field Encryption** - PII fields can be encrypted at rest
 13. **Comprehensive Test Suite** - 307 tests covering all core modules
 14. **Continuous Testing** - pytest-watch for auto-running tests on file save
+15. **Voice AI Integration (Jan 23)** - Retell AI integration code complete:
+    - WebSocket server for custom LLM (`voice_ws.py`)
+    - Voice webhooks and API (`voice_bp.py`)
+    - Voice helper functions (`core/voice.py`)
+    - Voice booking confirmation flow
+    - Premium voice prompts in `core/ai.py`
+    - 25+ voice tests
+    - Telnyx account for UK phone number (pending verification)
+    - *Status: Code complete, Retell connection issue pending*
 
 ---
 
@@ -2715,6 +2824,11 @@ core/reminders.py::send_reminder()
 | `reminders.py` | `mailer.py` | Sends email reminders |
 | `reminders.py` | `sms.py` | Sends SMS reminders |
 | `auth_bp.py` | `encryption.py` | Could encrypt PII fields |
+| `voice_ws.py` | `ai.py` | Gets AI responses for voice calls |
+| `voice_ws.py` | `voice.py` | Voice booking flow, call management |
+| `voice_bp.py` | `voice.py` | Webhook handlers, call API |
+| `voice.py` | `booking.py` | Confirms voice bookings to database |
+| `voice.py` | `db.py` | Stores voice call records |
 | All blueprints | `validators.py` | Input validation/sanitization |
 | All blueprints | `db.py` | Database operations |
 
@@ -2728,7 +2842,7 @@ core/reminders.py::send_reminder()
 - **Stop**: `pkill -f "ptw tests/"`
 
 ### Test Results (as of last run)
-- **Total Tests**: 284
+- **Total Tests**: 307
 - **Pass Rate**: 100%
 - **Time**: ~7 seconds
 
@@ -2736,8 +2850,9 @@ core/reminders.py::send_reminder()
 1. **SMS sending**: `core/sms.py` exists but needs Twilio credentials configured
 2. **Email sending**: `core/mailer.py` needs SMTP configuration
 3. **Reminder worker**: Not running by default, needs manual start
-4. **Voice AI**: Not implemented (planned for Phase 2)
+4. **Voice AI**: Code complete, Retell connection issue pending (see Voice AI section above)
 5. **Calendar sync**: Not implemented (planned for Phase 3)
+6. **Telnyx verification**: UK phone number purchased, awaiting identity verification (24-48h)
 
 ### Environment Setup Checklist
 ```bash
