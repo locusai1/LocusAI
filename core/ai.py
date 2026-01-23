@@ -166,53 +166,145 @@ def _kb_snippets(business_id: int, query: str, limit: int = 3):
         return []
 
 
-def _voice_business_prompt(bd: dict, sentiment_context: Optional[Dict] = None) -> str:
-    """Build voice-optimized system prompt with shorter, more natural responses."""
+def _voice_business_prompt(bd: dict, sentiment_context: Optional[Dict] = None, kb_entries: Optional[List] = None) -> str:
+    """Build voice-optimized system prompt — top-tier, natural, fully contextual."""
+    from datetime import datetime
+
     name = bd.get("name", "this business")
-    hours = bd.get("hours", "not provided")
-    addr = bd.get("address", "not provided")
-    serv = bd.get("services", "not provided")
+    hours = bd.get("hours", "")
+    addr = bd.get("address", "")
     tone = bd.get("tone", "friendly and professional")
 
-    base_prompt = f"""
-You are the AI phone receptionist for {name}.
-This is a VOICE conversation - speak naturally and conversationally.
-Use a {tone} tone.
+    # Get current time for context
+    now = datetime.now()
+    current_time = now.strftime("%I:%M %p").lstrip("0")
+    current_day = now.strftime("%A")
 
-Business details (use when relevant):
-- Hours: {hours}
-- Address: {addr}
-- Services: {serv}
+    # Build services info if available
+    services_info = ""
+    services_data = bd.get("services_list") or bd.get("services", "")
+    if isinstance(services_data, list) and services_data:
+        services_lines = []
+        for s in services_data[:10]:  # Limit to top 10
+            if isinstance(s, dict):
+                svc_name = s.get("name", "")
+                duration = s.get("duration_min", "")
+                price = s.get("price", "")
+                if svc_name:
+                    line = f"  • {svc_name}"
+                    if duration:
+                        line += f" ({duration} minutes)"
+                    if price:
+                        line += f" - {price}"
+                    services_lines.append(line)
+        if services_lines:
+            services_info = "\n".join(services_lines)
+    elif isinstance(services_data, str) and services_data:
+        services_info = services_data
 
-VOICE CONVERSATION GUIDELINES:
-- Keep responses SHORT (1-2 sentences max). This is a phone call.
-- Use natural speech patterns. Avoid bullet points, lists, or formatted text.
-- Speak numbers clearly (e.g., "two thirty PM" not "14:30").
-- Spell out addresses and names when needed for clarity.
-- Confirm important details by repeating them back.
-- Use conversational fillers occasionally ("Sure!", "Absolutely!", "Let me check that for you.")
+    base_prompt = f"""You are the AI phone receptionist for {name}. You sound completely human — warm, natural, and effortlessly professional. Callers should feel like they're speaking with the friendliest, most capable receptionist they've ever encountered.
 
-BOOKING VIA VOICE:
-- When you have booking details, ask: "Would you like me to confirm this booking?"
-- Wait for verbal confirmation before outputting the booking tag.
-- If confirmed, output: <VOICE_BOOKING>{{"name":"<NAME>","phone":"<PHONE>","service":"<SERVICE>","datetime":"YYYY-MM-DD HH:MM"}}</VOICE_BOOKING>
-- Continue your normal reply outside the tag.
+## Your Personality
+- {tone.capitalize()} but never robotic or scripted
+- Genuinely helpful — you want to solve their problem
+- Quick and efficient — respect their time
+- Confident but not pushy
+- Use contractions naturally (I'll, you're, we've, that's)
 
-ESCALATION:
-- If the caller asks to speak with a human, say: "Let me connect you with a team member."
-- For emergencies or urgent matters, prioritize helping them immediately.
+## Current Context
+- It's currently {current_day}, {current_time}
+- You're answering calls for {name}
+
+## Business Information
 """
+
+    if hours:
+        base_prompt += f"HOURS: {hours}\n"
+    if addr:
+        base_prompt += f"ADDRESS: {addr}\n"
+    if services_info:
+        base_prompt += f"\nSERVICES OFFERED:\n{services_info}\n"
+
+    base_prompt += """
+## Voice Conversation Rules (CRITICAL)
+1. BREVITY IS KEY: 1-2 sentences per response. This is a phone call, not an essay.
+2. SOUND HUMAN: Use natural speech — "Sure thing!", "Absolutely!", "Let me check that", "Perfect!"
+3. NO FORMATTING: Never use bullet points, numbered lists, or markdown. Just speak naturally.
+4. NUMBERS: Say "two thirty" not "14:30", "oh-seven-seven" for phone numbers
+5. SPELL CAREFULLY: For names/addresses, offer to spell: "That's S-M-I-T-H, right?"
+6. CONFIRM BACK: Repeat important details: "So that's Tuesday at 3pm for a haircut?"
+7. SMOOTH TRANSITIONS: "Great!", "Perfect!", "Brilliant!", "Got it!"
+
+## Handling Bookings
+When booking, collect naturally through conversation:
+1. What service they'd like
+2. When works for them (date and time)
+3. Their name
+4. A contact number
+
+Once you have ALL details AND they confirm, output:
+<VOICE_BOOKING>{{"name":"NAME","phone":"PHONE","service":"SERVICE","datetime":"YYYY-MM-DD HH:MM"}}</VOICE_BOOKING>
+
+Before outputting the tag, always confirm: "So that's [service] on [date] at [time] for [name]. Should I book that in for you?"
+
+## Handling Questions
+- If you know the answer from the business info above, answer confidently
+- If you're not sure, say: "I'm not certain about that — let me have someone get back to you"
+- Never make up information
+
+## Transfers & Escalation
+- If they ask for a human/manager: "Of course, let me connect you with someone"
+- If they're upset: Empathize first, then help: "I'm really sorry about that. Let me sort this out for you."
+- For emergencies: Act with appropriate urgency
+
+## What NEVER to Do
+- Never say "as an AI" or mention you're artificial
+- Never give long responses — keep it punchy
+- Never sound scripted or like you're reading
+- Never say "I don't have access to" — just say "I'm not sure about that"
+- Never repeat the same phrase twice in a row
+"""
+
+    # Add KB context if available
+    if kb_entries:
+        base_prompt += "\n## Business Knowledge Base\n"
+        for entry in kb_entries[:5]:
+            if isinstance(entry, dict):
+                q = entry.get("question", entry.get("title", ""))
+                a = entry.get("answer", entry.get("content", ""))
+                if q and a:
+                    base_prompt += f"Q: {q}\nA: {a}\n\n"
 
     # Sentiment-adaptive additions
     if sentiment_context:
         sentiment = sentiment_context.get("sentiment")
-        if sentiment in ("frustrated", "angry"):
+        frustration = sentiment_context.get("frustration_score", 0)
+
+        if sentiment in ("frustrated", "angry") or frustration > 0.5:
             base_prompt += """
-The caller seems frustrated. Be extra empathetic and patient. Apologize for any inconvenience and focus on solving their problem quickly.
+## IMPORTANT: Caller Alert
+The caller seems frustrated or upset. Adjust your approach:
+- Lead with empathy: "I completely understand" / "I'm sorry you're dealing with this"
+- Be extra patient and don't rush them
+- Focus on solutions, not explanations
+- Offer to escalate if they're not satisfied: "Would you like me to have a manager call you back?"
 """
         elif sentiment == "urgent":
             base_prompt += """
-This seems urgent. Respond with appropriate urgency and prioritize getting them help.
+## IMPORTANT: Urgent Call
+This seems urgent. Respond with appropriate urgency:
+- Skip small talk and get to the point
+- Prioritize solving their immediate need
+- If it's a medical/safety emergency, recommend appropriate services
+"""
+        elif sentiment == "confused":
+            base_prompt += """
+## IMPORTANT: Caller Needs Clarity
+The caller seems unsure or confused:
+- Use simpler language
+- Take it one step at a time
+- Offer to explain things differently
+- Be reassuring: "No worries, I can help with that"
 """
 
     return base_prompt.strip()
@@ -479,6 +571,41 @@ def process_message(
     return (reply or "").strip()
 
 
+def _get_business_services(business_id: int) -> List[Dict]:
+    """Fetch active services for a business."""
+    try:
+        from core.db import get_conn
+        with get_conn() as con:
+            rows = con.execute("""
+                SELECT name, duration_min, price FROM services
+                WHERE business_id = ? AND active = 1
+                ORDER BY name
+            """, (business_id,)).fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def _get_kb_entries_for_voice(business_id: int, query: str, limit: int = 5) -> List[Dict]:
+    """Fetch relevant KB entries for voice context."""
+    if not kb_search or not business_id:
+        return []
+    try:
+        rows = kb_search(business_id, query, limit=limit) or []
+        entries = []
+        for r in rows:
+            if isinstance(r, dict):
+                entries.append(r)
+            else:
+                entries.append({
+                    "question": r.get("title", "") if hasattr(r, "get") else "",
+                    "answer": r.get("content", "") if hasattr(r, "get") else ""
+                })
+        return entries
+    except Exception:
+        return []
+
+
 def process_message_for_voice(
     user_input: str,
     business_data: Dict,
@@ -487,13 +614,14 @@ def process_message_for_voice(
     customer_info: Optional[Dict] = None
 ) -> str:
     """
-    Generate a voice-optimized receptionist reply.
+    Generate a voice-optimized receptionist reply with full business context.
 
-    Similar to process_message but uses voice-specific prompts that:
-    - Keep responses shorter (1-2 sentences)
-    - Use natural speech patterns
-    - Use VOICE_BOOKING tag instead of BOOKING tag
-    - Are optimized for text-to-speech
+    This is the top-tier voice AI that:
+    - Uses natural, human-like conversation
+    - Has full access to business services, hours, KB
+    - Handles booking with verbal confirmation
+    - Adapts tone based on sentiment
+    - Keeps responses short and punchy for voice
 
     Returns:
         Reply string optimized for voice
@@ -506,10 +634,14 @@ def process_message_for_voice(
     session_id = state.get("session_id")
     user_text = (user_input or "").strip() or "Hello"
 
+    # Enrich business data with services if not already present
+    if business_id and "services_list" not in bd:
+        bd["services_list"] = _get_business_services(business_id)
+
     # Get conversation history
     conversation_history = []
     if session_id:
-        conversation_history = _history_from_db(session_id, limit=8)  # Shorter for voice
+        conversation_history = _history_from_db(session_id, limit=8)
     else:
         conversation_history = state.get("history", [])[-6:]
 
@@ -555,36 +687,36 @@ def process_message_for_voice(
             if escalation_id:
                 state["escalated"] = True
                 state["escalation_id"] = escalation_id
-                return get_escalation_response()
+                # Voice-optimized escalation response
+                return "I understand. Let me connect you with a team member who can help you directly."
         except Exception as e:
             logger.error(f"Escalation handling failed: {e}")
 
-    # Build voice-optimized prompt
-    sys_prompt = _voice_business_prompt(bd, sentiment_context)
-
-    # Add KB snippets (shorter for voice)
+    # Get relevant KB entries for context
+    kb_entries = []
     if business_id:
-        snips = _kb_snippets(business_id, user_text, limit=2)
-        if snips:
-            sys_prompt += "\n\nRelevant info:\n" + "\n".join(snips)
+        kb_entries = _get_kb_entries_for_voice(business_id, user_text, limit=5)
+
+    # Build voice-optimized prompt with full context
+    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries)
 
     # Build messages
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_text})
 
-    # Call AI with lower max_tokens for shorter voice responses
+    # Call AI
     reply = _call_ai_with_resilience(messages, max_retries=2)
 
     if not reply:
-        reply = "I'm having a little trouble. Could you repeat that?"
+        reply = "I'm having a little trouble right now. Could you say that again?"
 
     # Update state
     if "history" not in state:
         state["history"] = []
     state["history"].append({"role": "user", "content": user_text})
     state["history"].append({"role": "assistant", "content": reply})
-    if len(state["history"]) > 16:  # Shorter history for voice
+    if len(state["history"]) > 16:
         state["history"] = state["history"][-16:]
 
     return (reply or "").strip()
