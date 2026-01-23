@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 WS_HOST = os.getenv("VOICE_WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("VOICE_WS_PORT", "8080"))
-DEFAULT_BUSINESS_ID = int(os.getenv("DEFAULT_BUSINESS_ID", "10"))  # Default for test calls
+DEFAULT_BUSINESS_ID = int(os.getenv("DEFAULT_BUSINESS_ID", "9"))  # StyleCuts Hair Studio
 
 
 class RetellLLMWebSocket:
@@ -219,11 +219,13 @@ class RetellLLMWebSocket:
             state["channel"] = "voice"
             state["call_id"] = call_id
 
-            # Add conversation history from transcript
+            # Add conversation history from transcript (OpenAI format)
             history = []
             for item in transcript[:-1]:  # Exclude last message (current)
-                role = "user" if item.get("role") == "user" else "bot"
-                history.append({"sender": role, "text": item.get("content", "")})
+                role = "user" if item.get("role") == "user" else "assistant"
+                content = item.get("content", "")
+                if content:
+                    history.append({"role": role, "content": content})
             state["history"] = history
 
             # Get AI response using our full system
