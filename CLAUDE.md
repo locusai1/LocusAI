@@ -84,7 +84,8 @@ cd "/Users/paulomartinez/AxisAI"
 | Frontend | Jinja2 templates, Tailwind CSS (CDN), Chart.js |
 | AI | OpenAI GPT-4o-mini via API |
 | Auth | Session-based with bcrypt/pbkdf2 password hashing |
-| Testing | pytest (284 tests), pytest-watch for continuous testing |
+| Testing | pytest (307 tests), pytest-watch for continuous testing |
+| Voice AI | Retell AI integration (code complete, connection pending) |
 | Virtual Env | `.venv/` |
 
 ---
@@ -98,6 +99,9 @@ ENCRYPTION_KEY=...                   # Optional: Fernet key for PII encryption
 ENV=dev                              # Environment (dev/prod)
 DASHBOARD_USERNAME=admin             # Default admin username
 DASHBOARD_PASSWORD=admin             # Default admin password
+
+# Retell AI Voice Configuration
+RETELL_API_KEY=key_...               # Retell AI API key for voice calls
 ```
 
 ---
@@ -454,7 +458,7 @@ AxisAI/
 │   ├── backup_axis.py        # Create backups
 │   └── restore_axis.py       # Restore from backup
 │
-├── tests/                    # Test suite (284 tests total)
+├── tests/                    # Test suite (307 tests total)
 │   ├── conftest.py           # Pytest fixtures and configuration
 │   │   - test_db fixture (temporary SQLite database)
 │   │   - db_conn fixture (database connection)
@@ -585,7 +589,7 @@ AxisAI/
 .venv/bin/ptw tests/ --clear
 ```
 
-### Test Summary (284 tests)
+### Test Summary (307 tests)
 
 | Test File | Tests | Module Tested |
 |-----------|-------|---------------|
@@ -938,7 +942,7 @@ tools/reminder_worker.py  # Background reminder daemon
 tools/restore_axis.py     # Restore from backup
 tools/sync_businesses.py  # Sync DB to filesystem
 
-# Tests (284 tests total)
+# Tests (307 tests total)
 tests/conftest.py              # Fixtures
 tests/test_auth.py             # 21 tests
 tests/test_booking.py          # 1 test
@@ -1561,7 +1565,7 @@ pkill -f "ptw tests/"
 10. **Account Lockout** - 5 failed login attempts → 15 minute lockout
 11. **Circuit Breaker** - Resilience pattern for external API calls
 12. **Field Encryption** - PII fields can be encrypted at rest
-13. **Comprehensive Test Suite** - 284 tests covering all core modules
+13. **Comprehensive Test Suite** - 307 tests covering all core modules
 14. **Continuous Testing** - pytest-watch for auto-running tests on file save
 
 ---
@@ -1628,7 +1632,7 @@ The platform is designed to work with any appointment-based or inquiry-based bus
 | Circuit breaker resilience | ✅ Done | Good |
 | Field encryption for PII | ✅ Done | Good |
 | Account lockout security | ✅ Done | Good |
-| Comprehensive test suite | ✅ Done | 284 tests |
+| Comprehensive test suite | ✅ Done | 307 tests |
 
 **Critical Gaps (vs Competitors)**:
 | Gap | Competitor Standard | Priority |
