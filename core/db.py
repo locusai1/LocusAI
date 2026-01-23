@@ -349,6 +349,73 @@ def init_db() -> None:
         );""")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_escalations_business ON escalations(business_id, status);")
 
+        # ---- voice_calls ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS voice_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            session_id INTEGER,
+            customer_id INTEGER,
+            retell_call_id TEXT UNIQUE NOT NULL,
+            retell_agent_id TEXT,
+            direction TEXT NOT NULL CHECK(direction IN ('inbound', 'outbound')),
+            from_number TEXT,
+            to_number TEXT,
+            call_status TEXT NOT NULL DEFAULT 'registered'
+                CHECK(call_status IN ('registered', 'ongoing', 'ended', 'error', 'transferred')),
+            started_at TEXT,
+            ended_at TEXT,
+            duration_seconds INTEGER,
+            transcript TEXT,
+            transcript_json TEXT,
+            call_summary TEXT,
+            sentiment TEXT,
+            recording_url TEXT,
+            recording_duration_seconds INTEGER,
+            booking_discussed INTEGER DEFAULT 0,
+            booking_confirmed INTEGER DEFAULT 0,
+            appointment_id INTEGER,
+            transferred INTEGER DEFAULT 0,
+            transfer_number TEXT,
+            transfer_reason TEXT,
+            cost_cents INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+            FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_business ON voice_calls(business_id, created_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_status ON voice_calls(business_id, call_status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_retell ON voice_calls(retell_call_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_customer ON voice_calls(customer_id);")
+
+        # ---- voice_settings ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS voice_settings (
+            business_id INTEGER PRIMARY KEY,
+            retell_agent_id TEXT,
+            retell_phone_number TEXT,
+            voice_id TEXT DEFAULT 'default',
+            voice_speed REAL DEFAULT 1.0,
+            voice_pitch REAL DEFAULT 1.0,
+            greeting_message TEXT DEFAULT 'Hello! Thank you for calling. How can I help you today?',
+            transfer_message TEXT DEFAULT 'Let me connect you with a team member.',
+            voicemail_message TEXT,
+            transfer_enabled INTEGER DEFAULT 1,
+            transfer_number TEXT,
+            transfer_after_seconds INTEGER DEFAULT 300,
+            after_hours_enabled INTEGER DEFAULT 1,
+            after_hours_message TEXT,
+            after_hours_voicemail INTEGER DEFAULT 1,
+            recording_enabled INTEGER DEFAULT 1,
+            transcript_enabled INTEGER DEFAULT 1,
+            booking_enabled INTEGER DEFAULT 1,
+            booking_confirmation_required INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        );""")
+
         # ---- Add columns to existing tables ----
         # Sessions: channel, phone, customer_id, escalated
         session_columns = [

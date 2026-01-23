@@ -30,6 +30,16 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 # Model selector so you can switch without code changes
 OPENAI_MODEL    = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# ===== Retell AI (Voice Calls) =====
+# Required for voice AI functionality
+RETELL_API_KEY = os.getenv("RETELL_API_KEY")
+RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET")
+RETELL_DEFAULT_AGENT_ID = os.getenv("RETELL_DEFAULT_AGENT_ID")
+# Voice call limits
+VOICE_TRANSFER_TIMEOUT = int(os.getenv("VOICE_TRANSFER_TIMEOUT", "300"))  # seconds
+VOICE_MAX_DURATION = int(os.getenv("VOICE_MAX_DURATION", "600"))  # seconds (10 min)
+VOICE_RECORDING_ENABLED = os.getenv("VOICE_RECORDING_ENABLED", "true").lower() == "true"
+
 # ===== Email (optional; used for appointment confirmations) =====
 SMTP_HOST = os.getenv("SMTP_HOST")            # e.g. "smtp.gmail.com"
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

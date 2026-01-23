@@ -1,7 +1,7 @@
 # AxisAI - Complete Project Documentation
 
 > **This file is automatically read by Claude at the start of each session.**
-> Last updated: January 21, 2026
+> Last updated: January 23, 2026
 >
 > **IMPORTANT**: This file contains EVERYTHING about the codebase, strategic plan, and project state.
 > Read this entire file to have full context equivalent to the developer who wrote it.
@@ -2448,9 +2448,17 @@ When things fail, degrade gracefully:
 | Twilio | SMS, Voice, WhatsApp | Pay-per-use |
 | Retell AI | Voice AI platform | $0.07/min |
 | Stripe | Payments, billing | 2.9% + $0.30 |
-| Google APIs | Calendar sync | Free tier |
+| Google APIs | Calendar sync, SSO | Free tier |
+| Microsoft Graph | Outlook calendar, SSO | Free tier |
+| Meta Business API | Instagram DMs, Facebook Messenger | Free (with approval) |
 | DeepL/Google | Translation | Pay-per-use |
 | Sentry | Error tracking | Free tier |
+| HubSpot API | CRM integration | Free tier |
+| Salesforce API | CRM integration | Varies |
+| Okta | Enterprise SSO | Per-user pricing |
+| SendGrid/Mailgun | Transactional email | Pay-per-use |
+| OpenAI | GPT-4o-mini, function calling | Pay-per-use |
+| Anthropic | Claude (fallback/alternative) | Pay-per-use |
 
 ### Infrastructure Upgrades (As We Scale)
 
@@ -2463,29 +2471,127 @@ When things fail, degrade gracefully:
 
 ## Implementation Priority Matrix
 
-### Do First (Highest ROI)
+### Do First (Highest ROI) - Months 1-3
 1. ✅ Booking confirmation loop - Builds trust, reduces errors
 2. Automated reminders - 20-40% no-show reduction
 3. SMS channel - Many customers prefer text
 4. Google Calendar sync - #1 requested integration
 
 ### Do Next (Months 3-6)
-5. Voice AI (Retell integration)
-6. Multi-model fallback
-7. Outlook Calendar sync
-8. Payment processing
+5. Voice AI (Retell integration) - Expected for "receptionist"
+6. Multi-model fallback - Reliability
+7. Outlook Calendar sync - Microsoft shops
+8. Payment processing - Deposits reduce no-shows 50%+
+9. **Proactive outreach (follow-ups, re-engagement)** - Revenue driver
+10. **Basic personalization (customer memory)** - Quick win
 
-### Do Later (Months 6-12)
-9. CRM integrations
-10. Multi-language support
-11. Industry templates
-12. WhatsApp channel
+### Build Differentiation (Months 6-9)
+11. CRM integrations (HubSpot, Salesforce) - Enterprise requirement
+12. Workflow automation engine - Customization power
+13. WhatsApp channel - International markets
+14. **Social channels (Instagram, Facebook)** - Where customers are
+15. **Intake forms & surveys** - Data collection
 
-### Enterprise (Months 12-18)
-13. Usage-based billing
-14. White-label program
-15. Public API
-16. Advanced analytics
+### AI Leadership (Months 9-12)
+16. Multi-language support - Expand TAM
+17. Industry templates - Faster onboarding
+18. **Agentic capabilities (Level 1-2)** - True differentiation
+19. **Business intelligence dashboard** - Data-driven decisions
+20. **Advanced personalization** - Competitive moat
+
+### Enterprise & Scale (Months 12-18)
+21. Usage-based billing - Monetization
+22. White-label program - Channel expansion
+23. Public API - Developer ecosystem
+24. **SSO & RBAC** - Enterprise security
+25. **Multi-location support** - Franchise market
+26. **Agentic capabilities (Level 3)** - Full autonomy
+27. Advanced analytics with predictions - Premium tier
+
+---
+
+## Complete Feature Roadmap Summary
+
+### Communication Channels (7 total)
+| Channel | Status | Phase |
+|---------|--------|-------|
+| Web Chat Widget | ✅ Done | - |
+| SMS/Text | Planned | 2.1 |
+| Voice AI (Phone) | Planned | 2.2 |
+| WhatsApp Business | Planned | 2.3 |
+| Instagram DMs | Planned | 2.4 |
+| Facebook Messenger | Planned | 2.4 |
+| Email | ✅ Done | - |
+
+### Integrations (10+ planned)
+| Integration | Purpose | Phase |
+|-------------|---------|-------|
+| Google Calendar | 2-way sync | 3.1 |
+| Outlook Calendar | 2-way sync | 3.2 |
+| HubSpot | CRM | 3.3 |
+| Salesforce | CRM | 3.3 |
+| Zoho | CRM | 3.3 |
+| Stripe | Payments | 3.4 |
+| Square | Payments | 3.4 |
+| Zapier | Workflow automation | 3.6 |
+| Make (Integromat) | Workflow automation | 3.6 |
+| Google SSO | Enterprise auth | 5.5 |
+| Microsoft SSO | Enterprise auth | 5.5 |
+| Okta | Enterprise auth | 5.5 |
+
+### AI Capabilities
+| Capability | Status | Phase |
+|------------|--------|-------|
+| Conversation AI (GPT-4o-mini) | ✅ Done | - |
+| Sentiment Analysis | ✅ Done | - |
+| Intent Detection | ✅ Done | - |
+| Knowledge Base (RAG) | ✅ Done | - |
+| Multi-model fallback | Planned | 1.3 |
+| Multi-language | Planned | 4.1 |
+| Advanced intent (function calling) | Planned | 4.3 |
+| Agentic actions (Level 1) | Planned | 4.6 |
+| Agentic actions (Level 2) | Planned | 4.6 |
+| Agentic actions (Level 3) | Planned | 4.6 |
+| Customer personalization | Planned | 4.7 |
+| Churn prediction | Planned | 4.5 |
+| Demand forecasting | Planned | 4.5 |
+
+### Automation & Outreach
+| Feature | Purpose | Phase |
+|---------|---------|-------|
+| Appointment reminders | Reduce no-shows | 1.2 |
+| Post-appointment follow-ups | Engagement | 3.5 |
+| Re-engagement campaigns | Win back customers | 3.5 |
+| Birthday messages | Loyalty | 3.5 |
+| Review solicitation | Reputation | 3.5 |
+| Custom workflow triggers | Automation | 3.6 |
+| Intake forms | Data collection | 3.6 |
+| Post-appointment surveys | Feedback | 3.6 |
+
+### Enterprise Features
+| Feature | Purpose | Phase |
+|---------|---------|-------|
+| Multi-tenant architecture | ✅ Done | - |
+| Role-based access (basic) | ✅ Done | - |
+| Granular RBAC | Enterprise security | 5.5 |
+| SSO (Google/Microsoft/Okta) | Enterprise auth | 5.5 |
+| Audit logging | Compliance | 5.5 |
+| Multi-location support | Franchises | 5.6 |
+| White-label | Resellers | 5.3 |
+| Public API | Developers | 5.4 |
+| Usage-based billing | Monetization | 5.1 |
+
+### Compliance & Security
+| Requirement | Status | Phase |
+|-------------|--------|-------|
+| GDPR (data export/delete) | Planned | 3+ |
+| CCPA compliance | Planned | 3+ |
+| HIPAA (healthcare) | Planned | Enterprise |
+| SOC 2 Type 2 | Planned | Enterprise |
+| Field-level encryption | ✅ Done | - |
+| Account lockout | ✅ Done | - |
+| CSRF protection | ✅ Done | - |
+| Rate limiting | ✅ Done | - |
 
 ---
 

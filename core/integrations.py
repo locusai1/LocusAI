@@ -23,7 +23,7 @@ def register(provider_cls):
 def _ensure_default_providers_loaded():
     """Import default providers once so their @register runs."""
     # If already loaded, do nothing
-    if "local" in _REGISTRY and "dummy" in _REGISTRY:
+    if "local" in _REGISTRY and "dummy" in _REGISTRY and "retell" in _REGISTRY:
         return
     try:
         import providers.local_provider  # noqa: F401
@@ -31,6 +31,10 @@ def _ensure_default_providers_loaded():
         pass
     try:
         import providers.dummy_provider  # noqa: F401
+    except Exception:
+        pass
+    try:
+        import providers.retell_provider  # noqa: F401
     except Exception:
         pass
 
