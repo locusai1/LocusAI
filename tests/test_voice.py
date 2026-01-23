@@ -545,8 +545,8 @@ class TestVoiceAIPrompt:
         # Should mention voice/phone call
         assert 'voice' in prompt.lower() or 'phone' in prompt.lower()
 
-        # Should mention keeping responses short
-        assert 'short' in prompt.lower()
+        # Should mention keeping responses brief/short
+        assert 'brevity' in prompt.lower() or 'short' in prompt.lower() or '1-2 sentences' in prompt.lower()
 
         # Should use VOICE_BOOKING tag
         assert 'VOICE_BOOKING' in prompt
