@@ -225,6 +225,14 @@ class Metrics:
     JOBS_FAILED = "jobs_failed_total"
     JOB_DURATION = "job_duration_seconds"
 
+    # Voice call metrics
+    VOICE_CALLS_TOTAL = "voice_calls_total"
+    VOICE_CALL_DURATION = "voice_call_duration_seconds"
+    VOICE_CALL_ERRORS = "voice_call_errors_total"
+    VOICE_TRANSFERS_TOTAL = "voice_transfers_total"
+    VOICE_BOOKINGS_TOTAL = "voice_bookings_total"
+    VOICE_COST_CENTS = "voice_cost_cents_total"
+
 
 # ============================================================================
 # Decorators for Automatic Instrumentation

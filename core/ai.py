@@ -166,6 +166,58 @@ def _kb_snippets(business_id: int, query: str, limit: int = 3):
         return []
 
 
+def _voice_business_prompt(bd: dict, sentiment_context: Optional[Dict] = None) -> str:
+    """Build voice-optimized system prompt with shorter, more natural responses."""
+    name = bd.get("name", "this business")
+    hours = bd.get("hours", "not provided")
+    addr = bd.get("address", "not provided")
+    serv = bd.get("services", "not provided")
+    tone = bd.get("tone", "friendly and professional")
+
+    base_prompt = f"""
+You are the AI phone receptionist for {name}.
+This is a VOICE conversation - speak naturally and conversationally.
+Use a {tone} tone.
+
+Business details (use when relevant):
+- Hours: {hours}
+- Address: {addr}
+- Services: {serv}
+
+VOICE CONVERSATION GUIDELINES:
+- Keep responses SHORT (1-2 sentences max). This is a phone call.
+- Use natural speech patterns. Avoid bullet points, lists, or formatted text.
+- Speak numbers clearly (e.g., "two thirty PM" not "14:30").
+- Spell out addresses and names when needed for clarity.
+- Confirm important details by repeating them back.
+- Use conversational fillers occasionally ("Sure!", "Absolutely!", "Let me check that for you.")
+
+BOOKING VIA VOICE:
+- When you have booking details, ask: "Would you like me to confirm this booking?"
+- Wait for verbal confirmation before outputting the booking tag.
+- If confirmed, output: <VOICE_BOOKING>{{"name":"<NAME>","phone":"<PHONE>","service":"<SERVICE>","datetime":"YYYY-MM-DD HH:MM"}}</VOICE_BOOKING>
+- Continue your normal reply outside the tag.
+
+ESCALATION:
+- If the caller asks to speak with a human, say: "Let me connect you with a team member."
+- For emergencies or urgent matters, prioritize helping them immediately.
+"""
+
+    # Sentiment-adaptive additions
+    if sentiment_context:
+        sentiment = sentiment_context.get("sentiment")
+        if sentiment in ("frustrated", "angry"):
+            base_prompt += """
+The caller seems frustrated. Be extra empathetic and patient. Apologize for any inconvenience and focus on solving their problem quickly.
+"""
+        elif sentiment == "urgent":
+            base_prompt += """
+This seems urgent. Respond with appropriate urgency and prioritize getting them help.
+"""
+
+    return base_prompt.strip()
+
+
 def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
     """Call AI model with circuit breaker and fallback chain.
 
@@ -423,6 +475,117 @@ def process_message(
         })
         if len(sentiment_history) > 20:
             del sentiment_history[:-20]
+
+    return (reply or "").strip()
+
+
+def process_message_for_voice(
+    user_input: str,
+    business_data: Dict,
+    state: Optional[Dict] = None,
+    customer_id: Optional[int] = None,
+    customer_info: Optional[Dict] = None
+) -> str:
+    """
+    Generate a voice-optimized receptionist reply.
+
+    Similar to process_message but uses voice-specific prompts that:
+    - Keep responses shorter (1-2 sentences)
+    - Use natural speech patterns
+    - Use VOICE_BOOKING tag instead of BOOKING tag
+    - Are optimized for text-to-speech
+
+    Returns:
+        Reply string optimized for voice
+    """
+    if state is None:
+        state = {}
+
+    bd = _row_to_dict(business_data)
+    business_id = bd.get("id")
+    session_id = state.get("session_id")
+    user_text = (user_input or "").strip() or "Hello"
+
+    # Get conversation history
+    conversation_history = []
+    if session_id:
+        conversation_history = _history_from_db(session_id, limit=8)  # Shorter for voice
+    else:
+        conversation_history = state.get("history", [])[-6:]
+
+    # Sentiment Analysis
+    sentiment_result = None
+    sentiment_context = None
+    failed_attempts = state.get("failed_attempts", 0)
+
+    if SENTIMENT_AVAILABLE:
+        try:
+            sentiment_result = analyze_sentiment(
+                text=user_text,
+                conversation_history=conversation_history,
+                failed_attempts=failed_attempts
+            )
+            sentiment_context = {
+                "sentiment": sentiment_result.sentiment.value,
+                "intent": sentiment_result.intent.value,
+                "confidence": sentiment_result.confidence,
+                "frustration_score": sentiment_result.details.get("frustration_score", 0)
+            }
+        except Exception as e:
+            logger.warning(f"Sentiment analysis failed: {e}")
+
+    # Escalation Check
+    if sentiment_result and sentiment_result.triggers_escalation and ESCALATION_AVAILABLE:
+        try:
+            business = bd
+            if business_id and not business.get("email"):
+                full_business = get_business_by_id(business_id)
+                if full_business:
+                    business = _row_to_dict(full_business)
+
+            escalation_id = handle_escalation(
+                sentiment_result=sentiment_result,
+                business=business,
+                session_id=session_id,
+                customer_id=customer_id,
+                customer_info=customer_info,
+                conversation_history=conversation_history + [{"role": "user", "content": user_text}]
+            )
+
+            if escalation_id:
+                state["escalated"] = True
+                state["escalation_id"] = escalation_id
+                return get_escalation_response()
+        except Exception as e:
+            logger.error(f"Escalation handling failed: {e}")
+
+    # Build voice-optimized prompt
+    sys_prompt = _voice_business_prompt(bd, sentiment_context)
+
+    # Add KB snippets (shorter for voice)
+    if business_id:
+        snips = _kb_snippets(business_id, user_text, limit=2)
+        if snips:
+            sys_prompt += "\n\nRelevant info:\n" + "\n".join(snips)
+
+    # Build messages
+    messages = [{"role": "system", "content": sys_prompt}]
+    messages.extend(conversation_history)
+    messages.append({"role": "user", "content": user_text})
+
+    # Call AI with lower max_tokens for shorter voice responses
+    reply = _call_ai_with_resilience(messages, max_retries=2)
+
+    if not reply:
+        reply = "I'm having a little trouble. Could you repeat that?"
+
+    # Update state
+    if "history" not in state:
+        state["history"] = []
+    state["history"].append({"role": "user", "content": user_text})
+    state["history"].append({"role": "assistant", "content": reply})
+    if len(state["history"]) > 16:  # Shorter history for voice
+        state["history"] = state["history"][-16:]
 
     return (reply or "").strip()
 

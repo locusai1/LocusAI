@@ -62,6 +62,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
 import providers.local_provider  # noqa: F401
 import providers.dummy_provider  # noqa: F401
+try:
+    import providers.retell_provider  # noqa: F401
+except ImportError:
+    pass  # Retell provider is optional
 
 # ============================================================================
 # Blueprint Registration
@@ -87,6 +91,13 @@ try:
 except ImportError:
     SMS_AVAILABLE = False
 
+# Voice Blueprint (optional, requires Retell AI)
+try:
+    from voice_bp import bp as voice_bp
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
+
 app.register_blueprint(auth_bp)
 app.register_blueprint(appointments_bp)
 app.register_blueprint(chat_bp)
@@ -103,6 +114,10 @@ app.register_blueprint(analytics_bp)
 # Register SMS blueprint if available
 if SMS_AVAILABLE:
     app.register_blueprint(sms_bp)
+
+# Register Voice blueprint if available
+if VOICE_AVAILABLE:
+    app.register_blueprint(voice_bp)
 
 # ============================================================================
 # Logging Configuration
