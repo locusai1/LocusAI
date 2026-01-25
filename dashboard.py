@@ -186,6 +186,11 @@ def _req_start():
         g.allowed_business_ids = []
         return
 
+    # Skip for voice webhook routes (they use signature verification)
+    if request.path.startswith("/api/voice/webhook"):
+        g.allowed_business_ids = []
+        return
+
     # Skip for static files
     if request.path.startswith("/static/"):
         g.allowed_business_ids = []

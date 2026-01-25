@@ -8,6 +8,7 @@ _EXEMPT_PATHS = {
     "/api/widget/",      # Widget API uses tenant key auth
     "/api/sms/",         # SMS webhooks use signature verification
     "/api/whatsapp/",    # WhatsApp webhooks use signature verification
+    "/api/voice/",       # Voice webhooks use signature verification
 }
 
 def _get_token():
