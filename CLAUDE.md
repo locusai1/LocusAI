@@ -170,3 +170,66 @@ TWILIO_PHONE_NUMBER=...
 - ✅ Voice AI: Retell integration working (WebSocket + webhooks)
 - ✅ Booking confirmation flow: User must confirm before commit
 - ✅ Security hardened: Lockout, encryption, rate limiting, validation
+
+---
+
+## STRATEGY: Wedge → Expand → Platform
+
+**See STRATEGY.md for full details.**
+
+### Core Insight
+Businesses DON'T switch their entire operating system. But they WILL add something new that solves a painful gap. An AI receptionist is ADDITIVE - it doesn't replace anything they have.
+
+### Execution Plan
+
+**Year 1: THE WEDGE - Best AI Receptionist on the market. Period.**
+- Caller recognition ("Hi Sarah!")
+- Real-time availability checking
+- Multi-channel: Voice + SMS + Chat
+- Integrates with existing calendars (Google, Outlook, Calendly)
+- Dead simple setup (10 minutes)
+- Multi-language (Spanish priority)
+
+**Year 2: THE HOOK - Strategic integrations + optional native features**
+- Offer LocusAI scheduling that "works better with the AI"
+- Offer CRM that "tracks everyone who calls"
+- Always integrate first, offer native second
+
+**Year 3: THE PLATFORM - Full business OS for those ready**
+- By now customers trust us and use multiple features
+- Switching cost works in our favor
+- We've earned the right to be their platform
+
+### What We Say NO To (Year 1)
+- Building our own payment processor
+- Complex staff scheduling
+- Inventory management
+- Marketing automation
+- Mobile apps
+- Multi-location complexity
+- Enterprise features
+
+### The Pitch
+"AI that answers your business calls 24/7, books appointments, and never takes a day off."
+
+**We are:** The AI receptionist that integrates with everything you already use.
+**We are NOT:** Another all-in-one platform asking you to switch everything.
+
+### Year 1 Priorities (Ranked)
+1. Incredible AI Voice Receptionist (caller recognition, natural conversation)
+2. Multi-Channel Excellence (Voice, SMS, Web Widget)
+3. Calendar Integrations (Google, Outlook, Calendly, Acuity, iCal)
+4. Dead Simple Onboarding (10-minute setup)
+5. Multi-Language Support (Spanish first)
+6. Industry Templates (Medical, Salon, Auto)
+
+---
+
+## Development Guidelines
+
+When building new features, always ask:
+1. Does this make the AI receptionist better?
+2. Does this integrate with tools businesses already use?
+3. Can this be set up in under 10 minutes?
+
+If the answer is NO to all three, it's probably a Year 2+ feature.
