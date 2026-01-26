@@ -1,4 +1,4 @@
-# core/validators.py — Input validation utilities for AxisAI
+# core/validators.py — Input validation utilities for LocusAI
 # Provides consistent, secure validation across the application
 
 import re

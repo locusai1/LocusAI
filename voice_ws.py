@@ -1,5 +1,5 @@
 # voice_ws.py — WebSocket server for Retell Custom LLM Integration
-# This allows Retell to use AxisAI as the AI backend for voice calls,
+# This allows Retell to use LocusAI as the AI backend for voice calls,
 # giving full access to our KB, booking system, customer data, and sentiment analysis.
 
 import asyncio
@@ -212,7 +212,7 @@ class RetellLLMWebSocket:
             response_text = "I'm sorry, I'm having trouble accessing the system right now. Could you please call back in a moment?"
             return self._create_response(data, response_text)
 
-        # Process through AxisAI with full KB, sentiment, booking support
+        # Process through LocusAI with full KB, sentiment, booking support
         try:
             state = call_state.get("state", {})
             state["session_id"] = session_id

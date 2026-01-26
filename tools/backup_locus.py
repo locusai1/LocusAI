@@ -2,7 +2,7 @@ import os, zipfile, time
 
 ROOT = os.getcwd()
 STAMP = time.strftime("%Y%m%d-%H%M%S")
-OUT = f"axis-backup-{STAMP}.zip"
+OUT = f"locus-backup-{STAMP}.zip"
 
 INCLUDE_DIRS = ["businesses", os.path.join("static","tenants"), "templates", "core", "adapters"]
 INCLUDE_FILES = ["dashboard.py", "main.py", "requirements.lock.txt", "DB_SCHEMA.sql"]

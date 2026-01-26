@@ -1,4 +1,4 @@
-# dashboard.py — AxisAI admin (tenant isolation + branding + pro UI)
+# dashboard.py — LocusAI admin (tenant isolation + branding + pro UI)
 # Production-grade Flask application with proper security and error handling
 
 import os

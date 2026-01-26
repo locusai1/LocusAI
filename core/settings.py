@@ -45,5 +45,5 @@ SMTP_HOST = os.getenv("SMTP_HOST")            # e.g. "smtp.gmail.com"
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
-SMTP_FROM = os.getenv("SMTP_FROM", "no-reply@axisai.local")
+SMTP_FROM = os.getenv("SMTP_FROM", "no-reply@locusai.local")
 SMTP_TLS  = os.getenv("SMTP_TLS", "true").lower() == "true"

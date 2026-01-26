@@ -1,5 +1,5 @@
 /**
- * AxisAI Embeddable Chat Widget
+ * LocusAI Embeddable Chat Widget
  *
  * Usage:
  * <script src="https://your-domain.com/static/widget.js"
@@ -11,7 +11,7 @@
   'use strict';
 
   // Prevent multiple initializations
-  if (window.AxisAIWidget) return;
+  if (window.LocusAIWidget) return;
 
   // Get script element and configuration
   const script = document.currentScript || document.querySelector('script[data-tenant]');
@@ -20,8 +20,8 @@
   let apiBase = '';
   if (script?.getAttribute('data-api-base')) {
     apiBase = script.getAttribute('data-api-base');
-  } else if (window.AXISAI_API_BASE) {
-    apiBase = window.AXISAI_API_BASE;
+  } else if (window.LOCUSAI_API_BASE) {
+    apiBase = window.LOCUSAI_API_BASE;
   } else if (script?.src) {
     // Extract base URL from script src
     const srcUrl = new URL(script.src, window.location.href);
@@ -38,7 +38,7 @@
   };
 
   if (!config.tenant) {
-    console.error('AxisAI Widget: Missing data-tenant attribute');
+    console.error('LocusAI Widget: Missing data-tenant attribute');
     return;
   }
 
@@ -53,24 +53,24 @@
   };
 
   // Storage key for session persistence
-  const STORAGE_KEY = `axisai_session_${config.tenant}`;
+  const STORAGE_KEY = `locusai_session_${config.tenant}`;
 
   // ============================================================================
   // Styles
   // ============================================================================
 
   const styles = `
-    #axisai-widget-container {
-      --axisai-primary: #2f6fec;
-      --axisai-primary-hover: #1d5bc7;
-      --axisai-bg: #ffffff;
-      --axisai-text: #1f2937;
-      --axisai-text-muted: #6b7280;
-      --axisai-border: #e5e7eb;
-      --axisai-user-bg: var(--axisai-primary);
-      --axisai-user-text: #ffffff;
-      --axisai-bot-bg: #f3f4f6;
-      --axisai-bot-text: #1f2937;
+    #locusai-widget-container {
+      --locusai-primary: #2f6fec;
+      --locusai-primary-hover: #1d5bc7;
+      --locusai-bg: #ffffff;
+      --locusai-text: #1f2937;
+      --locusai-text-muted: #6b7280;
+      --locusai-border: #e5e7eb;
+      --locusai-user-bg: var(--locusai-primary);
+      --locusai-user-text: #ffffff;
+      --locusai-bot-bg: #f3f4f6;
+      --locusai-bot-text: #1f2937;
       position: fixed;
       bottom: 20px;
       ${config.position === 'bottom-left' ? 'left: 20px;' : 'right: 20px;'}
@@ -80,11 +80,11 @@
       line-height: 1.5;
     }
 
-    #axisai-launcher {
+    #locusai-launcher {
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: var(--axisai-primary);
+      background: var(--locusai-primary);
       border: none;
       cursor: pointer;
       display: flex;
@@ -94,23 +94,23 @@
       transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    #axisai-launcher:hover {
+    #locusai-launcher:hover {
       transform: scale(1.05);
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     }
 
-    #axisai-launcher svg {
+    #locusai-launcher svg {
       width: 28px;
       height: 28px;
       fill: white;
     }
 
-    #axisai-launcher.open svg.chat-icon { display: none; }
-    #axisai-launcher.open svg.close-icon { display: block; }
-    #axisai-launcher:not(.open) svg.chat-icon { display: block; }
-    #axisai-launcher:not(.open) svg.close-icon { display: none; }
+    #locusai-launcher.open svg.chat-icon { display: none; }
+    #locusai-launcher.open svg.close-icon { display: block; }
+    #locusai-launcher:not(.open) svg.chat-icon { display: block; }
+    #locusai-launcher:not(.open) svg.close-icon { display: none; }
 
-    #axisai-chat-window {
+    #locusai-chat-window {
       position: absolute;
       bottom: 70px;
       ${config.position === 'bottom-left' ? 'left: 0;' : 'right: 0;'}
@@ -118,21 +118,21 @@
       max-width: calc(100vw - 40px);
       height: 500px;
       max-height: calc(100vh - 120px);
-      background: var(--axisai-bg);
+      background: var(--locusai-bg);
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
       display: none;
       flex-direction: column;
       overflow: hidden;
-      border: 1px solid var(--axisai-border);
+      border: 1px solid var(--locusai-border);
     }
 
-    #axisai-chat-window.open {
+    #locusai-chat-window.open {
       display: flex;
-      animation: axisai-slide-up 0.3s ease-out;
+      animation: locusai-slide-up 0.3s ease-out;
     }
 
-    @keyframes axisai-slide-up {
+    @keyframes locusai-slide-up {
       from {
         opacity: 0;
         transform: translateY(10px);
@@ -143,16 +143,16 @@
       }
     }
 
-    #axisai-header {
+    #locusai-header {
       padding: 16px;
-      background: var(--axisai-primary);
+      background: var(--locusai-primary);
       color: white;
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    #axisai-header-avatar {
+    #locusai-header-avatar {
       width: 40px;
       height: 40px;
       border-radius: 50%;
@@ -162,27 +162,27 @@
       justify-content: center;
     }
 
-    #axisai-header-avatar svg {
+    #locusai-header-avatar svg {
       width: 24px;
       height: 24px;
       fill: white;
     }
 
-    #axisai-header-info {
+    #locusai-header-info {
       flex: 1;
     }
 
-    #axisai-header-title {
+    #locusai-header-title {
       font-weight: 600;
       font-size: 16px;
     }
 
-    #axisai-header-status {
+    #locusai-header-status {
       font-size: 12px;
       opacity: 0.9;
     }
 
-    #axisai-messages {
+    #locusai-messages {
       flex: 1;
       overflow-y: auto;
       padding: 16px;
@@ -191,68 +191,68 @@
       gap: 12px;
     }
 
-    .axisai-message {
+    .locusai-message {
       max-width: 85%;
       padding: 10px 14px;
       border-radius: 16px;
       word-wrap: break-word;
     }
 
-    .axisai-message.user {
+    .locusai-message.user {
       align-self: flex-end;
-      background: var(--axisai-user-bg);
-      color: var(--axisai-user-text);
+      background: var(--locusai-user-bg);
+      color: var(--locusai-user-text);
       border-bottom-right-radius: 4px;
     }
 
-    .axisai-message.assistant {
+    .locusai-message.assistant {
       align-self: flex-start;
-      background: var(--axisai-bot-bg);
-      color: var(--axisai-bot-text);
+      background: var(--locusai-bot-bg);
+      color: var(--locusai-bot-text);
       border-bottom-left-radius: 4px;
     }
 
-    .axisai-typing {
+    .locusai-typing {
       align-self: flex-start;
       padding: 12px 16px;
-      background: var(--axisai-bot-bg);
+      background: var(--locusai-bot-bg);
       border-radius: 16px;
       border-bottom-left-radius: 4px;
     }
 
-    .axisai-typing-dots {
+    .locusai-typing-dots {
       display: flex;
       gap: 4px;
     }
 
-    .axisai-typing-dot {
+    .locusai-typing-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--axisai-text-muted);
-      animation: axisai-bounce 1.4s infinite ease-in-out both;
+      background: var(--locusai-text-muted);
+      animation: locusai-bounce 1.4s infinite ease-in-out both;
     }
 
-    .axisai-typing-dot:nth-child(1) { animation-delay: -0.32s; }
-    .axisai-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    .locusai-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .locusai-typing-dot:nth-child(2) { animation-delay: -0.16s; }
 
-    @keyframes axisai-bounce {
+    @keyframes locusai-bounce {
       0%, 80%, 100% { transform: scale(0); }
       40% { transform: scale(1); }
     }
 
-    #axisai-input-area {
+    #locusai-input-area {
       padding: 12px 16px;
-      border-top: 1px solid var(--axisai-border);
+      border-top: 1px solid var(--locusai-border);
       display: flex;
       gap: 8px;
-      background: var(--axisai-bg);
+      background: var(--locusai-bg);
     }
 
-    #axisai-input {
+    #locusai-input {
       flex: 1;
       padding: 10px 14px;
-      border: 1px solid var(--axisai-border);
+      border: 1px solid var(--locusai-border);
       border-radius: 24px;
       outline: none;
       font-size: 14px;
@@ -262,16 +262,16 @@
       line-height: 1.4;
     }
 
-    #axisai-input:focus {
-      border-color: var(--axisai-primary);
+    #locusai-input:focus {
+      border-color: var(--locusai-primary);
       box-shadow: 0 0 0 2px rgba(47, 111, 236, 0.1);
     }
 
-    #axisai-send {
+    #locusai-send {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: var(--axisai-primary);
+      background: var(--locusai-primary);
       border: none;
       cursor: pointer;
       display: flex;
@@ -281,40 +281,40 @@
       flex-shrink: 0;
     }
 
-    #axisai-send:hover {
-      background: var(--axisai-primary-hover);
+    #locusai-send:hover {
+      background: var(--locusai-primary-hover);
     }
 
-    #axisai-send:disabled {
+    #locusai-send:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    #axisai-send svg {
+    #locusai-send svg {
       width: 20px;
       height: 20px;
       fill: white;
     }
 
-    #axisai-branding {
+    #locusai-branding {
       padding: 8px;
       text-align: center;
       font-size: 11px;
-      color: var(--axisai-text-muted);
-      background: var(--axisai-bg);
+      color: var(--locusai-text-muted);
+      background: var(--locusai-bg);
     }
 
-    #axisai-branding a {
-      color: var(--axisai-text-muted);
+    #locusai-branding a {
+      color: var(--locusai-text-muted);
       text-decoration: none;
     }
 
-    #axisai-branding a:hover {
+    #locusai-branding a:hover {
       text-decoration: underline;
     }
 
     @media (max-width: 480px) {
-      #axisai-chat-window {
+      #locusai-chat-window {
         width: calc(100vw - 40px);
         height: calc(100vh - 100px);
         bottom: 70px;
@@ -322,39 +322,39 @@
     }
 
     /* Booking Confirmation Card Styles */
-    .axisai-booking-card {
+    .locusai-booking-card {
       background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-      border: 1px solid var(--axisai-border);
+      border: 1px solid var(--locusai-border);
       border-radius: 12px;
       padding: 16px;
       margin: 8px 0;
       max-width: 100%;
     }
 
-    .axisai-booking-card-header {
+    .locusai-booking-card-header {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-bottom: 12px;
-      color: var(--axisai-text);
+      color: var(--locusai-text);
       font-weight: 600;
       font-size: 14px;
     }
 
-    .axisai-booking-card-header svg {
+    .locusai-booking-card-header svg {
       width: 20px;
       height: 20px;
-      fill: var(--axisai-primary);
+      fill: var(--locusai-primary);
     }
 
-    .axisai-booking-details {
+    .locusai-booking-details {
       background: white;
       border-radius: 8px;
       padding: 12px;
       margin-bottom: 12px;
     }
 
-    .axisai-booking-row {
+    .locusai-booking-row {
       display: flex;
       justify-content: space-between;
       padding: 6px 0;
@@ -362,28 +362,28 @@
       font-size: 13px;
     }
 
-    .axisai-booking-row:last-child {
+    .locusai-booking-row:last-child {
       border-bottom: none;
     }
 
-    .axisai-booking-label {
-      color: var(--axisai-text-muted);
+    .locusai-booking-label {
+      color: var(--locusai-text-muted);
     }
 
-    .axisai-booking-value {
-      color: var(--axisai-text);
+    .locusai-booking-value {
+      color: var(--locusai-text);
       font-weight: 500;
       text-align: right;
       max-width: 60%;
       word-break: break-word;
     }
 
-    .axisai-booking-actions {
+    .locusai-booking-actions {
       display: flex;
       gap: 8px;
     }
 
-    .axisai-booking-btn {
+    .locusai-booking-btn {
       flex: 1;
       padding: 10px 16px;
       border-radius: 8px;
@@ -394,47 +394,47 @@
       transition: all 0.2s;
     }
 
-    .axisai-booking-btn:disabled {
+    .locusai-booking-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
 
-    .axisai-booking-btn-confirm {
-      background: var(--axisai-primary);
+    .locusai-booking-btn-confirm {
+      background: var(--locusai-primary);
       color: white;
     }
 
-    .axisai-booking-btn-confirm:hover:not(:disabled) {
-      background: var(--axisai-primary-hover);
+    .locusai-booking-btn-confirm:hover:not(:disabled) {
+      background: var(--locusai-primary-hover);
     }
 
-    .axisai-booking-btn-cancel {
+    .locusai-booking-btn-cancel {
       background: white;
-      color: var(--axisai-text);
-      border: 1px solid var(--axisai-border);
+      color: var(--locusai-text);
+      border: 1px solid var(--locusai-border);
     }
 
-    .axisai-booking-btn-cancel:hover:not(:disabled) {
+    .locusai-booking-btn-cancel:hover:not(:disabled) {
       background: #f9fafb;
     }
 
-    .axisai-booking-timer {
+    .locusai-booking-timer {
       text-align: center;
       font-size: 11px;
-      color: var(--axisai-text-muted);
+      color: var(--locusai-text-muted);
       margin-top: 8px;
     }
 
-    .axisai-booking-confirmed {
+    .locusai-booking-confirmed {
       background: #ecfdf5;
       border-color: #a7f3d0;
     }
 
-    .axisai-booking-confirmed .axisai-booking-card-header {
+    .locusai-booking-confirmed .locusai-booking-card-header {
       color: #059669;
     }
 
-    .axisai-booking-confirmed .axisai-booking-card-header svg {
+    .locusai-booking-confirmed .locusai-booking-card-header svg {
       fill: #059669;
     }
   `;
@@ -484,7 +484,7 @@
 
       return await response.json();
     } catch (error) {
-      console.error('AxisAI Widget API Error:', error);
+      console.error('LocusAI Widget API Error:', error);
       throw error;
     }
   }
@@ -496,9 +496,9 @@
 
       // Apply custom colors
       if (data.business?.accent_color) {
-        const container = document.getElementById('axisai-widget-container');
+        const container = document.getElementById('locusai-widget-container');
         if (container) {
-          container.style.setProperty('--axisai-primary', data.business.accent_color);
+          container.style.setProperty('--locusai-primary', data.business.accent_color);
         }
       }
 
@@ -607,8 +607,8 @@
     if (!state.pendingBooking) return;
 
     const token = state.pendingBooking.token;
-    const confirmBtn = document.getElementById('axisai-booking-confirm');
-    const cancelBtn = document.getElementById('axisai-booking-cancel');
+    const confirmBtn = document.getElementById('locusai-booking-confirm');
+    const cancelBtn = document.getElementById('locusai-booking-cancel');
 
     // Disable buttons during request
     if (confirmBtn) confirmBtn.disabled = true;
@@ -625,16 +625,16 @@
 
       if (data.success) {
         // Update the booking card to show confirmed state
-        const bookingCard = document.getElementById('axisai-booking-card');
+        const bookingCard = document.getElementById('locusai-booking-card');
         if (bookingCard) {
-          bookingCard.classList.add('axisai-booking-confirmed');
+          bookingCard.classList.add('locusai-booking-confirmed');
           bookingCard.innerHTML = `
-            <div class="axisai-booking-card-header">
+            <div class="locusai-booking-card-header">
               ${checkIcon}
               <span>Booking Confirmed!</span>
             </div>
-            <div class="axisai-booking-details">
-              <p style="margin: 0; color: var(--axisai-text); font-size: 13px;">
+            <div class="locusai-booking-details">
+              <p style="margin: 0; color: var(--locusai-text); font-size: 13px;">
                 ${escapeHtml(data.message)}
               </p>
             </div>
@@ -680,7 +680,7 @@
       });
 
       // Remove the booking card
-      const bookingCard = document.getElementById('axisai-booking-card');
+      const bookingCard = document.getElementById('locusai-booking-card');
       if (bookingCard) {
         bookingCard.remove();
       }
@@ -718,27 +718,27 @@
 
     // Create container
     const container = document.createElement('div');
-    container.id = 'axisai-widget-container';
+    container.id = 'locusai-widget-container';
     container.innerHTML = `
-      <button id="axisai-launcher" aria-label="Open chat">
+      <button id="locusai-launcher" aria-label="Open chat">
         ${chatIcon}
         ${closeIcon}
       </button>
-      <div id="axisai-chat-window">
-        <div id="axisai-header">
-          <div id="axisai-header-avatar">${avatarIcon}</div>
-          <div id="axisai-header-info">
-            <div id="axisai-header-title">Chat with us</div>
-            <div id="axisai-header-status">We typically reply instantly</div>
+      <div id="locusai-chat-window">
+        <div id="locusai-header">
+          <div id="locusai-header-avatar">${avatarIcon}</div>
+          <div id="locusai-header-info">
+            <div id="locusai-header-title">Chat with us</div>
+            <div id="locusai-header-status">We typically reply instantly</div>
           </div>
         </div>
-        <div id="axisai-messages"></div>
-        <div id="axisai-input-area">
-          <textarea id="axisai-input" placeholder="Type a message..." rows="1"></textarea>
-          <button id="axisai-send" aria-label="Send message">${sendIcon}</button>
+        <div id="locusai-messages"></div>
+        <div id="locusai-input-area">
+          <textarea id="locusai-input" placeholder="Type a message..." rows="1"></textarea>
+          <button id="locusai-send" aria-label="Send message">${sendIcon}</button>
         </div>
-        <div id="axisai-branding">
-          Powered by <a href="https://axisai.com" target="_blank" rel="noopener">AxisAI</a>
+        <div id="locusai-branding">
+          Powered by <a href="https://locusai.com" target="_blank" rel="noopener">LocusAI</a>
         </div>
       </div>
     `;
@@ -746,10 +746,10 @@
     document.body.appendChild(container);
 
     // Bind events
-    const launcher = document.getElementById('axisai-launcher');
-    const chatWindow = document.getElementById('axisai-chat-window');
-    const input = document.getElementById('axisai-input');
-    const sendBtn = document.getElementById('axisai-send');
+    const launcher = document.getElementById('locusai-launcher');
+    const chatWindow = document.getElementById('locusai-chat-window');
+    const input = document.getElementById('locusai-input');
+    const sendBtn = document.getElementById('locusai-send');
 
     launcher.addEventListener('click', toggleWidget);
 
@@ -774,8 +774,8 @@
   function toggleWidget() {
     state.isOpen = !state.isOpen;
 
-    const launcher = document.getElementById('axisai-launcher');
-    const chatWindow = document.getElementById('axisai-chat-window');
+    const launcher = document.getElementById('locusai-launcher');
+    const chatWindow = document.getElementById('locusai-chat-window');
 
     launcher.classList.toggle('open', state.isOpen);
     chatWindow.classList.toggle('open', state.isOpen);
@@ -786,7 +786,7 @@
 
       // Focus input
       setTimeout(() => {
-        document.getElementById('axisai-input')?.focus();
+        document.getElementById('locusai-input')?.focus();
       }, 100);
     }
   }
@@ -813,7 +813,7 @@
   }
 
   function handleSend() {
-    const input = document.getElementById('axisai-input');
+    const input = document.getElementById('locusai-input');
     const text = input.value.trim();
 
     if (!text) return;
@@ -825,7 +825,7 @@
   }
 
   function renderMessages() {
-    const container = document.getElementById('axisai-messages');
+    const container = document.getElementById('locusai-messages');
     if (!container) return;
 
     container.innerHTML = state.messages.map(msg => {
@@ -836,12 +836,12 @@
 
       // Handle regular messages
       const roleClass = msg.role === 'assistant' ? 'assistant' : msg.role;
-      return `<div class="axisai-message ${roleClass}">${escapeHtml(msg.text || '')}</div>`;
+      return `<div class="locusai-message ${roleClass}">${escapeHtml(msg.text || '')}</div>`;
     }).join('');
 
     // Bind booking button events after rendering
-    const confirmBtn = document.getElementById('axisai-booking-confirm');
-    const cancelBtn = document.getElementById('axisai-booking-cancel');
+    const confirmBtn = document.getElementById('locusai-booking-confirm');
+    const cancelBtn = document.getElementById('locusai-booking-cancel');
 
     if (confirmBtn) {
       confirmBtn.onclick = confirmBooking;
@@ -889,30 +889,30 @@
     }
 
     const detailsHtml = details.map(d => `
-      <div class="axisai-booking-row">
-        <span class="axisai-booking-label">${escapeHtml(d.label)}</span>
-        <span class="axisai-booking-value">${escapeHtml(d.value)}</span>
+      <div class="locusai-booking-row">
+        <span class="locusai-booking-label">${escapeHtml(d.label)}</span>
+        <span class="locusai-booking-value">${escapeHtml(d.value)}</span>
       </div>
     `).join('');
 
     return `
-      <div id="axisai-booking-card" class="axisai-booking-card">
-        <div class="axisai-booking-card-header">
+      <div id="locusai-booking-card" class="locusai-booking-card">
+        <div class="locusai-booking-card-header">
           ${calendarIcon}
           <span>Confirm Your Booking</span>
         </div>
-        <div class="axisai-booking-details">
+        <div class="locusai-booking-details">
           ${detailsHtml}
         </div>
-        <div class="axisai-booking-actions">
-          <button id="axisai-booking-cancel" class="axisai-booking-btn axisai-booking-btn-cancel">
+        <div class="locusai-booking-actions">
+          <button id="locusai-booking-cancel" class="locusai-booking-btn locusai-booking-btn-cancel">
             Cancel
           </button>
-          <button id="axisai-booking-confirm" class="axisai-booking-btn axisai-booking-btn-confirm">
+          <button id="locusai-booking-confirm" class="locusai-booking-btn locusai-booking-btn-confirm">
             Confirm Booking
           </button>
         </div>
-        <div class="axisai-booking-timer">
+        <div class="locusai-booking-timer">
           This booking will expire in 5 minutes
         </div>
       </div>
@@ -920,17 +920,17 @@
   }
 
   function showTyping() {
-    const container = document.getElementById('axisai-messages');
+    const container = document.getElementById('locusai-messages');
     if (!container) return;
 
     const typing = document.createElement('div');
-    typing.className = 'axisai-typing';
-    typing.id = 'axisai-typing-indicator';
+    typing.className = 'locusai-typing';
+    typing.id = 'locusai-typing-indicator';
     typing.innerHTML = `
-      <div class="axisai-typing-dots">
-        <div class="axisai-typing-dot"></div>
-        <div class="axisai-typing-dot"></div>
-        <div class="axisai-typing-dot"></div>
+      <div class="locusai-typing-dots">
+        <div class="locusai-typing-dot"></div>
+        <div class="locusai-typing-dot"></div>
+        <div class="locusai-typing-dot"></div>
       </div>
     `;
     container.appendChild(typing);
@@ -938,7 +938,7 @@
   }
 
   function hideTyping() {
-    const typing = document.getElementById('axisai-typing-indicator');
+    const typing = document.getElementById('locusai-typing-indicator');
     if (typing) typing.remove();
   }
 
@@ -949,7 +949,7 @@
   }
 
   function updateHeader(businessName) {
-    const title = document.getElementById('axisai-header-title');
+    const title = document.getElementById('locusai-header-title');
     if (title && businessName) {
       title.textContent = businessName;
     }
@@ -976,13 +976,13 @@
 
       // Apply placeholder
       if (configData.widget?.placeholder_text) {
-        const input = document.getElementById('axisai-input');
+        const input = document.getElementById('locusai-input');
         if (input) input.placeholder = configData.widget.placeholder_text;
       }
 
       // Hide branding if configured
       if (!configData.widget?.show_branding) {
-        const branding = document.getElementById('axisai-branding');
+        const branding = document.getElementById('locusai-branding');
         if (branding) branding.style.display = 'none';
       }
 
@@ -996,7 +996,7 @@
   }
 
   // Expose API for programmatic control
-  window.AxisAIWidget = {
+  window.LocusAIWidget = {
     open: () => { if (!state.isOpen) toggleWidget(); },
     close: () => { if (state.isOpen) toggleWidget(); },
     toggle: toggleWidget,

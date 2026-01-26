@@ -6,14 +6,14 @@ def _fmt(dt: datetime) -> str:
     return dt.strftime("%Y%m%dT%H%M%S")
 
 def make_ics(summary: str, description: str, start: datetime, duration_min: int = 60, location: str = "") -> bytes:
-    uid = f"{uuid.uuid4()}@axisai"
+    uid = f"{uuid.uuid4()}@locusai"
     dtstamp = _fmt(datetime.utcnow())
     dtstart = _fmt(start)
     dtend   = _fmt(start + timedelta(minutes=duration_min))
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//AxisAI//Appointments//EN",
+        "PRODID:-//LocusAI//Appointments//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         "BEGIN:VEVENT",

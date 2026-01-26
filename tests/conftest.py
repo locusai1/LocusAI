@@ -1,4 +1,4 @@
-# tests/conftest.py — Pytest configuration and fixtures for AxisAI tests
+# tests/conftest.py — Pytest configuration and fixtures for LocusAI tests
 # Provides comprehensive test infrastructure for all modules
 
 import os

@@ -1,4 +1,4 @@
-# core/sms.py — SMS sending via Twilio for AxisAI
+# core/sms.py — SMS sending via Twilio for LocusAI
 # Provides SMS messaging for reminders, notifications, and 2-way conversations
 
 import os

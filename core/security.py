@@ -1,4 +1,4 @@
-# core/security.py — Security utilities and audit logging for AxisAI
+# core/security.py — Security utilities and audit logging for LocusAI
 # Provides centralized security functions, audit logging, and data protection
 
 import logging

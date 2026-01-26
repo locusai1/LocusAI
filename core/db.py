@@ -1,4 +1,4 @@
-# core/db.py — SQLite helpers for AxisAI (tenancy + sessions + users)
+# core/db.py — SQLite helpers for LocusAI (tenancy + sessions + users)
 # Production-grade database layer with proper error handling and transactions
 
 import sqlite3

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Autosave script for AxisAI project
+# Autosave script for LocusAI project
 # Automatically commits changes if there are any
 
-PROJECT_DIR="/Users/paulomartinez/AxisAI"
+PROJECT_DIR="/Users/paulomartinez/LocusAI"
 cd "$PROJECT_DIR" || exit 1
 
 # Check if there are any changes to commit

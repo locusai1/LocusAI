@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}AxisAI — Integrations{% endblock %}
+{% block title %}LocusAI — Integrations{% endblock %}
 {% block content %}
   <div class="flex items-center justify-between mb-4">
     <h1 class="text-xl font-semibold">Integrations</h1>
@@ -71,7 +71,7 @@
 
           <label class="flex items-center gap-2">
             <input type="checkbox" name="show_branding" {% if widget.show_branding %}checked{% endif %} class="rounded">
-            <span class="text-sm">Show "Powered by AxisAI" branding</span>
+            <span class="text-sm">Show "Powered by LocusAI" branding</span>
           </label>
 
           <div>
@@ -152,8 +152,8 @@
 
     function testWidget() {
       // Dynamically load the widget for testing
-      if (window.AxisAIWidget) {
-        window.AxisAIWidget.open();
+      if (window.LocusAIWidget) {
+        window.LocusAIWidget.open();
         return;
       }
 
@@ -165,8 +165,8 @@
 
       script.onload = () => {
         setTimeout(() => {
-          if (window.AxisAIWidget) {
-            window.AxisAIWidget.open();
+          if (window.LocusAIWidget) {
+            window.LocusAIWidget.open();
           }
         }, 500);
       };

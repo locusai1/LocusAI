@@ -175,7 +175,7 @@ def notify_escalation(
         return False
 
     # Build email
-    subject = f"[AxisAI] Customer Escalation - {business.get('name', 'Your Business')}"
+    subject = f"[LocusAI] Customer Escalation - {business.get('name', 'Your Business')}"
 
     body_parts = [
         f"A customer interaction requires your attention.",
@@ -202,10 +202,10 @@ def notify_escalation(
 
     body_parts.extend([
         "",
-        "Please log into your AxisAI dashboard to review and respond.",
+        "Please log into your LocusAI dashboard to review and respond.",
         "",
         "—",
-        "AxisAI Automated Notification"
+        "LocusAI Automated Notification"
     ])
 
     body = "\n".join(body_parts)

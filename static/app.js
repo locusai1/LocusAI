@@ -2,12 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Theme toggle (persists)
   const root = document.documentElement;
   const themeBtn = document.getElementById('theme-toggle');
-  const saved = localStorage.getItem('axis_theme');
+  const saved = localStorage.getItem('locus_theme');
   root.setAttribute('data-theme', (saved === 'dark' || saved === 'light') ? saved : 'light');
   if (themeBtn) themeBtn.addEventListener('click', () => {
     const cur = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', cur);
-    localStorage.setItem('axis_theme', cur);
+    localStorage.setItem('locus_theme', cur);
   });
 
   // Mobile sidebar toggle

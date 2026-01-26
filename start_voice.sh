@@ -1,11 +1,11 @@
 #!/bin/bash
-# start_voice.sh — Start AxisAI with Voice AI support
+# start_voice.sh — Start LocusAI with Voice AI support
 # Runs both the Flask web server and the WebSocket server for Retell
 
 cd "$(dirname "$0")"
 
 echo "=========================================="
-echo "  AxisAI Voice Server Startup"
+echo "  LocusAI Voice Server Startup"
 echo "=========================================="
 echo ""
 

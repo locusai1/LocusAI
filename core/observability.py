@@ -1,4 +1,4 @@
-# core/observability.py — Observability utilities for AxisAI
+# core/observability.py — Observability utilities for LocusAI
 # Provides metrics collection, structured logging, and performance tracking
 
 import logging
@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 from functools import wraps
-from threading import Lock
+from threading import RLock
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class MetricsCollector:
     """
 
     def __init__(self):
-        self._lock = Lock()
+        self._lock = RLock()
         self._counters: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self._histograms: Dict[str, list] = defaultdict(list)
         self._gauges: Dict[str, float] = {}

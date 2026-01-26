@@ -1,4 +1,4 @@
-# core/encryption.py — Field-level encryption for PII data in AxisAI
+# core/encryption.py — Field-level encryption for PII data in LocusAI
 # Provides encryption/decryption utilities for sensitive data at rest
 
 import os
@@ -53,7 +53,7 @@ def _get_encryption_key() -> bytes:
     # Derive a 32-byte key using PBKDF2
     # Using a fixed salt is not ideal but necessary for deterministic derivation
     # In production, use a proper ENCRYPTION_KEY
-    salt = b"axisai_pii_encryption_v1"
+    salt = b"locusai_pii_encryption_v1"
     _ENCRYPTION_KEY = hashlib.pbkdf2_hmac(
         'sha256',
         flask_secret.encode('utf-8'),

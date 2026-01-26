@@ -1,4 +1,4 @@
-# core/utils.py — Shared utility functions for AxisAI
+# core/utils.py — Shared utility functions for LocusAI
 # Re-exports from validators for backward compatibility
 
 from core.validators import slugify, safe_int, validate_email, validate_phone

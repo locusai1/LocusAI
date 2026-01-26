@@ -1,4 +1,4 @@
-# sms_bp.py — SMS webhook handlers for AxisAI
+# sms_bp.py — SMS webhook handlers for LocusAI
 # Handles incoming SMS via Twilio and routes to AI conversation flow
 
 import os

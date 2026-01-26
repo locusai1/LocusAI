@@ -8,5 +8,5 @@
   <rect width="128" height="128" rx="24" fill="white"/>
   <path d="M28 86c0-26 18-46 40-46 9 0 16 3 22 8l10-10c-8-8-20-13-32-13-31 0-56 26-56 61h16z" fill="url(#g)"/>
   <circle cx="88" cy="88" r="20" fill="url(#g)"/>
-  <text x="64" y="118" font-family="Inter, system-ui" font-size="12" text-anchor="middle" fill="#64748b">AxisAI</text>
+  <text x="64" y="118" font-family="Inter, system-ui" font-size="12" text-anchor="middle" fill="#64748b">LocusAI</text>
 </svg>

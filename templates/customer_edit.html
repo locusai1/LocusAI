@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}AxisAI — Edit {{ customer['name'] or 'Customer' }}{% endblock %}
+{% block title %}LocusAI — Edit {{ customer['name'] or 'Customer' }}{% endblock %}
 {% block content %}
 <div class="flex items-center gap-4 mb-6">
   <a href="{{ url_for('customers.customer_detail', customer_id=customer['id']) }}" class="text-slate-400 hover:text-slate-600">

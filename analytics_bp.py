@@ -658,7 +658,7 @@ def api_export():
 
     # Build CSV
     lines = [
-        f"AxisAI Analytics Export",
+        f"LocusAI Analytics Export",
         f"Period: {range_label} ({start_date} to {end_date})",
         "",
         "Overview Metrics",

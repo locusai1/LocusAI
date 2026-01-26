@@ -382,7 +382,7 @@ def appointments_new():
             if dt_valid and start_dt:
                 business = next((b for b in list_businesses(limit=500) if b["id"] == bid), None)
                 address = business.get("address", "") if business else ""
-                business_name = business.get("name", "AxisAI") if business else "AxisAI"
+                business_name = business.get("name", "LocusAI") if business else "LocusAI"
 
                 ics = make_ics(
                     summary=f"{svc_name} — {business_name}",
@@ -471,7 +471,7 @@ def appointments_ics(appt_id: int):
     # Get business info
     biz = next((b for b in list_businesses(limit=500) if b["id"] == bid), None)
     address = biz.get("address", "") if biz else ""
-    business_name = biz.get("name", "AxisAI") if biz else "AxisAI"
+    business_name = biz.get("name", "LocusAI") if biz else "LocusAI"
 
     ics = make_ics(
         summary=f"{svc_name} — {business_name}",

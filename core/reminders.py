@@ -1,4 +1,4 @@
-# core/reminders.py — Automated appointment reminder system for AxisAI
+# core/reminders.py — Automated appointment reminder system for LocusAI
 # Schedules and sends email/SMS reminders before appointments
 
 import logging

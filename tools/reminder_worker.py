@@ -3,7 +3,7 @@
 # Run as a daemon or scheduled job to send reminders
 
 """
-Reminder Worker for AxisAI
+Reminder Worker for LocusAI
 
 This worker periodically checks for due reminders and sends them.
 
@@ -198,7 +198,7 @@ def show_stats():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AxisAI Reminder Worker - Process and send appointment reminders"
+        description="LocusAI Reminder Worker - Process and send appointment reminders"
     )
 
     mode_group = parser.add_mutually_exclusive_group(required=True)
