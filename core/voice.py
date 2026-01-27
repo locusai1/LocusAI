@@ -798,6 +798,387 @@ def get_caller_info_by_call_id(call_id: str) -> Optional[Dict]:
 
 
 # ============================================================================
+# Expanded Intents: Appointments Status, Cancel, Reschedule
+# ============================================================================
+
+# Intent detection patterns
+INTENT_STATUS_PATTERNS = [
+    r'\b(when|what time).*(my|next|upcoming).*(appointment|booking|visit)\b',
+    r'\b(do i have).*(appointment|booking|scheduled)\b',
+    r'\b(check|look up|find).*(my|the|upcoming).*(appointment|booking)s?\b',
+    r'\bmy.*(next|upcoming).*(appointment|booking)\b',
+    r'\b(am i|what\'s).*(booked|scheduled)\b',
+    r'\bupcoming.*(appointment|booking)s?\b',
+]
+
+INTENT_CANCEL_PATTERNS = [
+    r'\b(cancel|canceling|cancellation).*(my|the).*(appointment|booking)\b',
+    r'\b(need to|want to|like to).*(cancel)\b',
+    r'\b(can\'t make|won\'t make|won\'t be able to make|unable to make).*(appointment|booking|it)\b',
+    r'\b(remove|delete).*(my|the).*(appointment|booking)\b',
+]
+
+INTENT_RESCHEDULE_PATTERNS = [
+    r'\b(reschedule|move|change|push|switch).*(my|the).*(appointment|booking)\b',
+    r'\b(need to|want to|like to).*(reschedule|move|change)\b',
+    r'\b(different|another).*(time|day|date).*(appointment|booking)\b',
+    r'\b(change|move).*(the time|the date|when)\b',
+]
+
+# Compile patterns
+_INTENT_STATUS_RE = re.compile('|'.join(INTENT_STATUS_PATTERNS), re.IGNORECASE)
+_INTENT_CANCEL_RE = re.compile('|'.join(INTENT_CANCEL_PATTERNS), re.IGNORECASE)
+_INTENT_RESCHEDULE_RE = re.compile('|'.join(INTENT_RESCHEDULE_PATTERNS), re.IGNORECASE)
+
+
+def detect_appointment_intent(text: str) -> Optional[str]:
+    """Detect appointment-related intent from user speech.
+
+    Args:
+        text: User's speech transcript
+
+    Returns:
+        'status', 'cancel', 'reschedule', or None
+    """
+    text = text.lower().strip()
+
+    # Check in order of specificity
+    if _INTENT_CANCEL_RE.search(text):
+        return 'cancel'
+    if _INTENT_RESCHEDULE_RE.search(text):
+        return 'reschedule'
+    if _INTENT_STATUS_RE.search(text):
+        return 'status'
+
+    return None
+
+
+def get_caller_upcoming_appointments(
+    business_id: int,
+    phone: str,
+    limit: int = 3
+) -> List[Dict]:
+    """Get caller's upcoming appointments by phone number.
+
+    Args:
+        business_id: Business ID
+        phone: Caller's phone number
+        limit: Max appointments to return
+
+    Returns:
+        List of upcoming appointments with id, service, start_at, status
+    """
+    if not phone or not business_id:
+        return []
+
+    from core.db import get_conn
+
+    # Normalize phone for matching
+    normalized = ''.join(c for c in phone if c.isdigit())
+    if len(normalized) < 7:
+        return []
+    last_10 = normalized[-10:] if len(normalized) >= 10 else normalized
+
+    with get_conn() as con:
+        # Find upcoming appointments for this phone
+        rows = con.execute("""
+            SELECT id, service, start_at, status, customer_name
+            FROM appointments
+            WHERE business_id = ?
+              AND phone LIKE ?
+              AND status IN ('pending', 'confirmed')
+              AND datetime(start_at) > datetime('now')
+            ORDER BY start_at ASC
+            LIMIT ?
+        """, (business_id, f"%{last_10}%", limit)).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+def format_appointments_for_voice(appointments: List[Dict]) -> str:
+    """Format appointments for voice AI response.
+
+    Args:
+        appointments: List of appointment dicts
+
+    Returns:
+        Human-readable string for voice
+    """
+    if not appointments:
+        return ""
+
+    lines = []
+    for i, appt in enumerate(appointments):
+        service = appt.get("service", "appointment")
+        start_at = appt.get("start_at", "")
+
+        # Format datetime nicely
+        try:
+            dt = datetime.fromisoformat(start_at.replace("Z", "").replace(" ", "T"))
+            # e.g., "Tuesday, January 28th at 2:30 PM"
+            day_name = dt.strftime("%A")
+            month_day = dt.strftime("%B %d").replace(" 0", " ")
+            time_str = dt.strftime("%I:%M %p").lstrip("0")
+            formatted = f"{day_name}, {month_day} at {time_str}"
+        except:
+            formatted = start_at
+
+        lines.append(f"{service} on {formatted}")
+
+    if len(lines) == 1:
+        return lines[0]
+    else:
+        return "; ".join(lines)
+
+
+def get_caller_appointments_context(
+    business_id: int,
+    phone: str
+) -> Optional[str]:
+    """Get a voice-friendly context string about caller's appointments.
+
+    Used to inject into AI prompt for appointment management.
+
+    Returns:
+        Context string or None if no appointments
+    """
+    appointments = get_caller_upcoming_appointments(business_id, phone, limit=3)
+    if not appointments:
+        return None
+
+    formatted = format_appointments_for_voice(appointments)
+    return f"Upcoming appointments: {formatted}"
+
+
+def cancel_caller_appointment(
+    business_id: int,
+    phone: str,
+    appointment_id: Optional[int] = None
+) -> Tuple[bool, str, Optional[Dict]]:
+    """Cancel a caller's appointment.
+
+    If appointment_id is not provided, cancels the next upcoming appointment.
+
+    Args:
+        business_id: Business ID
+        phone: Caller's phone
+        appointment_id: Specific appointment to cancel (optional)
+
+    Returns:
+        (success, message, cancelled_appointment or None)
+    """
+    from core.db import get_conn, update_appointment_status
+    from core.reminders import cancel_reminders_for_appointment
+
+    # Find the appointment
+    if appointment_id:
+        # Verify it belongs to this caller
+        appointments = get_caller_upcoming_appointments(business_id, phone, limit=10)
+        appt = next((a for a in appointments if a["id"] == appointment_id), None)
+        if not appt:
+            return False, "I couldn't find that appointment under your name.", None
+    else:
+        # Get next upcoming
+        appointments = get_caller_upcoming_appointments(business_id, phone, limit=1)
+        if not appointments:
+            return False, "I don't see any upcoming appointments for you.", None
+        appt = appointments[0]
+
+    # Cancel it
+    appt_id = appt["id"]
+    success = update_appointment_status(appt_id, "cancelled")
+
+    if not success:
+        return False, "I had trouble cancelling that appointment. Could you try again?", None
+
+    # Cancel reminders
+    try:
+        cancel_reminders_for_appointment(appt_id)
+    except Exception as e:
+        logger.warning(f"Could not cancel reminders for appointment {appt_id}: {e}")
+
+    # Format the cancelled appointment info
+    formatted = format_appointments_for_voice([appt])
+    logger.info(f"Cancelled appointment {appt_id} for caller {phone}")
+
+    return True, f"I've cancelled your {formatted}.", appt
+
+
+def reschedule_caller_appointment(
+    business_id: int,
+    phone: str,
+    new_datetime: str,
+    appointment_id: Optional[int] = None,
+    session_id: Optional[int] = None
+) -> Tuple[bool, str, Optional[Dict]]:
+    """Reschedule a caller's appointment to a new time.
+
+    Args:
+        business_id: Business ID
+        phone: Caller's phone
+        new_datetime: New datetime in YYYY-MM-DD HH:MM format
+        appointment_id: Specific appointment to reschedule (optional)
+        session_id: Session ID for logging
+
+    Returns:
+        (success, message, updated_appointment or None)
+    """
+    from core.db import get_conn, transaction, check_slot_available
+    from core.reminders import reschedule_reminders_for_appointment
+
+    # Find the appointment
+    if appointment_id:
+        appointments = get_caller_upcoming_appointments(business_id, phone, limit=10)
+        appt = next((a for a in appointments if a["id"] == appointment_id), None)
+        if not appt:
+            return False, "I couldn't find that appointment under your name.", None
+    else:
+        appointments = get_caller_upcoming_appointments(business_id, phone, limit=1)
+        if not appointments:
+            return False, "I don't see any upcoming appointments to reschedule.", None
+        appt = appointments[0]
+
+    appt_id = appt["id"]
+    service = appt.get("service")
+
+    # Get service duration
+    duration = 30  # default
+    with get_conn() as con:
+        row = con.execute(
+            "SELECT duration_min FROM services WHERE business_id = ? AND name = ?",
+            (business_id, service)
+        ).fetchone()
+        if row:
+            duration = row["duration_min"]
+
+    # Check if new slot is available
+    if not check_slot_available(business_id, new_datetime, duration, exclude_appointment_id=appt_id):
+        return False, "That time slot isn't available. Would you like to try another time?", None
+
+    # Update the appointment
+    try:
+        with transaction() as con:
+            con.execute(
+                "UPDATE appointments SET start_at = ? WHERE id = ?",
+                (new_datetime, appt_id)
+            )
+
+        # Reschedule reminders
+        try:
+            reschedule_reminders_for_appointment(
+                appt_id,
+                new_datetime,
+                customer_email=None,  # Will use existing
+                customer_phone=phone
+            )
+        except Exception as e:
+            logger.warning(f"Could not reschedule reminders for appointment {appt_id}: {e}")
+
+        # Format the new time
+        try:
+            dt = datetime.fromisoformat(new_datetime.replace("Z", "").replace(" ", "T"))
+            day_name = dt.strftime("%A")
+            month_day = dt.strftime("%B %d").replace(" 0", " ")
+            time_str = dt.strftime("%I:%M %p").lstrip("0")
+            formatted_time = f"{day_name}, {month_day} at {time_str}"
+        except:
+            formatted_time = new_datetime
+
+        logger.info(f"Rescheduled appointment {appt_id} to {new_datetime} for caller {phone}")
+
+        appt["start_at"] = new_datetime
+        return True, f"I've moved your {service} to {formatted_time}.", appt
+
+    except Exception as e:
+        logger.error(f"Failed to reschedule appointment {appt_id}: {e}")
+        return False, "I had trouble rescheduling that appointment. Could you try again?", None
+
+
+# In-memory storage for pending appointment changes (cancel/reschedule)
+_VOICE_PENDING_CHANGES: Dict[str, Dict] = {}
+_changes_lock = Lock()
+
+
+def store_voice_pending_change(call_id: str, change_type: str, change_data: Dict) -> None:
+    """Store a pending appointment change for voice confirmation.
+
+    Args:
+        call_id: Retell call ID
+        change_type: 'cancel' or 'reschedule'
+        change_data: Details of the change
+    """
+    with _changes_lock:
+        _VOICE_PENDING_CHANGES[call_id] = {
+            "type": change_type,
+            "data": change_data,
+            "created_at": time.time(),
+            "call_id": call_id,
+        }
+    logger.info(f"Stored pending {change_type} for call {call_id}")
+
+
+def get_voice_pending_change(call_id: str) -> Optional[Dict]:
+    """Get pending appointment change for a call."""
+    with _changes_lock:
+        return _VOICE_PENDING_CHANGES.get(call_id)
+
+
+def clear_voice_pending_change(call_id: str) -> Optional[Dict]:
+    """Clear and return pending change for a call."""
+    with _changes_lock:
+        return _VOICE_PENDING_CHANGES.pop(call_id, None)
+
+
+def confirm_voice_change(call_id: str, business_id: int, phone: str, session_id: Optional[int] = None) -> Tuple[bool, str]:
+    """Confirm a pending appointment change (cancel or reschedule).
+
+    Args:
+        call_id: Retell call ID
+        business_id: Business ID
+        phone: Caller's phone
+        session_id: Optional session ID
+
+    Returns:
+        (success, response_message)
+    """
+    pending = clear_voice_pending_change(call_id)
+    if not pending:
+        return False, "I don't have any pending changes to confirm."
+
+    change_type = pending.get("type")
+    change_data = pending.get("data", {})
+
+    if change_type == "cancel":
+        appointment_id = change_data.get("appointment_id")
+        success, message, _ = cancel_caller_appointment(business_id, phone, appointment_id)
+        return success, message
+
+    elif change_type == "reschedule":
+        appointment_id = change_data.get("appointment_id")
+        new_datetime = change_data.get("new_datetime")
+        success, message, _ = reschedule_caller_appointment(
+            business_id, phone, new_datetime, appointment_id, session_id
+        )
+        return success, message
+
+    return False, "I'm not sure what to confirm. Could you tell me what you'd like to do?"
+
+
+def cancel_voice_change(call_id: str) -> Tuple[bool, str]:
+    """Cancel a pending appointment change.
+
+    Returns:
+        (success, message)
+    """
+    pending = clear_voice_pending_change(call_id)
+    if pending:
+        change_type = pending.get("type", "change")
+        logger.info(f"Voice {change_type} cancelled for call {call_id}")
+        return True, f"No problem, I won't {change_type} anything. Is there something else I can help with?"
+    return False, "No pending changes to cancel."
+
+
+# ============================================================================
 # Voice Call Lifecycle
 # ============================================================================
 

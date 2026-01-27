@@ -171,7 +171,8 @@ def _voice_business_prompt(
     sentiment_context: Optional[Dict] = None,
     kb_entries: Optional[List] = None,
     customer_info: Optional[Dict] = None,
-    availability_info: Optional[str] = None
+    availability_info: Optional[str] = None,
+    appointments_context: Optional[str] = None
 ) -> str:
     """Build voice-optimized system prompt — top-tier, natural, fully contextual.
 
@@ -181,6 +182,7 @@ def _voice_business_prompt(
         kb_entries: Relevant knowledge base entries
         customer_info: Known caller info (name, history, preferences)
         availability_info: Formatted available time slots
+        appointments_context: Caller's upcoming appointments
     """
     from datetime import datetime
 
@@ -263,6 +265,20 @@ You know this caller! Greet them warmly by name.
         base_prompt += """
 Use their name naturally in conversation (but don't overdo it).
 If rebooking, you can suggest: "Would you like the same service as last time?"
+"""
+
+    # Add caller's upcoming appointments if available
+    if appointments_context:
+        base_prompt += f"""
+## CALLER'S UPCOMING APPOINTMENTS
+{appointments_context}
+
+When they ask about their appointments, tell them these details.
+For cancellations: Confirm what they want to cancel, then output:
+<VOICE_CANCEL>{{"appointment_id": ID}}</VOICE_CANCEL>
+For reschedules: Get the new time, then output:
+<VOICE_RESCHEDULE>{{"appointment_id": ID, "new_datetime": "YYYY-MM-DD HH:MM"}}</VOICE_RESCHEDULE>
+Always confirm before processing: "Just to confirm, you'd like to cancel/reschedule your [service] on [date]?"
 """
 
     base_prompt += """
@@ -770,8 +786,21 @@ def process_message_for_voice(
         except Exception as e:
             logger.warning(f"Could not fetch availability: {e}")
 
+    # Get caller's upcoming appointments if we have customer info
+    appointments_context = None
+    if business_id and customer_info and customer_info.get("phone"):
+        try:
+            from core.voice import get_caller_appointments_context
+            appointments_context = get_caller_appointments_context(
+                business_id, customer_info.get("phone")
+            )
+        except Exception as e:
+            logger.warning(f"Could not fetch appointments context: {e}")
+
     # Build voice-optimized prompt with full context including caller recognition
-    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries, customer_info, availability_info)
+    sys_prompt = _voice_business_prompt(
+        bd, sentiment_context, kb_entries, customer_info, availability_info, appointments_context
+    )
 
     # Build messages
     messages = [{"role": "system", "content": sys_prompt}]

@@ -714,3 +714,233 @@ class TestCallerRecognition:
         # Should still be a valid prompt
         assert 'StyleCuts' in prompt
         assert 'CALLER RECOGNIZED' not in prompt
+
+
+# ============================================================================
+# Expanded Intents Tests (Cancel, Reschedule, Status)
+# ============================================================================
+
+class TestExpandedIntents:
+    """Tests for expanded voice intents: cancel, reschedule, status check."""
+
+    def test_detect_appointment_intent_status(self):
+        """Should detect status check intent."""
+        from core.voice import detect_appointment_intent
+
+        assert detect_appointment_intent("When is my next appointment?") == 'status'
+        assert detect_appointment_intent("Do I have any appointments scheduled?") == 'status'
+        assert detect_appointment_intent("What time is my booking?") == 'status'
+        assert detect_appointment_intent("Check my upcoming appointments") == 'status'
+
+    def test_detect_appointment_intent_cancel(self):
+        """Should detect cancellation intent."""
+        from core.voice import detect_appointment_intent
+
+        assert detect_appointment_intent("I need to cancel my appointment") == 'cancel'
+        assert detect_appointment_intent("Cancel the booking please") == 'cancel'
+        assert detect_appointment_intent("I can't make my appointment") == 'cancel'
+        assert detect_appointment_intent("I won't be able to make it") == 'cancel'
+
+    def test_detect_appointment_intent_reschedule(self):
+        """Should detect reschedule intent."""
+        from core.voice import detect_appointment_intent
+
+        assert detect_appointment_intent("I need to reschedule my appointment") == 'reschedule'
+        assert detect_appointment_intent("Can I move my booking to another time?") == 'reschedule'
+        assert detect_appointment_intent("I want to change the date") == 'reschedule'
+        assert detect_appointment_intent("Can I switch my appointment to Friday?") == 'reschedule'
+
+    def test_detect_appointment_intent_none(self):
+        """Should return None for non-intent messages."""
+        from core.voice import detect_appointment_intent
+
+        assert detect_appointment_intent("Hello, how are you?") is None
+        assert detect_appointment_intent("I'd like to book an appointment") is None
+        assert detect_appointment_intent("What services do you offer?") is None
+
+    def test_get_caller_upcoming_appointments(self, test_db, sample_business):
+        """Should retrieve upcoming appointments for a caller."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.db import get_conn
+            from datetime import datetime, timedelta
+
+            # Create future appointment
+            future_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d 14:00')
+            with get_conn() as con:
+                con.execute(
+                    """INSERT INTO appointments (business_id, customer_name, phone, service, start_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Test Customer', '+14155551234', 'Haircut', future_date, 'confirmed')
+                )
+                con.commit()
+
+            from core.voice import get_caller_upcoming_appointments
+            appointments = get_caller_upcoming_appointments(sample_business['id'], '+14155551234')
+
+            assert len(appointments) == 1
+            assert appointments[0]['service'] == 'Haircut'
+            assert appointments[0]['status'] == 'confirmed'
+
+    def test_get_caller_upcoming_appointments_excludes_past(self, test_db, sample_business):
+        """Should not include past appointments."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.db import get_conn
+            from datetime import datetime, timedelta
+
+            # Create past appointment
+            past_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d 14:00')
+            with get_conn() as con:
+                con.execute(
+                    """INSERT INTO appointments (business_id, customer_name, phone, service, start_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Test Customer', '+14155551234', 'Haircut', past_date, 'completed')
+                )
+                con.commit()
+
+            from core.voice import get_caller_upcoming_appointments
+            appointments = get_caller_upcoming_appointments(sample_business['id'], '+14155551234')
+
+            assert len(appointments) == 0
+
+    def test_format_appointments_for_voice(self):
+        """Should format appointments in human-readable way."""
+        from core.voice import format_appointments_for_voice
+        from datetime import datetime, timedelta
+
+        future_date = (datetime.now() + timedelta(days=2)).strftime('%Y-%m-%d 14:30')
+        appointments = [
+            {'service': 'Haircut', 'start_at': future_date, 'status': 'confirmed'}
+        ]
+
+        formatted = format_appointments_for_voice(appointments)
+
+        assert 'Haircut' in formatted
+        assert '2:30 PM' in formatted
+
+    def test_format_appointments_for_voice_empty(self):
+        """Should return empty string for no appointments."""
+        from core.voice import format_appointments_for_voice
+
+        formatted = format_appointments_for_voice([])
+        assert formatted == ""
+
+    def test_cancel_caller_appointment(self, test_db, sample_business):
+        """Should cancel a caller's appointment."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.db import get_conn, get_appointment_by_id
+            from datetime import datetime, timedelta
+
+            # Create future appointment
+            future_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d 14:00')
+            with get_conn() as con:
+                cur = con.cursor()
+                cur.execute(
+                    """INSERT INTO appointments (business_id, customer_name, phone, service, start_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Test Customer', '+14155551234', 'Haircut', future_date, 'confirmed')
+                )
+                con.commit()
+                appt_id = cur.lastrowid
+
+            from core.voice import cancel_caller_appointment
+            success, message, cancelled = cancel_caller_appointment(
+                sample_business['id'], '+14155551234'
+            )
+
+            assert success is True
+            assert 'cancelled' in message.lower()
+            assert cancelled is not None
+            assert cancelled['id'] == appt_id
+
+            # Verify it was actually cancelled
+            appt = get_appointment_by_id(appt_id)
+            assert appt['status'] == 'cancelled'
+
+    def test_cancel_caller_appointment_no_appointment(self, test_db, sample_business):
+        """Should return failure when no appointment exists."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.voice import cancel_caller_appointment
+            success, message, cancelled = cancel_caller_appointment(
+                sample_business['id'], '+19999999999'
+            )
+
+            assert success is False
+            assert 'don\'t see' in message.lower() or "couldn't find" in message.lower()
+            assert cancelled is None
+
+    def test_reschedule_caller_appointment(self, test_db, sample_business):
+        """Should reschedule a caller's appointment."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.db import get_conn, get_appointment_by_id
+            from datetime import datetime, timedelta
+
+            # Create service (use INSERT OR REPLACE to handle existing)
+            with get_conn() as con:
+                con.execute(
+                    """INSERT OR REPLACE INTO services (business_id, name, duration_min, active)
+                       VALUES (?, ?, ?, ?)""",
+                    (sample_business['id'], 'Reschedule Test Service', 30, 1)
+                )
+                con.commit()
+
+            # Create future appointment
+            future_date = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d 14:00')
+            with get_conn() as con:
+                cur = con.cursor()
+                cur.execute(
+                    """INSERT INTO appointments (business_id, customer_name, phone, service, start_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Test Customer', '+14155557777', 'Reschedule Test Service', future_date, 'confirmed')
+                )
+                con.commit()
+                appt_id = cur.lastrowid
+
+            from core.voice import reschedule_caller_appointment
+            new_date = (datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d 10:00')
+            success, message, updated = reschedule_caller_appointment(
+                sample_business['id'], '+14155557777', new_date
+            )
+
+            assert success is True
+            assert 'moved' in message.lower() or 'rescheduled' in message.lower()
+            assert updated is not None
+
+            # Verify it was actually rescheduled
+            appt = get_appointment_by_id(appt_id)
+            assert appt['start_at'] == new_date
+
+    def test_pending_change_store_and_retrieve(self):
+        """Should store and retrieve pending changes."""
+        from core.voice import (
+            store_voice_pending_change,
+            get_voice_pending_change,
+            clear_voice_pending_change
+        )
+
+        call_id = 'test_call_456'
+        change_data = {'appointment_id': 123}
+
+        store_voice_pending_change(call_id, 'cancel', change_data)
+
+        pending = get_voice_pending_change(call_id)
+        assert pending is not None
+        assert pending['type'] == 'cancel'
+        assert pending['data']['appointment_id'] == 123
+
+        # Clear and verify
+        cleared = clear_voice_pending_change(call_id)
+        assert cleared is not None
+        assert get_voice_pending_change(call_id) is None
+
+    def test_voice_prompt_with_appointments_context(self):
+        """Voice prompt should include appointments context."""
+        from core.ai import _voice_business_prompt
+
+        bd = {'name': 'StyleCuts', 'tone': 'friendly'}
+        appointments_context = "Upcoming appointments: Haircut on Tuesday, January 28 at 2:30 PM"
+
+        prompt = _voice_business_prompt(bd, appointments_context=appointments_context)
+
+        assert 'Upcoming appointments' in prompt
+        assert 'VOICE_CANCEL' in prompt
+        assert 'VOICE_RESCHEDULE' in prompt

@@ -26,6 +26,11 @@ from core.voice import (
     cancel_voice_booking,
     get_voice_pending_booking,
     get_caller_info_by_call_id,
+    # Expanded intents
+    get_voice_pending_change,
+    store_voice_pending_change,
+    confirm_voice_change,
+    cancel_voice_change,
 )
 try:
     from core.kb import search_kb as kb_search
@@ -193,8 +198,11 @@ class RetellLLMWebSocket:
                 logger.info(f"Using default business {business_id} for test call")
 
         # Check for pending booking confirmation
-        pending = get_voice_pending_booking(call_id) if call_id else None
-        if pending:
+        pending_booking = get_voice_pending_booking(call_id) if call_id else None
+        pending_change = get_voice_pending_change(call_id) if call_id else None
+
+        # Handle pending booking confirmation
+        if pending_booking:
             response_type = detect_booking_response(last_user_message)
             if response_type == "confirm":
                 success, message, appt_id = confirm_voice_booking(call_id, business_id, session_id)
@@ -209,6 +217,35 @@ class RetellLLMWebSocket:
                 cancel_voice_booking(call_id)
                 response_text = "No problem, I've cancelled that. Would you like to look at a different time, or is there something else I can help with?"
                 return self._create_response(data, response_text)
+
+        # Handle pending appointment change confirmation (cancel/reschedule)
+        if pending_change:
+            response_type = detect_booking_response(last_user_message)
+            change_type = pending_change.get("type", "change")
+
+            if response_type == "confirm":
+                # Get caller phone for the change
+                customer_info = call_state.get("customer_info") or {}
+                caller_phone = customer_info.get("phone") or ""
+
+                # If no phone from customer_info, try to get from voice call
+                if not caller_phone:
+                    voice_call = get_voice_call(call_id) if call_id else None
+                    if voice_call:
+                        direction = voice_call.get("direction", "inbound")
+                        caller_phone = voice_call.get("from_number") if direction == "inbound" else voice_call.get("to_number")
+
+                success, message = confirm_voice_change(call_id, business_id, caller_phone, session_id)
+                if success:
+                    response_text = f"{message} Is there anything else I can help you with?"
+                else:
+                    response_text = f"{message}"
+
+                return self._create_response(data, response_text)
+
+            elif response_type == "cancel":
+                success, message = cancel_voice_change(call_id)
+                return self._create_response(data, message)
 
         # Get business data for AI processing
         business_data = None
@@ -259,6 +296,9 @@ class RetellLLMWebSocket:
             if booking_data:
                 update_voice_call(call_id, booking_discussed=1)
 
+            # Check for cancel/reschedule tags in response
+            cleaned_response, change_data = self._extract_voice_change(cleaned_response, call_id)
+
             # Log messages
             if session_id:
                 log_message(session_id, "user", last_user_message)
@@ -292,6 +332,50 @@ class RetellLLMWebSocket:
             "content": content,
             "content_complete": True
         }
+
+    def _extract_voice_change(self, response: str, call_id: str) -> tuple:
+        """Extract VOICE_CANCEL or VOICE_RESCHEDULE tags from AI response.
+
+        Returns:
+            (cleaned_response, change_data or None)
+        """
+        import re
+
+        # Check for cancel tag
+        cancel_pattern = r'<VOICE_CANCEL>(.*?)</VOICE_CANCEL>'
+        cancel_match = re.search(cancel_pattern, response, re.DOTALL)
+
+        if cancel_match:
+            cleaned = re.sub(cancel_pattern, '', response).strip()
+            try:
+                change_json = cancel_match.group(1).strip()
+                change_data = json.loads(change_json)
+                # Store for confirmation
+                store_voice_pending_change(call_id, 'cancel', change_data)
+                logger.info(f"Stored pending cancel for call {call_id}: {change_data}")
+                return cleaned, {'type': 'cancel', 'data': change_data}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse VOICE_CANCEL JSON: {e}")
+                return response, None
+
+        # Check for reschedule tag
+        reschedule_pattern = r'<VOICE_RESCHEDULE>(.*?)</VOICE_RESCHEDULE>'
+        reschedule_match = re.search(reschedule_pattern, response, re.DOTALL)
+
+        if reschedule_match:
+            cleaned = re.sub(reschedule_pattern, '', response).strip()
+            try:
+                change_json = reschedule_match.group(1).strip()
+                change_data = json.loads(change_json)
+                # Store for confirmation
+                store_voice_pending_change(call_id, 'reschedule', change_data)
+                logger.info(f"Stored pending reschedule for call {call_id}: {change_data}")
+                return cleaned, {'type': 'reschedule', 'data': change_data}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse VOICE_RESCHEDULE JSON: {e}")
+                return response, None
+
+        return response, None
 
     async def _stream_response(self, data: Dict, content: str, websocket: WebSocketServerProtocol) -> Dict:
         """Stream response word by word for more natural speech.
