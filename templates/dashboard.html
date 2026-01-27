@@ -3,137 +3,304 @@
 {% block content %}
 <!-- Page Header -->
 <div class="page-header">
-  <p class="page-greeting">My Workspace</p>
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <h1 class="page-title">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 18 else 'evening') }}, {{ session.user.email.split('@')[0]|title if session.user else 'there' }}</h1>
+    <div>
+      <h1 class="page-title">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 18 else 'evening') }}{% if session.user %}, {{ session.user.email.split('@')[0]|title }}{% endif %}</h1>
+      <p class="page-subtitle">Here's what's happening with your business today.</p>
+    </div>
     <div class="flex items-center gap-2">
-      <a href="{{ url_for('analytics.analytics_index') }}" class="btn">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        View Analytics
-      </a>
-      <a href="{{ url_for('onboard.business_new') }}" class="btn btn-primary">
+      <a href="{{ url_for('appointments.appointments_new') }}" class="btn">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-        New Business
+        New Booking
+      </a>
+      <a href="{{ url_for('analytics.analytics_index') }}" class="btn btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Analytics
       </a>
     </div>
   </div>
 </div>
 
-<!-- KPI Stats -->
+<!-- Escalation Alert (if any) -->
+{% if escalation_count > 0 %}
+<div class="escalation-alert mb-6">
+  <div class="flex items-center gap-3">
+    <div class="alert-icon">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    </div>
+    <div class="flex-1">
+      <div class="alert-title">{{ escalation_count }} escalation{{ 's' if escalation_count != 1 else '' }} need{{ '' if escalation_count != 1 else 's' }} attention</div>
+      <div class="alert-subtitle">Customers are waiting for a human response</div>
+    </div>
+    <a href="{{ url_for('escalations.escalations_index') }}" class="btn btn-sm">View Escalations</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- AI Activity Hero -->
+<div class="ai-hero mb-6">
+  <div class="ai-hero-header">
+    <div class="ai-hero-icon">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+    </div>
+    <div>
+      <h2 class="ai-hero-title">AI Receptionist</h2>
+      <p class="ai-hero-subtitle">Today's activity</p>
+    </div>
+    <div class="ai-status">
+      <span class="status-dot"></span>
+      <span>Active</span>
+    </div>
+  </div>
+  <div class="ai-hero-stats">
+    <div class="ai-stat">
+      <div class="ai-stat-icon calls">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+      </div>
+      <div class="ai-stat-value">{{ ai_stats.calls_today }}</div>
+      <div class="ai-stat-label">Calls</div>
+    </div>
+    <div class="ai-stat">
+      <div class="ai-stat-icon chats">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      </div>
+      <div class="ai-stat-value">{{ ai_stats.chats_today }}</div>
+      <div class="ai-stat-label">Chats</div>
+    </div>
+    <div class="ai-stat">
+      <div class="ai-stat-icon bookings">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      </div>
+      <div class="ai-stat-value">{{ ai_stats.bookings_today }}</div>
+      <div class="ai-stat-label">Bookings Made</div>
+    </div>
+    <div class="ai-stat highlight">
+      <div class="ai-stat-icon week">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      </div>
+      <div class="ai-stat-value">{{ ai_stats.calls_week + ai_stats.chats_week }}</div>
+      <div class="ai-stat-label">This Week</div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Stats Grid -->
 <div class="stats-grid mb-6">
   <div class="stat-card">
-    <div class="stat-label">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-      Today's appointments
+    <div class="stat-header">
+      <div class="stat-icon blue">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      </div>
     </div>
     <div class="stat-value">{{ kpis.get("today", 0) }}</div>
+    <div class="stat-label">Today's Appointments</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-label">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      Pending
+    <div class="stat-header">
+      <div class="stat-icon amber">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
     </div>
     <div class="stat-value">{{ kpis.get("pending", 0) }}</div>
+    <div class="stat-label">Pending</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-label">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      Confirmed
+    <div class="stat-header">
+      <div class="stat-icon green">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
     </div>
     <div class="stat-value">{{ kpis.get("confirmed", 0) }}</div>
+    <div class="stat-label">Confirmed</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-label">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
-      Total all time
+    <div class="stat-header">
+      <div class="stat-icon purple">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </div>
+      {% if week_comparison.change_pct != 0 %}
+      <div class="stat-trend {% if week_comparison.change_pct > 0 %}positive{% else %}negative{% endif %}">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {% if week_comparison.change_pct > 0 %}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+          {% else %}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          {% endif %}
+        </svg>
+        {{ week_comparison.change_pct|abs }}%
+      </div>
+      {% endif %}
     </div>
-    <div class="stat-value">{{ kpis.get("total", 0) }}</div>
+    <div class="stat-value">{{ week_comparison.this_week }}</div>
+    <div class="stat-label">This Week</div>
   </div>
 </div>
 
 <!-- Main Content Grid -->
 <div class="grid lg:grid-cols-3 gap-6">
-  <!-- Chart (2 columns) -->
-  <div class="lg:col-span-2 card">
-    <div class="card-header">
-      <h3 class="card-title">Appointments - Last 7 Days</h3>
-      <span class="badge badge-success">Live</span>
-    </div>
-    <div class="card-body">
-      <div style="height: 240px;">
-        <canvas id="kpiChart"
-          data-labels='{{ series_labels|tojson }}'
-          data-values='{{ series_values|tojson }}'></canvas>
+  <!-- Chart + Upcoming (2 columns) -->
+  <div class="lg:col-span-2 space-y-6">
+    <!-- Chart Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Appointments Overview</h3>
+        <div class="flex items-center gap-2">
+          <span class="badge">Last 7 days</span>
+        </div>
       </div>
+      <div class="card-body">
+        <div style="height: 220px;">
+          <canvas id="kpiChart"
+            data-labels='{{ series_labels|tojson }}'
+            data-values='{{ series_values|tojson }}'></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upcoming Appointments -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Upcoming Appointments</h3>
+        <a href="{{ url_for('appointments.appointments_index') }}" class="btn btn-sm btn-ghost">View All</a>
+      </div>
+      {% if upcoming_appointments %}
+      <div class="upcoming-list">
+        {% for appt in upcoming_appointments %}
+        <div class="upcoming-item">
+          <div class="upcoming-avatar">
+            {{ appt.customer_name[0]|upper if appt.customer_name else '?' }}
+          </div>
+          <div class="upcoming-info">
+            <div class="upcoming-name">{{ appt.customer_name or 'Unknown' }}</div>
+            <div class="upcoming-service">{{ appt.service or 'Appointment' }}</div>
+          </div>
+          <div class="upcoming-time">
+            {% set appt_dt = appt.start_at %}
+            {% if appt_dt %}
+              {% set parts = appt_dt.split(' ') %}
+              {% if parts|length > 1 %}
+                <div class="upcoming-hour">{{ parts[1][:5] }}</div>
+              {% endif %}
+              <div class="upcoming-date">{{ parts[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="upcoming-status {{ appt.status }}">
+            {{ appt.status|capitalize }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state py-8">
+        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <div class="empty-state-title">No upcoming appointments</div>
+        <div class="empty-state-description">When customers book, they'll appear here</div>
+      </div>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Quick Actions -->
-  <div class="card">
-    <div class="card-header">
-      <h3 class="card-title">Quick Actions</h3>
+  <!-- Sidebar (1 column) -->
+  <div class="space-y-6">
+    <!-- Live Activity Feed -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Live Activity</h3>
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          <span class="text-xs text-tertiary">Live</span>
+        </div>
+      </div>
+      {% if recent_activity %}
+      <div class="activity-feed">
+        {% for item in recent_activity %}
+        <div class="activity-item">
+          <div class="activity-icon {{ item.type }}">
+            {% if item.type == 'booking' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            {% elif item.type == 'escalation' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            {% elif item.type == 'call' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            {% else %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            {% endif %}
+          </div>
+          <div class="activity-content">
+            <div class="activity-title">{{ item.title|truncate(24) }}</div>
+            <div class="activity-subtitle">{{ item.subtitle }}</div>
+          </div>
+          <div class="activity-time">
+            {% if item.timestamp %}
+              {{ item.timestamp.split(' ')[1][:5] if ' ' in item.timestamp else '' }}
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state py-6">
+        <div class="empty-state-description">Activity will appear here</div>
+      </div>
+      {% endif %}
     </div>
-    <div class="card-body space-y-3">
-      <a href="{{ url_for('appointments.appointments_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
-        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-          <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        </div>
-        <div>
-          <div class="font-medium text-sm">Manage Appointments</div>
-          <div class="text-xs text-tertiary">View and edit all appointments</div>
-        </div>
-      </a>
 
-      <a href="{{ url_for('customers.customers_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
-        <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-          <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        </div>
-        <div>
-          <div class="font-medium text-sm">View Customers</div>
-          <div class="text-xs text-tertiary">Customer profiles and history</div>
-        </div>
-      </a>
-
-      <a href="{{ url_for('chat.chat_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
-        <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-        </div>
-        <div>
-          <div class="font-medium text-sm">AI Conversations</div>
-          <div class="text-xs text-tertiary">View chat history</div>
-        </div>
-      </a>
-
-      <a href="{{ url_for('escalations.escalations_index') }}" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors" style="border-color: var(--border-light);">
-        <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-          <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-        </div>
-        <div>
-          <div class="font-medium text-sm">Escalations</div>
-          <div class="text-xs text-tertiary">Handle customer issues</div>
-        </div>
-      </a>
+    <!-- Quick Actions -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Quick Actions</h3>
+      </div>
+      <div class="quick-actions">
+        <a href="{{ url_for('appointments.appointments_index') }}" class="quick-action">
+          <div class="quick-action-icon blue">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <span>Appointments</span>
+          <svg class="w-4 h-4 ml-auto opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        <a href="{{ url_for('customers.customers_index') }}" class="quick-action">
+          <div class="quick-action-icon purple">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+          <span>Customers</span>
+          <svg class="w-4 h-4 ml-auto opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        <a href="{{ url_for('chat.chat_index') }}" class="quick-action">
+          <div class="quick-action-icon green">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          </div>
+          <span>Conversations</span>
+          <svg class="w-4 h-4 ml-auto opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        <a href="{{ url_for('kb.kb_index') }}" class="quick-action">
+          <div class="quick-action-icon amber">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          </div>
+          <span>Knowledge Base</span>
+          <svg class="w-4 h-4 ml-auto opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Businesses Table -->
+<!-- Businesses Section -->
+{% if businesses|length > 1 %}
 <div class="card mt-6">
   <div class="card-header">
     <h3 class="card-title">Your Businesses</h3>
-    <span class="text-sm text-tertiary">{{ businesses|length }} business{{ 'es' if businesses|length != 1 else '' }}</span>
+    <span class="badge">{{ businesses|length }}</span>
   </div>
   <div class="table-container" style="border: none; border-radius: 0;">
     <table class="table">
       <thead>
         <tr>
-          <th>Business Name</th>
-          <th>Slug</th>
+          <th>Business</th>
           <th>Today</th>
-          <th>Brand</th>
+          <th>Status</th>
           <th></th>
         </tr>
       </thead>
@@ -141,28 +308,30 @@
         {% for b in businesses %}
         <tr>
           <td>
-            <div class="font-medium text-primary">{{ b['name'] }}</div>
+            <div class="flex items-center gap-3">
+              <div class="business-avatar" style="background: {{ b.get('accent_color') or '#000' }};">
+                {{ b['name'][0]|upper }}
+              </div>
+              <div>
+                <div class="font-medium text-primary">{{ b['name'] }}</div>
+                <div class="text-xs text-tertiary">{{ b['slug'] }}</div>
+              </div>
+            </div>
           </td>
           <td>
-            <code class="text-xs px-2 py-1 rounded" style="background: var(--bg-muted);">{{ b['slug'] }}</code>
+            <span class="font-medium">{{ appt_counts.get(b['id'], 0) }}</span>
+            <span class="text-tertiary">appointments</span>
           </td>
           <td>
-            <span class="badge">{{ appt_counts.get(b['id'], 0) }} appt{{ 's' if appt_counts.get(b['id'], 0) != 1 else '' }}</span>
-          </td>
-          <td>
-            {% set ac = b.get('accent_color') or '#000000' %}
-            <div class="w-6 h-6 rounded-md shadow-sm" style="background: {{ ac }};"></div>
+            <span class="status-badge active">
+              <span class="status-dot-sm"></span>
+              Active
+            </span>
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-2">
-              <a href="{{ url_for('appointments.appointments_index') }}?business_id={{ b['id'] }}" class="btn btn-sm btn-ghost">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                View
-              </a>
-              <a href="{{ url_for('edit_business', business_id=b['id']) }}" class="btn btn-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                Edit
-              </a>
+              <a href="{{ url_for('appointments.appointments_index') }}?business_id={{ b['id'] }}" class="btn btn-sm btn-ghost">View</a>
+              <a href="{{ url_for('edit_business', business_id=b['id']) }}" class="btn btn-sm">Edit</a>
             </div>
           </td>
         </tr>
@@ -171,6 +340,365 @@
     </table>
   </div>
 </div>
+{% endif %}
+
+<style>
+/* Dashboard-specific styles - Linear aesthetic + Stripe data clarity */
+
+/* Escalation Alert */
+.escalation-alert {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+.escalation-alert .alert-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+}
+.escalation-alert .alert-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.escalation-alert .alert-subtitle {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* AI Hero Section */
+.ai-hero {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.ai-hero-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-light);
+}
+.ai-hero-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--text-primary) 0%, #404040 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-inverse);
+}
+html[data-theme="dark"] .ai-hero-icon {
+  background: linear-gradient(135deg, #fafafa 0%, #a3a3a3 100%);
+  color: #171717;
+}
+.ai-hero-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ai-hero-subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.ai-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--success);
+}
+.ai-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.ai-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border-light);
+}
+.ai-stat {
+  background: var(--bg-card);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  transition: background var(--transition-fast);
+}
+.ai-stat:hover {
+  background: var(--bg-hover);
+}
+.ai-stat.highlight {
+  background: var(--bg-muted);
+}
+.ai-stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-stat-icon.calls { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.ai-stat-icon.chats { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.ai-stat-icon.bookings { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+.ai-stat-icon.week { background: rgba(23, 23, 23, 0.1); color: var(--text-primary); }
+html[data-theme="dark"] .ai-stat-icon.week { background: rgba(250, 250, 250, 0.1); }
+.ai-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.ai-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+/* Stat Cards with Stripe-style clarity */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+.stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-icon.blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.stat-icon.amber { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.stat-icon.green { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.stat-icon.purple { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+.stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+}
+.stat-trend.positive { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.stat-trend.negative { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+/* Upcoming Appointments */
+.upcoming-list {
+  padding: 0;
+}
+.upcoming-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
+}
+.upcoming-item:last-child { border-bottom: none; }
+.upcoming-item:hover { background: var(--bg-hover); }
+.upcoming-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.upcoming-info { flex: 1; min-width: 0; }
+.upcoming-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.upcoming-service {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.upcoming-time {
+  text-align: right;
+}
+.upcoming-hour {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.upcoming-date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.upcoming-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.upcoming-status.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.upcoming-status.confirmed { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+
+/* Live Activity Feed */
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+.activity-feed {
+  padding: 0;
+}
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.activity-icon.booking { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+.activity-icon.escalation { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.activity-icon.call { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.activity-icon.chat { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.activity-content { flex: 1; min-width: 0; }
+.activity-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-subtitle {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.activity-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Quick Actions */
+.quick-actions {
+  padding: var(--space-2);
+}
+.quick-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+.quick-action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.quick-action-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.quick-action-icon.blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.quick-action-icon.purple { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+.quick-action-icon.green { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.quick-action-icon.amber { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+
+/* Business Table */
+.business-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: white;
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+.status-dot-sm {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .ai-hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -180,21 +708,27 @@ document.addEventListener('DOMContentLoaded', function() {
   const labels = JSON.parse(canvas.dataset.labels || '[]');
   const values = JSON.parse(canvas.dataset.values || '[]');
 
+  // Format labels to show day names
+  const formattedLabels = labels.map(d => {
+    const date = new Date(d);
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  });
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor = isDark ? '#262626' : '#f0f0f0';
+  const textColor = isDark ? '#737373' : '#737373';
+
   new Chart(canvas, {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: labels,
+      labels: formattedLabels,
       datasets: [{
         label: 'Appointments',
         data: values,
-        borderColor: '#171717',
-        backgroundColor: 'rgba(23, 23, 23, 0.05)',
-        fill: true,
-        tension: 0.4,
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 6,
-        pointBackgroundColor: '#171717'
+        backgroundColor: isDark ? 'rgba(250, 250, 250, 0.8)' : 'rgba(23, 23, 23, 0.8)',
+        borderRadius: 6,
+        borderSkipped: false,
+        barThickness: 24,
       }]
     },
     options: {
@@ -207,27 +741,38 @@ document.addEventListener('DOMContentLoaded', function() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#171717',
-          titleColor: '#fff',
-          bodyColor: '#fff',
+          backgroundColor: isDark ? '#fafafa' : '#171717',
+          titleColor: isDark ? '#171717' : '#fff',
+          bodyColor: isDark ? '#171717' : '#fff',
           padding: 12,
           cornerRadius: 8,
-          displayColors: false
+          displayColors: false,
+          callbacks: {
+            title: function(items) {
+              return labels[items[0].dataIndex];
+            }
+          }
         }
       },
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: '#737373', font: { size: 11 } }
+          ticks: { color: textColor, font: { size: 11, weight: 500 } }
         },
         y: {
           beginAtZero: true,
-          grid: { color: '#f0f0f0' },
-          ticks: { color: '#737373', font: { size: 11 }, stepSize: 1 }
+          grid: { color: gridColor, drawBorder: false },
+          ticks: { color: textColor, font: { size: 11 }, stepSize: 1 }
         }
       }
     }
   });
+
+  // Update chart on theme change
+  const observer = new MutationObserver(function() {
+    location.reload(); // Simple reload on theme change
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });
 </script>
 {% endblock %}

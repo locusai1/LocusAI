@@ -461,7 +461,7 @@ def set_brand():
 @app.route("/dashboard")
 @app.route("/businesses")
 def dashboard():
-    """Main dashboard with KPIs and business list."""
+    """Main dashboard with KPIs, AI activity, and business insights."""
     if session.get("user") is None:
         return redirect(url_for("auth.login"))
 
@@ -483,6 +483,13 @@ def dashboard():
     kpis = {"today": 0, "pending": 0, "confirmed": 0, "total": 0}
     series_labels = []
     series_values = []
+
+    # Extended metrics for new dashboard
+    ai_stats = {"calls_today": 0, "chats_today": 0, "bookings_today": 0, "calls_week": 0, "chats_week": 0}
+    upcoming_appointments = []
+    recent_activity = []
+    escalation_count = 0
+    week_comparison = {"this_week": 0, "last_week": 0, "change_pct": 0}
 
     if businesses:
         ids = [b["id"] for b in businesses]
@@ -539,6 +546,147 @@ def dashboard():
                 series_labels.append(d)
                 series_values.append(int(data.get(d, 0)))
 
+            # === NEW: AI Activity Stats ===
+            # Today's chat sessions
+            row = con.execute(f"""
+                SELECT COUNT(*) c FROM sessions
+                WHERE business_id IN ({placeholders})
+                  AND date(created_at) = date('now', 'localtime')
+            """, tuple(ids)).fetchone()
+            ai_stats["chats_today"] = row["c"] if row else 0
+
+            # This week's chats
+            row = con.execute(f"""
+                SELECT COUNT(*) c FROM sessions
+                WHERE business_id IN ({placeholders})
+                  AND date(created_at) >= date('now', '-7 days')
+            """, tuple(ids)).fetchone()
+            ai_stats["chats_week"] = row["c"] if row else 0
+
+            # Today's AI-booked appointments
+            row = con.execute(f"""
+                SELECT COUNT(*) c FROM appointments
+                WHERE business_id IN ({placeholders})
+                  AND source = 'ai'
+                  AND date(created_at) = date('now', 'localtime')
+            """, tuple(ids)).fetchone()
+            ai_stats["bookings_today"] = row["c"] if row else 0
+
+            # Voice calls (if table exists)
+            try:
+                row = con.execute(f"""
+                    SELECT COUNT(*) c FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) = date('now', 'localtime')
+                """, tuple(ids)).fetchone()
+                ai_stats["calls_today"] = row["c"] if row else 0
+
+                row = con.execute(f"""
+                    SELECT COUNT(*) c FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date('now', '-7 days')
+                """, tuple(ids)).fetchone()
+                ai_stats["calls_week"] = row["c"] if row else 0
+            except Exception:
+                pass  # voice_calls table may not exist
+
+            # === NEW: Upcoming Appointments ===
+            rows = con.execute(f"""
+                SELECT id, customer_name, service, start_at, status, business_id
+                FROM appointments
+                WHERE business_id IN ({placeholders})
+                  AND datetime(start_at) > datetime('now', 'localtime')
+                  AND status IN ('pending', 'confirmed')
+                ORDER BY start_at ASC
+                LIMIT 5
+            """, tuple(ids)).fetchall()
+            upcoming_appointments = [dict(r) for r in rows] if rows else []
+
+            # === NEW: Recent Activity Feed ===
+            # Combine recent messages, appointments, escalations
+            activity_items = []
+
+            # Recent bookings
+            rows = con.execute(f"""
+                SELECT 'booking' as type, customer_name as title, service as subtitle,
+                       created_at as timestamp, id
+                FROM appointments
+                WHERE business_id IN ({placeholders})
+                  AND date(created_at) >= date('now', '-1 day')
+                ORDER BY created_at DESC
+                LIMIT 5
+            """, tuple(ids)).fetchall()
+            activity_items.extend([dict(r) for r in rows] if rows else [])
+
+            # Recent escalations
+            try:
+                rows = con.execute(f"""
+                    SELECT 'escalation' as type, reason as title, status as subtitle,
+                           created_at as timestamp, id
+                    FROM escalations
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date('now', '-1 day')
+                    ORDER BY created_at DESC
+                    LIMIT 3
+                """, tuple(ids)).fetchall()
+                activity_items.extend([dict(r) for r in rows] if rows else [])
+            except Exception:
+                pass
+
+            # Recent voice calls
+            try:
+                rows = con.execute(f"""
+                    SELECT 'call' as type,
+                           COALESCE(from_number, 'Unknown') as title,
+                           COALESCE(duration_seconds || 's', 'In progress') as subtitle,
+                           created_at as timestamp, id
+                    FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date('now', '-1 day')
+                    ORDER BY created_at DESC
+                    LIMIT 3
+                """, tuple(ids)).fetchall()
+                activity_items.extend([dict(r) for r in rows] if rows else [])
+            except Exception:
+                pass
+
+            # Sort by timestamp and take top 8
+            activity_items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            recent_activity = activity_items[:8]
+
+            # === NEW: Pending Escalations Count ===
+            try:
+                row = con.execute(f"""
+                    SELECT COUNT(*) c FROM escalations
+                    WHERE business_id IN ({placeholders})
+                      AND status = 'pending'
+                """, tuple(ids)).fetchone()
+                escalation_count = row["c"] if row else 0
+            except Exception:
+                pass
+
+            # === NEW: Week-over-Week Comparison ===
+            row = con.execute(f"""
+                SELECT COUNT(*) c FROM appointments
+                WHERE business_id IN ({placeholders})
+                  AND date(created_at) >= date('now', '-7 days')
+            """, tuple(ids)).fetchone()
+            week_comparison["this_week"] = row["c"] if row else 0
+
+            row = con.execute(f"""
+                SELECT COUNT(*) c FROM appointments
+                WHERE business_id IN ({placeholders})
+                  AND date(created_at) >= date('now', '-14 days')
+                  AND date(created_at) < date('now', '-7 days')
+            """, tuple(ids)).fetchone()
+            week_comparison["last_week"] = row["c"] if row else 0
+
+            if week_comparison["last_week"] > 0:
+                change = week_comparison["this_week"] - week_comparison["last_week"]
+                week_comparison["change_pct"] = round((change / week_comparison["last_week"]) * 100)
+            elif week_comparison["this_week"] > 0:
+                week_comparison["change_pct"] = 100
+
     from datetime import datetime as dt
     return render_template(
         "dashboard.html",
@@ -548,7 +696,13 @@ def dashboard():
         kpis=kpis,
         series_labels=series_labels,
         series_values=series_values,
-        now=dt.now()
+        now=dt.now(),
+        # New data for redesigned dashboard
+        ai_stats=ai_stats,
+        upcoming_appointments=upcoming_appointments,
+        recent_activity=recent_activity,
+        escalation_count=escalation_count,
+        week_comparison=week_comparison
     )
 
 
