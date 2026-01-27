@@ -528,3 +528,108 @@ class TestBookingConfirmationFlow:
                     # Second confirm
                     success2, message, _ = confirm_pending_booking(token)
                     assert success2 is False
+
+
+# ============================================================================
+# Real-Time Availability Tests
+# ============================================================================
+
+class TestAvailabilityFunctions:
+    """Tests for real-time availability checking functions."""
+
+    def test_get_available_slots_for_day(self):
+        """Should return formatted time slots."""
+        with patch('core.booking.get_business_provider') as mock_provider:
+            with patch('core.booking._find_local_service_id', return_value=1):
+                mock_prov = MagicMock()
+                mock_prov.fetch_slots.return_value = [
+                    "2026-01-27 09:00",
+                    "2026-01-27 10:00",
+                    "2026-01-27 14:30",
+                ]
+                mock_provider.return_value = mock_prov
+
+                from core.booking import get_available_slots_for_day
+                slots = get_available_slots_for_day(1, "2026-01-27", "Haircut")
+
+                assert len(slots) == 3
+                assert "9:00 AM" in slots
+                assert "10:00 AM" in slots
+                assert "2:30 PM" in slots
+
+    def test_get_available_slots_no_provider(self):
+        """Should return empty list if no provider."""
+        with patch('core.booking.get_business_provider', return_value=None):
+            from core.booking import get_available_slots_for_day
+            slots = get_available_slots_for_day(999, "2026-01-27")
+            assert slots == []
+
+    def test_get_next_available_slots(self):
+        """Should return slots across multiple days."""
+        with patch('core.booking.get_business_provider') as mock_provider:
+            with patch('core.booking._find_local_service_id', return_value=1):
+                with patch('core.booking.get_conn'):
+                    mock_prov = MagicMock()
+                    # Different slots per day
+                    def fake_fetch_slots(service_id, date_str):
+                        if "01-27" in date_str:
+                            return ["2026-01-27 10:00", "2026-01-27 11:00"]
+                        elif "01-28" in date_str:
+                            return ["2026-01-28 14:00"]
+                        return []
+
+                    mock_prov.fetch_slots.side_effect = fake_fetch_slots
+                    mock_provider.return_value = mock_prov
+
+                    from core.booking import get_next_available_slots
+                    slots = get_next_available_slots(1, num_slots=5)
+
+                    # Should have found slots
+                    assert len(slots) >= 1
+                    assert "times" in slots[0]
+                    assert len(slots[0]["times"]) >= 1
+
+    def test_check_time_available_true(self):
+        """Should return True when slot is available."""
+        with patch('core.db.check_slot_available', return_value=True):
+            with patch('core.booking._find_local_service_id', return_value=1):
+                with patch('core.booking.get_conn'):
+                    from core.booking import check_time_available
+                    is_available, alternative = check_time_available(1, "2026-01-27", "10:00")
+
+                    assert is_available is True
+                    assert alternative is None
+
+    def test_check_time_available_false_with_alternative(self):
+        """Should suggest alternative when slot is taken."""
+        with patch('core.db.check_slot_available', return_value=False):
+            with patch('core.booking.get_available_slots_for_day', return_value=["11:00 AM", "2:00 PM"]):
+                from core.booking import check_time_available
+                is_available, alternative = check_time_available(1, "2026-01-27", "10:00")
+
+                assert is_available is False
+                assert alternative == "11:00 AM"
+
+    def test_format_availability_for_voice(self):
+        """Should format availability in a voice-friendly way."""
+        with patch('core.booking.get_next_available_slots') as mock_slots:
+            mock_slots.return_value = [
+                {"day": "Today", "date": "2026-01-27", "times": ["10:00 AM", "2:30 PM"]},
+                {"day": "Tomorrow", "date": "2026-01-28", "times": ["9:00 AM"]},
+            ]
+
+            from core.booking import format_availability_for_voice
+            result = format_availability_for_voice(1)
+
+            assert "Available times:" in result
+            assert "Today:" in result
+            assert "10:00 AM" in result
+            assert "Tomorrow:" in result
+
+    def test_format_availability_no_slots(self):
+        """Should return helpful message when no slots available."""
+        with patch('core.booking.get_next_available_slots', return_value=[]):
+            from core.booking import format_availability_for_voice
+            result = format_availability_for_voice(1)
+
+            assert "No availability" in result or "Ask the caller" in result

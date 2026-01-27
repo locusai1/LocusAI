@@ -170,7 +170,8 @@ def _voice_business_prompt(
     bd: dict,
     sentiment_context: Optional[Dict] = None,
     kb_entries: Optional[List] = None,
-    customer_info: Optional[Dict] = None
+    customer_info: Optional[Dict] = None,
+    availability_info: Optional[str] = None
 ) -> str:
     """Build voice-optimized system prompt — top-tier, natural, fully contextual.
 
@@ -179,6 +180,7 @@ def _voice_business_prompt(
         sentiment_context: Current sentiment analysis
         kb_entries: Relevant knowledge base entries
         customer_info: Known caller info (name, history, preferences)
+        availability_info: Formatted available time slots
     """
     from datetime import datetime
 
@@ -285,11 +287,24 @@ If rebooking, you can suggest: "Would you like the same service as last time?"
 7. SMOOTH TRANSITIONS: "Great!", "Perfect!", "Brilliant!", "Got it!"
 
 ## Handling Bookings
+"""
+
+    # Add real-time availability if provided
+    if availability_info:
+        base_prompt += f"""
+## REAL-TIME AVAILABILITY
+{availability_info}
+
+Use this to proactively suggest times: "I have 2:30 and 3pm available today, would either work?"
+If they request a time not listed, say: "Let me check... I don't have that time, but I do have [alternative]."
+"""
+
+    base_prompt += """
 When booking, collect naturally through conversation:
 1. What service they'd like
-2. When works for them (date and time)
-3. Their name
-4. A contact number
+2. When works for them (suggest from available times above!)
+3. Their name (skip if caller is recognized)
+4. A contact number (skip if caller is recognized)
 
 Once you have ALL details AND they confirm, output:
 <VOICE_BOOKING>{{"name":"NAME","phone":"PHONE","service":"SERVICE","datetime":"YYYY-MM-DD HH:MM"}}</VOICE_BOOKING>
@@ -746,8 +761,17 @@ def process_message_for_voice(
     if business_id:
         kb_entries = _get_kb_entries_for_voice(business_id, user_text, limit=5)
 
+    # Get real-time availability for booking context
+    availability_info = None
+    if business_id:
+        try:
+            from core.booking import format_availability_for_voice
+            availability_info = format_availability_for_voice(business_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch availability: {e}")
+
     # Build voice-optimized prompt with full context including caller recognition
-    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries, customer_info)
+    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries, customer_info, availability_info)
 
     # Build messages
     messages = [{"role": "system", "content": sys_prompt}]

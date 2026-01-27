@@ -73,6 +73,208 @@ def _pick_slot_near(provider, service_id:Optional[int], date_pref:datetime) -> O
 
 
 # ============================================================================
+# Real-Time Availability Checking
+# ============================================================================
+
+def get_available_slots_for_day(
+    business_id: int,
+    date_str: str,
+    service_name: Optional[str] = None,
+    limit: int = 10
+) -> list:
+    """Get available time slots for a specific day.
+
+    Args:
+        business_id: Business ID
+        date_str: Date in YYYY-MM-DD format
+        service_name: Optional service name to get duration
+        limit: Max number of slots to return
+
+    Returns:
+        List of available slot strings in "HH:MM" format
+    """
+    provider = get_business_provider(business_id)
+    if not provider:
+        return []
+
+    # Get service ID if service name provided
+    service_id = None
+    if service_name:
+        service_id = _find_local_service_id(business_id, service_name)
+    else:
+        # Get first active service as default
+        with get_conn() as con:
+            row = con.execute(
+                "SELECT id FROM services WHERE business_id = ? AND active = 1 LIMIT 1",
+                (business_id,)
+            ).fetchone()
+            if row:
+                service_id = row["id"]
+
+    if not service_id:
+        return []
+
+    slots = provider.fetch_slots(service_id, date_str) or []
+
+    # Format for voice (just times, not full datetime)
+    formatted = []
+    for slot in slots[:limit]:
+        try:
+            dt = datetime.strptime(slot, "%Y-%m-%d %H:%M")
+            formatted.append(dt.strftime("%I:%M %p").lstrip("0"))  # "2:30 PM"
+        except:
+            formatted.append(slot)
+
+    return formatted
+
+
+def get_next_available_slots(
+    business_id: int,
+    service_name: Optional[str] = None,
+    num_slots: int = 5,
+    days_ahead: int = 7
+) -> list:
+    """Get the next available slots across multiple days.
+
+    Returns slots in a voice-friendly format like:
+    [
+        {"day": "Today", "date": "2026-01-27", "times": ["2:30 PM", "3:00 PM"]},
+        {"day": "Tomorrow", "date": "2026-01-28", "times": ["10:00 AM", "11:00 AM"]},
+    ]
+    """
+    from datetime import date
+
+    provider = get_business_provider(business_id)
+    if not provider:
+        return []
+
+    service_id = None
+    if service_name:
+        service_id = _find_local_service_id(business_id, service_name)
+    else:
+        with get_conn() as con:
+            row = con.execute(
+                "SELECT id FROM services WHERE business_id = ? AND active = 1 LIMIT 1",
+                (business_id,)
+            ).fetchone()
+            if row:
+                service_id = row["id"]
+
+    if not service_id:
+        return []
+
+    today = date.today()
+    results = []
+    total_slots = 0
+
+    for i in range(days_ahead):
+        if total_slots >= num_slots:
+            break
+
+        check_date = today + timedelta(days=i)
+        date_str = check_date.strftime("%Y-%m-%d")
+        slots = provider.fetch_slots(service_id, date_str) or []
+
+        if not slots:
+            continue
+
+        # Format day name
+        if i == 0:
+            day_name = "Today"
+        elif i == 1:
+            day_name = "Tomorrow"
+        else:
+            day_name = check_date.strftime("%A")  # "Monday", "Tuesday", etc.
+
+        # Format times
+        times = []
+        for slot in slots:
+            if total_slots >= num_slots:
+                break
+            try:
+                dt = datetime.strptime(slot, "%Y-%m-%d %H:%M")
+                times.append(dt.strftime("%I:%M %p").lstrip("0"))
+            except:
+                times.append(slot.split(" ")[-1] if " " in slot else slot)
+            total_slots += 1
+
+        if times:
+            results.append({
+                "day": day_name,
+                "date": date_str,
+                "times": times
+            })
+
+    return results
+
+
+def check_time_available(
+    business_id: int,
+    date_str: str,
+    time_str: str,
+    service_name: Optional[str] = None
+) -> Tuple[bool, Optional[str]]:
+    """Check if a specific time slot is available.
+
+    Args:
+        business_id: Business ID
+        date_str: Date in YYYY-MM-DD format
+        time_str: Time in HH:MM format (24-hour)
+        service_name: Optional service name
+
+    Returns:
+        (is_available, suggested_alternative or None)
+    """
+    from core.db import check_slot_available
+
+    # Get service duration
+    duration_min = 30  # default
+    if service_name:
+        service_id = _find_local_service_id(business_id, service_name)
+        if service_id:
+            with get_conn() as con:
+                row = con.execute(
+                    "SELECT duration_min FROM services WHERE id = ?",
+                    (service_id,)
+                ).fetchone()
+                if row:
+                    duration_min = row["duration_min"]
+
+    # Check availability
+    start_at = f"{date_str} {time_str}"
+    is_available = check_slot_available(business_id, start_at, duration_min)
+
+    if is_available:
+        return True, None
+
+    # Find alternative - get available slots for that day
+    slots = get_available_slots_for_day(business_id, date_str, service_name, limit=3)
+    if slots:
+        return False, slots[0]  # Suggest first available
+
+    return False, None
+
+
+def format_availability_for_voice(business_id: int, service_name: Optional[str] = None) -> str:
+    """Format availability info for inclusion in voice AI prompt.
+
+    Returns a concise string the AI can use to inform callers about availability.
+    """
+    slots = get_next_available_slots(business_id, service_name, num_slots=6, days_ahead=5)
+
+    if not slots:
+        return "No availability information. Ask the caller for their preferred time and let them know you'll check."
+
+    lines = ["Available times:"]
+    for slot_info in slots[:3]:  # Max 3 days
+        day = slot_info["day"]
+        times = ", ".join(slot_info["times"][:3])  # Max 3 times per day
+        lines.append(f"  {day}: {times}")
+
+    return "\n".join(lines)
+
+
+# ============================================================================
 # Pending Booking Management (Confirmation Flow)
 # ============================================================================
 
