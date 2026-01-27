@@ -166,8 +166,20 @@ def _kb_snippets(business_id: int, query: str, limit: int = 3):
         return []
 
 
-def _voice_business_prompt(bd: dict, sentiment_context: Optional[Dict] = None, kb_entries: Optional[List] = None) -> str:
-    """Build voice-optimized system prompt — top-tier, natural, fully contextual."""
+def _voice_business_prompt(
+    bd: dict,
+    sentiment_context: Optional[Dict] = None,
+    kb_entries: Optional[List] = None,
+    customer_info: Optional[Dict] = None
+) -> str:
+    """Build voice-optimized system prompt — top-tier, natural, fully contextual.
+
+    Args:
+        bd: Business data dict
+        sentiment_context: Current sentiment analysis
+        kb_entries: Relevant knowledge base entries
+        customer_info: Known caller info (name, history, preferences)
+    """
     from datetime import datetime
 
     name = bd.get("name", "this business")
@@ -214,7 +226,44 @@ def _voice_business_prompt(bd: dict, sentiment_context: Optional[Dict] = None, k
 ## Current Context
 - It's currently {current_day}, {current_time}
 - You're answering calls for {name}
+"""
 
+    # Add caller recognition context if we know them
+    if customer_info and customer_info.get("name"):
+        cust_name = customer_info.get("name", "")
+        visit_count = customer_info.get("total_appointments", 0) or customer_info.get("visit_count", 0)
+        last_service = customer_info.get("last_service", "")
+        last_visit = customer_info.get("last_visit", "")
+        preferred_staff = customer_info.get("preferred_staff", "")
+        notes = customer_info.get("notes", "")
+
+        base_prompt += f"""
+## CALLER RECOGNIZED: {cust_name}
+You know this caller! Greet them warmly by name.
+"""
+        if visit_count > 0:
+            if visit_count == 1:
+                base_prompt += f"- They've visited once before\n"
+            else:
+                base_prompt += f"- Returning customer with {visit_count} previous visits\n"
+
+        if last_service and last_visit:
+            base_prompt += f"- Last visit: {last_service} on {last_visit}\n"
+        elif last_service:
+            base_prompt += f"- Last service: {last_service}\n"
+
+        if preferred_staff:
+            base_prompt += f"- Usually sees: {preferred_staff}\n"
+
+        if notes:
+            base_prompt += f"- Notes: {notes}\n"
+
+        base_prompt += """
+Use their name naturally in conversation (but don't overdo it).
+If rebooking, you can suggest: "Would you like the same service as last time?"
+"""
+
+    base_prompt += """
 ## Business Information
 """
 
@@ -697,8 +746,8 @@ def process_message_for_voice(
     if business_id:
         kb_entries = _get_kb_entries_for_voice(business_id, user_text, limit=5)
 
-    # Build voice-optimized prompt with full context
-    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries)
+    # Build voice-optimized prompt with full context including caller recognition
+    sys_prompt = _voice_business_prompt(bd, sentiment_context, kb_entries, customer_info)
 
     # Build messages
     messages = [{"role": "system", "content": sys_prompt}]

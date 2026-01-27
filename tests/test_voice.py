@@ -595,3 +595,122 @@ class TestVoiceIntegration:
             assert call['call_status'] == 'ended'
             assert call['transcript'] is not None
             assert call['cost_cents'] == 42
+
+
+# ============================================================================
+# Caller Recognition Tests
+# ============================================================================
+
+class TestCallerRecognition:
+    """Tests for caller recognition (phone number lookup)."""
+
+    def test_get_caller_info_known_customer(self, test_db, sample_business):
+        """Should find customer by phone number."""
+        with patch('core.db.DB_PATH', test_db):
+            # Create a test customer
+            from core.db import get_conn
+            with get_conn() as con:
+                con.execute(
+                    """INSERT INTO customers (business_id, name, email, phone, total_appointments)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Sarah Smith', 'sarah@example.com', '+14155551234', 5)
+                )
+                con.commit()
+
+            from core.voice import get_caller_info
+            result = get_caller_info(sample_business['id'], '+14155551234')
+
+            assert result is not None
+            assert result['name'] == 'Sarah Smith'
+            assert result['email'] == 'sarah@example.com'
+
+    def test_get_caller_info_unknown_number(self, test_db, sample_business):
+        """Should return None for unknown phone numbers."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.voice import get_caller_info
+            result = get_caller_info(sample_business['id'], '+19995551234')
+
+            assert result is None
+
+    def test_get_caller_info_partial_phone_match(self, test_db, sample_business):
+        """Should match phone numbers ignoring country code."""
+        with patch('core.db.DB_PATH', test_db):
+            # Create customer with local format
+            from core.db import get_conn
+            with get_conn() as con:
+                con.execute(
+                    """INSERT INTO customers (business_id, name, phone)
+                       VALUES (?, ?, ?)""",
+                    (sample_business['id'], 'John Doe', '4155559999')
+                )
+                con.commit()
+
+            from core.voice import get_caller_info
+            # Search with full international format
+            result = get_caller_info(sample_business['id'], '+14155559999')
+
+            assert result is not None
+            assert result['name'] == 'John Doe'
+
+    def test_get_caller_info_with_appointment_history(self, test_db, sample_business):
+        """Should include last service and visit info."""
+        with patch('core.db.DB_PATH', test_db):
+            from core.db import get_conn
+            from datetime import datetime, timedelta
+
+            # Create customer
+            with get_conn() as con:
+                con.execute(
+                    """INSERT INTO customers (business_id, name, phone)
+                       VALUES (?, ?, ?)""",
+                    (sample_business['id'], 'Jane Wilson', '+14155558888')
+                )
+
+                # Create past appointment
+                past_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M')
+                con.execute(
+                    """INSERT INTO appointments (business_id, customer_name, phone, service, start_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (sample_business['id'], 'Jane Wilson', '+14155558888', 'Haircut', past_date, 'completed')
+                )
+                con.commit()
+
+            from core.voice import get_caller_info
+            result = get_caller_info(sample_business['id'], '+14155558888')
+
+            assert result is not None
+            assert result['name'] == 'Jane Wilson'
+            assert result.get('last_service') == 'Haircut'
+            assert result.get('visit_count', 0) >= 1
+
+    def test_voice_prompt_with_customer_info(self):
+        """Voice prompt should include caller recognition context."""
+        from core.ai import _voice_business_prompt
+
+        bd = {'name': 'StyleCuts', 'tone': 'friendly'}
+        customer_info = {
+            'name': 'Sarah Smith',
+            'total_appointments': 5,
+            'last_service': 'Haircut',
+            'last_visit': 'January 15'
+        }
+
+        prompt = _voice_business_prompt(bd, customer_info=customer_info)
+
+        # Should include caller name
+        assert 'Sarah Smith' in prompt
+        # Should mention they're a returning customer
+        assert 'returning' in prompt.lower() or 'previous' in prompt.lower() or 'visit' in prompt.lower()
+        # Should mention last service
+        assert 'Haircut' in prompt
+
+    def test_voice_prompt_without_customer_info(self):
+        """Voice prompt should work without customer info."""
+        from core.ai import _voice_business_prompt
+
+        bd = {'name': 'StyleCuts', 'tone': 'friendly'}
+        prompt = _voice_business_prompt(bd, customer_info=None)
+
+        # Should still be a valid prompt
+        assert 'StyleCuts' in prompt
+        assert 'CALLER RECOGNIZED' not in prompt

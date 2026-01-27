@@ -679,6 +679,125 @@ def cancel_voice_booking(call_id: str) -> Tuple[bool, str]:
 
 
 # ============================================================================
+# Caller Recognition
+# ============================================================================
+
+def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
+    """Look up caller by phone number and return enriched customer info.
+
+    This is the core of caller recognition - when a call comes in,
+    we look up the customer and provide context to the AI.
+
+    Args:
+        business_id: Business receiving the call
+        phone: Caller's phone number
+
+    Returns:
+        Dict with customer info including:
+        - id, name, email, phone
+        - total_appointments, visit_count
+        - last_service, last_visit
+        - preferred_staff
+        - notes, tags
+        Or None if customer not found
+    """
+    if not phone or not business_id:
+        return None
+
+    from core.db import get_conn
+
+    # Normalize phone for matching
+    normalized = ''.join(c for c in phone if c.isdigit())
+    if len(normalized) < 7:
+        return None
+
+    # Last 10 digits for matching (handles country codes)
+    last_10 = normalized[-10:] if len(normalized) >= 10 else normalized
+
+    with get_conn() as con:
+        # Find customer by phone
+        rows = con.execute(
+            "SELECT * FROM customers WHERE business_id = ? AND phone IS NOT NULL",
+            (business_id,)
+        ).fetchall()
+
+        customer = None
+        for row in rows:
+            row_phone = ''.join(c for c in (row["phone"] or "") if c.isdigit())
+            row_last_10 = row_phone[-10:] if len(row_phone) >= 10 else row_phone
+            if row_last_10 and last_10 == row_last_10:
+                customer = dict(row)
+                break
+
+        if not customer:
+            return None
+
+        customer_id = customer["id"]
+
+        # Get last appointment info
+        last_appt = con.execute(
+            """SELECT service, start_at, status
+               FROM appointments
+               WHERE business_id = ? AND customer_name IS NOT NULL
+               AND (phone LIKE ? OR customer_email = ?)
+               AND status IN ('completed', 'confirmed')
+               ORDER BY start_at DESC
+               LIMIT 1""",
+            (business_id, f"%{last_10}%", customer.get("email"))
+        ).fetchone()
+
+        if last_appt:
+            customer["last_service"] = last_appt["service"]
+            # Format date nicely
+            try:
+                dt = datetime.fromisoformat(last_appt["start_at"].replace("Z", ""))
+                customer["last_visit"] = dt.strftime("%B %d")  # e.g., "January 15"
+            except:
+                customer["last_visit"] = last_appt["start_at"][:10] if last_appt["start_at"] else None
+
+        # Count total completed appointments
+        count_row = con.execute(
+            """SELECT COUNT(*) as cnt FROM appointments
+               WHERE business_id = ?
+               AND (phone LIKE ? OR customer_email = ?)
+               AND status IN ('completed', 'confirmed')""",
+            (business_id, f"%{last_10}%", customer.get("email"))
+        ).fetchone()
+        customer["visit_count"] = count_row["cnt"] if count_row else customer.get("total_appointments", 0)
+
+        # Get preferred staff if we track it (future enhancement)
+        customer["preferred_staff"] = None  # TODO: Add staff preference tracking
+
+        logger.info(f"Caller recognized: {customer.get('name')} (ID: {customer_id}) for business {business_id}")
+        return customer
+
+
+def get_caller_info_by_call_id(call_id: str) -> Optional[Dict]:
+    """Get caller info for a voice call by looking up the call record.
+
+    Args:
+        call_id: Retell call ID
+
+    Returns:
+        Customer info dict or None
+    """
+    voice_call = get_voice_call(call_id)
+    if not voice_call:
+        return None
+
+    business_id = voice_call.get("business_id")
+    # For inbound calls, from_number is the caller
+    # For outbound calls, to_number is the customer
+    direction = voice_call.get("direction", "inbound")
+    phone = voice_call.get("from_number") if direction == "inbound" else voice_call.get("to_number")
+
+    if not business_id or not phone:
+        return None
+
+    return get_caller_info(business_id, phone)
+
+
+# ============================================================================
 # Voice Call Lifecycle
 # ============================================================================
 

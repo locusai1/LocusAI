@@ -25,6 +25,7 @@ from core.voice import (
     confirm_voice_booking,
     cancel_voice_booking,
     get_voice_pending_booking,
+    get_caller_info_by_call_id,
 )
 try:
     from core.kb import search_kb as kb_search
@@ -109,6 +110,7 @@ class RetellLLMWebSocket:
             "transcript": [],
             "business_id": None,
             "session_id": None,
+            "customer_info": None,  # Caller recognition
             "state": {},
         }
 
@@ -117,6 +119,12 @@ class RetellLLMWebSocket:
         if voice_call:
             self.active_calls[call_id]["business_id"] = voice_call.get("business_id")
             self.active_calls[call_id]["session_id"] = voice_call.get("session_id")
+
+        # CALLER RECOGNITION: Look up customer by phone
+        customer_info = get_caller_info_by_call_id(call_id)
+        if customer_info:
+            self.active_calls[call_id]["customer_info"] = customer_info
+            logger.info(f"Caller recognized: {customer_info.get('name')} for call {call_id}")
 
         # Return acknowledgment (Retell may not need a response here)
         return {
@@ -228,11 +236,21 @@ class RetellLLMWebSocket:
                     history.append({"role": role, "content": content})
             state["history"] = history
 
-            # Get AI response using our full system
+            # Get customer info for caller recognition
+            customer_info = call_state.get("customer_info")
+            if not customer_info and call_id:
+                # Try to look up customer if we didn't get it at call start
+                customer_info = get_caller_info_by_call_id(call_id)
+                if customer_info:
+                    call_state["customer_info"] = customer_info
+                    logger.info(f"Late caller recognition: {customer_info.get('name')}")
+
+            # Get AI response using our full system with caller recognition
             ai_response = process_message_for_voice(
                 user_input=last_user_message,
                 business_data=business_data,
-                state=state
+                state=state,
+                customer_info=customer_info
             )
 
             # Check for booking in response
