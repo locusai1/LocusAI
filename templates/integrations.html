@@ -1,175 +1,305 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — Integrations{% endblock %}
+{% block title %}Integrations — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">Integrations</h1>
-    <a class="text-sm text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back</a>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="page-title">Integrations</h1>
+      <p class="page-subtitle">Connect your AI receptionist to external services</p>
+    </div>
+  </div>
+</div>
+
+<!-- Business Selector -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('integrations.integrations_index') }}">
+      <div class="w-48">
+        <label class="form-label">Business</label>
+        <select name="business_id" class="input" onchange="this.form.submit()">
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business_id == b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not business_id %}
+<!-- No Business Selected -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+    </svg>
+    <div class="empty-state-title">Select a Business</div>
+    <div class="empty-state-description">Choose a business to manage its integrations</div>
+  </div>
+</div>
+
+{% else %}
+<!-- Chat Widget Section -->
+<div class="mb-8">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="section-icon">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+    </div>
+    <div>
+      <h2 class="text-lg font-semibold">Chat Widget</h2>
+      <p class="text-sm text-tertiary">Embed AI chat on your website</p>
+    </div>
   </div>
 
-  <form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('integrations.integrations_index') }}">
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Business</label>
-      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white" onchange="this.form.submit()">
-        <option value="">— Select —</option>
-        {% for b in businesses %}
-          <option value="{{ b['id'] }}" {% if business_id==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </form>
+  <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Widget Settings -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Widget Settings</h3>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('integrations.widget_settings') }}" class="space-y-4">
+          <input type="hidden" name="business_id" value="{{ business_id }}">
 
-  {% if business_id %}
-
-  <!-- Chat Widget Section -->
-  <div class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Chat Widget</h2>
-    <p class="text-sm text-slate-600 mb-4">Embed the AI chat on your website to let customers chat with your AI receptionist 24/7.</p>
-
-    <div class="grid md:grid-cols-2 gap-6">
-      <!-- Widget Settings -->
-      <form method="post" action="{{ url_for('integrations.widget_settings') }}" class="bg-white p-6 rounded-xl border">
-        <input type="hidden" name="business_id" value="{{ business_id }}">
-        <h3 class="font-medium mb-4">Widget Settings</h3>
-
-        <div class="space-y-4">
-          <label class="flex items-center gap-2">
-            <input type="checkbox" name="enabled" {% if widget.enabled %}checked{% endif %} class="rounded">
-            <span class="text-sm">Enable widget</span>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="enabled" {% if widget.enabled %}checked{% endif %} class="checkbox">
+            <span>Enable widget</span>
           </label>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Position</label>
-            <select name="position" class="border rounded-lg px-3 py-2 bg-white w-full">
+            <label class="form-label">Position</label>
+            <select name="position" class="input">
               <option value="bottom-right" {% if widget.position == 'bottom-right' %}selected{% endif %}>Bottom Right</option>
               <option value="bottom-left" {% if widget.position == 'bottom-left' %}selected{% endif %}>Bottom Left</option>
             </select>
           </div>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Primary Color</label>
+            <label class="form-label">Primary Color</label>
             <div class="flex gap-2">
-              <input type="color" name="primary_color" value="{{ widget.primary_color or business.accent_color or '#2f6fec' }}" class="w-12 h-10 rounded border cursor-pointer">
-              <input type="text" value="{{ widget.primary_color or business.accent_color or '#2f6fec' }}" class="flex-1 border rounded-lg px-3 py-2" readonly>
+              <input type="color" name="primary_color" value="{{ widget.primary_color or business.accent_color or '#171717' }}" class="color-picker">
+              <input type="text" value="{{ widget.primary_color or business.accent_color or '#171717' }}" class="input flex-1" readonly>
             </div>
           </div>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Welcome Message</label>
-            <textarea name="welcome_message" class="w-full border rounded-lg px-3 py-2" rows="2" placeholder="Hi! How can I help you today?">{{ widget.welcome_message or 'Hi! How can I help you today?' }}</textarea>
+            <label class="form-label">Welcome Message</label>
+            <textarea name="welcome_message" class="input" rows="2" placeholder="Hi! How can I help you today?">{{ widget.welcome_message or 'Hi! How can I help you today?' }}</textarea>
           </div>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Input Placeholder</label>
-            <input type="text" name="placeholder_text" value="{{ widget.placeholder_text or 'Type a message...' }}" class="w-full border rounded-lg px-3 py-2">
+            <label class="form-label">Input Placeholder</label>
+            <input type="text" name="placeholder_text" value="{{ widget.placeholder_text or 'Type a message...' }}" class="input">
           </div>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Allowed Domains (optional)</label>
-            <input type="text" name="allowed_domains" value="{{ widget.allowed_domains or '' }}" class="w-full border rounded-lg px-3 py-2" placeholder="example.com, app.example.com">
-            <p class="text-xs text-slate-500 mt-1">Comma-separated. Leave empty to allow all domains.</p>
+            <label class="form-label">Allowed Domains (optional)</label>
+            <input type="text" name="allowed_domains" value="{{ widget.allowed_domains or '' }}" class="input" placeholder="example.com, app.example.com">
+            <p class="text-xs text-tertiary mt-1">Comma-separated. Leave empty for all domains.</p>
           </div>
 
-          <label class="flex items-center gap-2">
-            <input type="checkbox" name="show_branding" {% if widget.show_branding %}checked{% endif %} class="rounded">
-            <span class="text-sm">Show "Powered by LocusAI" branding</span>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="show_branding" {% if widget.show_branding %}checked{% endif %} class="checkbox">
+            <span>Show "Powered by LocusAI"</span>
           </label>
 
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Auto-open delay (seconds)</label>
-            <input type="number" name="auto_open_delay" value="{{ widget.auto_open_delay or '' }}" class="w-full border rounded-lg px-3 py-2" placeholder="Leave empty to disable" min="1" max="300">
+            <label class="form-label">Auto-open Delay (seconds)</label>
+            <input type="number" name="auto_open_delay" value="{{ widget.auto_open_delay or '' }}" class="input" placeholder="Leave empty to disable" min="1" max="300">
+          </div>
+
+          <button class="btn btn-primary w-full" type="submit">Save Settings</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Embed Code -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Embed Code</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-secondary mb-4">Copy this code and paste it before the closing <code class="code-inline">&lt;/body&gt;</code> tag.</p>
+
+        <div class="code-block">
+          <pre id="embed-code">&lt;script src="{{ request.host_url }}static/widget.js"
+        data-tenant="{{ tenant_key }}"&gt;&lt;/script&gt;</pre>
+          <button type="button" onclick="copyEmbedCode()" class="code-copy">Copy</button>
+        </div>
+
+        <div class="tenant-key-box mt-4">
+          <div class="flex items-center gap-2 mb-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            <span class="font-medium text-sm">Tenant Key</span>
+          </div>
+          <code class="text-sm">{{ tenant_key }}</code>
+          <p class="text-xs text-tertiary mt-1">Keep this private. It identifies your business.</p>
+        </div>
+
+        <div class="mt-6">
+          <h4 class="font-medium text-sm mb-2">iFrame Alternative</h4>
+          <div class="code-block small">
+            <pre>&lt;iframe src="{{ request.host_url }}api/widget/frame?tenant_key={{ tenant_key }}"
+        width="400" height="600"&gt;&lt;/iframe&gt;</pre>
           </div>
         </div>
 
-        <button class="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Settings</button>
-      </form>
-
-      <!-- Embed Code -->
-      <div class="bg-white p-6 rounded-xl border">
-        <h3 class="font-medium mb-4">Embed Code</h3>
-        <p class="text-sm text-slate-600 mb-4">Copy this code and paste it before the closing <code class="bg-slate-100 px-1 rounded">&lt;/body&gt;</code> tag of your website.</p>
-
-        <div class="relative">
-          <pre class="bg-slate-900 text-slate-100 p-4 rounded-lg text-sm overflow-x-auto"><code id="embed-code">&lt;script src="{{ request.host_url }}static/widget.js"
-        data-tenant="{{ tenant_key }}"&gt;&lt;/script&gt;</code></pre>
-          <button type="button" onclick="copyEmbedCode()" class="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">Copy</button>
-        </div>
-
-        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p class="text-sm text-blue-800"><strong>Tenant Key:</strong> <code class="bg-blue-100 px-1 rounded">{{ tenant_key }}</code></p>
-          <p class="text-xs text-blue-600 mt-1">Keep this key private. It identifies your business for widget API requests.</p>
-        </div>
-
-        <div class="mt-4">
-          <h4 class="text-sm font-medium mb-2">Alternative: iFrame Embed</h4>
-          <pre class="bg-slate-100 p-3 rounded-lg text-xs overflow-x-auto"><code>&lt;iframe src="{{ request.host_url }}api/widget/frame?tenant_key={{ tenant_key }}"
-        width="400" height="600"
-        style="border:none; position:fixed; bottom:20px; right:20px; z-index:9999;"&gt;
-&lt;/iframe&gt;</code></pre>
-        </div>
-
-        <div class="mt-4">
-          <h4 class="text-sm font-medium mb-2">Test Your Widget</h4>
-          <button type="button" onclick="testWidget()" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm">Preview Widget</button>
+        <div class="mt-6">
+          <button type="button" onclick="testWidget()" class="btn btn-primary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            Preview Widget
+          </button>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <hr class="my-8 border-slate-200">
+<div class="divider"></div>
 
-  <!-- Scheduling Provider Section -->
-  <div>
-    <h2 class="text-lg font-semibold mb-3">Scheduling Provider</h2>
-    <p class="text-sm text-slate-600 mb-4">Connect to external scheduling systems (Google Calendar, Calendly, etc.) or use the built-in local scheduler.</p>
-
-    <form method="post" action="{{ url_for('integrations.integrations_index') }}" class="grid gap-3 max-w-2xl bg-white p-6 rounded-xl border">
-      <input type="hidden" name="business_id" value="{{ business_id }}">
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Provider</label>
-        <select name="provider_key" class="border rounded-lg px-3 py-2 bg-white">
-          {% for p in providers %}
-            <option value="{{ p.key }}" {% if current==p.key %}selected{% endif %}>{{ p.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Config (JSON)</label>
-        <textarea class="w-full border rounded-lg px-3 py-2 min-h-[160px]" name="config_json" placeholder='{"account_id":"..."}'>{{ cfg|tojson(indent=2) }}</textarea>
-        <p class="text-xs text-slate-500 mt-1">Leave default for Local/Dummy. Real providers will store OAuth tokens and account IDs here.</p>
-      </div>
-      <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Provider</button>
-    </form>
+<!-- Scheduling Provider Section -->
+<div>
+  <div class="flex items-center gap-3 mb-4">
+    <div class="section-icon">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    </div>
+    <div>
+      <h2 class="text-lg font-semibold">Scheduling Provider</h2>
+      <p class="text-sm text-tertiary">Connect to Google Calendar, Calendly, or use built-in scheduler</p>
+    </div>
   </div>
-  {% endif %}
 
-  <script>
-    function copyEmbedCode() {
-      const code = document.getElementById('embed-code').textContent;
-      navigator.clipboard.writeText(code).then(() => {
-        alert('Copied to clipboard!');
-      });
-    }
+  <div class="card max-w-2xl">
+    <div class="card-header">
+      <h3 class="card-title">Provider Settings</h3>
+    </div>
+    <div class="card-body">
+      <form method="post" action="{{ url_for('integrations.integrations_index') }}" class="space-y-4">
+        <input type="hidden" name="business_id" value="{{ business_id }}">
+        <div>
+          <label class="form-label">Provider</label>
+          <select name="provider_key" class="input">
+            {% for p in providers %}
+            <option value="{{ p.key }}" {% if current == p.key %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Configuration (JSON)</label>
+          <textarea class="input font-mono text-sm" name="config_json" rows="6" placeholder='{"account_id":"..."}'>{{ cfg|tojson(indent=2) }}</textarea>
+          <p class="text-xs text-tertiary mt-1">Leave default for Local. Real providers store OAuth tokens here.</p>
+        </div>
+        <button class="btn btn-primary" type="submit">Save Provider</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 
-    function testWidget() {
-      // Dynamically load the widget for testing
-      if (window.LocusAIWidget) {
-        window.LocusAIWidget.open();
-        return;
-      }
+<style>
+.section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  accent-color: var(--text-primary);
+}
+.color-picker {
+  width: 48px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  padding: 2px;
+}
+.code-inline {
+  background: var(--bg-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.code-block {
+  position: relative;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+.code-block pre {
+  font-family: 'SF Mono', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+.code-block.small pre {
+  font-size: 11px;
+}
+.code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #404040;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.code-copy:hover {
+  background: #525252;
+}
+.tenant-key-box {
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  color: #2563eb;
+}
+.divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 32px 0;
+}
+</style>
 
-      const script = document.createElement('script');
-      script.src = '{{ request.host_url }}static/widget.js';
-      script.setAttribute('data-tenant', '{{ tenant_key }}');
-      script.setAttribute('data-api-base', '{{ request.host_url.rstrip("/") }}');
-      document.body.appendChild(script);
+<script>
+function copyEmbedCode() {
+  const code = document.getElementById('embed-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    alert('Copied to clipboard!');
+  });
+}
 
-      script.onload = () => {
-        setTimeout(() => {
-          if (window.LocusAIWidget) {
-            window.LocusAIWidget.open();
-          }
-        }, 500);
-      };
-    }
-  </script>
+function testWidget() {
+  if (window.LocusAIWidget) {
+    window.LocusAIWidget.open();
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = '{{ request.host_url }}static/widget.js';
+  script.setAttribute('data-tenant', '{{ tenant_key }}');
+  script.setAttribute('data-api-base', '{{ request.host_url.rstrip("/") }}');
+  document.body.appendChild(script);
+  script.onload = () => {
+    setTimeout(() => {
+      if (window.LocusAIWidget) window.LocusAIWidget.open();
+    }, 500);
+  };
+}
+</script>
 {% endblock %}

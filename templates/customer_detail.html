@@ -1,24 +1,26 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — {{ customer['name'] or 'Customer' }}{% endblock %}
+{% block title %}{{ customer['name'] or 'Customer' }} — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-6">
-  <div class="flex items-center gap-4">
-    <a href="{{ url_for('customers.customers_index', business_id=customer['business_id']) }}" class="text-slate-400 hover:text-slate-600">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-      </svg>
-    </a>
-    <div>
-      <h1 class="text-xl font-semibold">{{ customer['name'] or 'Unknown Customer' }}</h1>
-      <p class="text-sm text-slate-500">Customer #{{ customer['id'] }} • Since {{ customer['first_seen_at'][:10] if customer['first_seen_at'] else 'Unknown' }}</p>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <a href="{{ url_for('customers.customers_index', business_id=customer['business_id']) }}" class="back-btn">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <div class="customer-avatar-lg">{{ (customer['name'] or '?')[0]|upper }}</div>
+      <div>
+        <h1 class="page-title">{{ customer['name'] or 'Unknown Customer' }}</h1>
+        <p class="page-subtitle">Customer #{{ customer['id'] }} &middot; Since {{ customer['first_seen_at'][:10] if customer['first_seen_at'] else 'Unknown' }}</p>
+      </div>
     </div>
-  </div>
-  <div class="flex items-center gap-2">
-    <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="btn bg-white border hover:bg-slate-50">Edit</a>
-    <form method="post" action="{{ url_for('customers.customer_delete', customer_id=customer['id']) }}" class="inline" onsubmit="return confirm('Delete this customer? This will unlink all appointments and sessions.')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn bg-red-50 text-red-600 border-red-200 hover:bg-red-100">Delete</button>
-    </form>
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="btn">Edit</a>
+      <form method="post" action="{{ url_for('customers.customer_delete', customer_id=customer['id']) }}" class="inline" onsubmit="return confirm('Delete this customer? This will unlink all appointments and sessions.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -26,176 +28,170 @@
   <!-- Left Column: Customer Info -->
   <div class="lg:col-span-1 space-y-6">
     <!-- Contact Card -->
-    <div class="bg-white rounded-xl border p-6">
-      <h2 class="font-medium text-slate-900 mb-4">Contact Information</h2>
-
-      <div class="space-y-4">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Contact Information</h3>
+      </div>
+      <div class="card-body space-y-4">
         {% if customer['email'] %}
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-            </svg>
+        <div class="contact-item">
+          <div class="contact-icon blue">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
           </div>
           <div>
-            <div class="text-xs text-slate-500">Email</div>
-            <a href="mailto:{{ customer['email'] }}" class="text-indigo-600 hover:underline">{{ customer['email'] }}</a>
+            <div class="text-xs text-tertiary">Email</div>
+            <a href="mailto:{{ customer['email'] }}" class="text-primary hover:underline">{{ customer['email'] }}</a>
           </div>
         </div>
         {% endif %}
 
         {% if customer['phone'] %}
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-            </svg>
+        <div class="contact-item">
+          <div class="contact-icon green">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
           </div>
           <div>
-            <div class="text-xs text-slate-500">Phone</div>
-            <a href="tel:{{ customer['phone'] }}" class="text-slate-900 hover:text-indigo-600">{{ customer['phone'] }}</a>
+            <div class="text-xs text-tertiary">Phone</div>
+            <a href="tel:{{ customer['phone'] }}" class="text-primary hover:underline">{{ customer['phone'] }}</a>
           </div>
         </div>
         {% endif %}
 
         {% if not customer['email'] and not customer['phone'] %}
-        <p class="text-slate-400 text-sm">No contact information available</p>
+        <p class="text-muted text-sm">No contact information available</p>
         {% endif %}
       </div>
     </div>
 
     <!-- Stats Card -->
-    <div class="bg-white rounded-xl border p-6">
-      <h2 class="font-medium text-slate-900 mb-4">Statistics</h2>
-
-      <div class="grid grid-cols-2 gap-4">
-        <div class="text-center p-3 bg-slate-50 rounded-lg">
-          <div class="text-2xl font-semibold text-slate-900">{{ stats['total_appointments'] }}</div>
-          <div class="text-xs text-slate-500">Appointments</div>
-        </div>
-        <div class="text-center p-3 bg-slate-50 rounded-lg">
-          <div class="text-2xl font-semibold text-slate-900">{{ stats['total_sessions'] }}</div>
-          <div class="text-xs text-slate-500">Conversations</div>
-        </div>
-        <div class="text-center p-3 bg-green-50 rounded-lg">
-          <div class="text-2xl font-semibold text-green-600">{{ stats['completed_appointments'] }}</div>
-          <div class="text-xs text-slate-500">Completed</div>
-        </div>
-        <div class="text-center p-3 bg-red-50 rounded-lg">
-          <div class="text-2xl font-semibold text-red-600">{{ stats['cancelled_appointments'] }}</div>
-          <div class="text-xs text-slate-500">Cancelled</div>
-        </div>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Statistics</h3>
       </div>
+      <div class="card-body">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="stat-box">
+            <div class="stat-value">{{ stats['total_appointments'] }}</div>
+            <div class="stat-label">Appointments</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{ stats['total_sessions'] }}</div>
+            <div class="stat-label">Conversations</div>
+          </div>
+          <div class="stat-box green">
+            <div class="stat-value">{{ stats['completed_appointments'] }}</div>
+            <div class="stat-label">Completed</div>
+          </div>
+          <div class="stat-box red">
+            <div class="stat-value">{{ stats['cancelled_appointments'] }}</div>
+            <div class="stat-label">Cancelled</div>
+          </div>
+        </div>
 
-      {% if stats['last_appointment'] %}
-      <div class="mt-4 pt-4 border-t">
-        <div class="text-xs text-slate-500 mb-1">Last Appointment</div>
-        <div class="text-sm">{{ stats['last_appointment']['service'] or 'Service' }} — {{ stats['last_appointment']['start_at'][:10] if stats['last_appointment']['start_at'] else 'Unknown' }}</div>
-        <div class="text-xs text-slate-500">Status: {{ stats['last_appointment']['status'] | capitalize }}</div>
+        {% if stats['last_appointment'] %}
+        <div class="mt-4 pt-4 border-t" style="border-color: var(--border-light);">
+          <div class="text-xs text-tertiary mb-1">Last Appointment</div>
+          <div class="text-sm font-medium">{{ stats['last_appointment']['service'] or 'Service' }}</div>
+          <div class="text-xs text-tertiary">{{ stats['last_appointment']['start_at'][:10] if stats['last_appointment']['start_at'] else 'Unknown' }} &middot; {{ stats['last_appointment']['status']|capitalize }}</div>
+        </div>
+        {% endif %}
       </div>
-      {% endif %}
     </div>
 
     <!-- Tags Card -->
-    <div class="bg-white rounded-xl border p-6">
-      <h2 class="font-medium text-slate-900 mb-4">Tags</h2>
-
-      {% if customer['tags'] %}
-      <div class="flex flex-wrap gap-2">
-        {% for tag in customer['tags'].split(',') %}
-        {% if tag.strip() %}
-        <span class="inline-block px-3 py-1 text-sm rounded-full bg-indigo-100 text-indigo-700">{{ tag.strip() }}</span>
-        {% endif %}
-        {% endfor %}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Tags</h3>
       </div>
-      {% else %}
-      <p class="text-slate-400 text-sm">No tags</p>
-      {% endif %}
-
-      <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="text-xs text-indigo-600 hover:underline mt-3 inline-block">Edit tags</a>
+      <div class="card-body">
+        {% if customer['tags'] %}
+        <div class="flex flex-wrap gap-2">
+          {% for tag in customer['tags'].split(',') %}
+          {% if tag.strip() %}
+          <span class="tag">{{ tag.strip() }}</span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-sm">No tags</p>
+        {% endif %}
+        <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="text-xs text-secondary hover:text-primary mt-3 inline-block">Edit tags</a>
+      </div>
     </div>
 
     <!-- Notes Card -->
-    <div class="bg-white rounded-xl border p-6">
-      <h2 class="font-medium text-slate-900 mb-4">Notes</h2>
-
-      {% if customer['notes'] %}
-      <div class="text-sm text-slate-600 whitespace-pre-wrap">{{ customer['notes'] }}</div>
-      {% else %}
-      <p class="text-slate-400 text-sm">No notes</p>
-      {% endif %}
-
-      <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="text-xs text-indigo-600 hover:underline mt-3 inline-block">Edit notes</a>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Notes</h3>
+      </div>
+      <div class="card-body">
+        {% if customer['notes'] %}
+        <div class="text-sm text-secondary whitespace-pre-wrap">{{ customer['notes'] }}</div>
+        {% else %}
+        <p class="text-muted text-sm">No notes</p>
+        {% endif %}
+        <a href="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="text-xs text-secondary hover:text-primary mt-3 inline-block">Edit notes</a>
+      </div>
     </div>
   </div>
 
   <!-- Right Column: Activity -->
   <div class="lg:col-span-2 space-y-6">
     <!-- Appointments -->
-    <div class="bg-white rounded-xl border">
-      <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 class="font-medium text-slate-900">Appointments</h2>
-        <span class="text-sm text-slate-500">{{ appointments|length }} shown</span>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Appointments</h3>
+        <span class="badge">{{ appointments|length }}</span>
       </div>
-
       {% if appointments %}
-      <div class="divide-y">
+      <div class="divide-y" style="border-color: var(--border-light);">
         {% for appt in appointments %}
-        <div class="px-6 py-4 flex items-center justify-between hover:bg-slate-50">
+        <div class="px-6 py-4 flex items-center justify-between hover:bg-subtle transition-colors">
           <div>
-            <div class="font-medium text-slate-900">{{ appt['service'] or 'Appointment' }}</div>
-            <div class="text-sm text-slate-500">
-              {% if appt['start_at'] %}
-              {{ appt['start_at'][:16] }}
-              {% else %}
-              Created: {{ appt['created_at'][:10] }}
-              {% endif %}
+            <div class="font-medium">{{ appt['service'] or 'Appointment' }}</div>
+            <div class="text-sm text-tertiary">
+              {% if appt['start_at'] %}{{ appt['start_at'][:16] }}{% else %}Created: {{ appt['created_at'][:10] }}{% endif %}
             </div>
           </div>
           <div class="text-right">
-            <span class="inline-block px-2 py-1 text-xs rounded-full
-              {% if appt['status'] == 'confirmed' %}bg-green-100 text-green-700
-              {% elif appt['status'] == 'pending' %}bg-yellow-100 text-yellow-700
-              {% elif appt['status'] == 'cancelled' %}bg-red-100 text-red-700
-              {% elif appt['status'] == 'completed' %}bg-blue-100 text-blue-700
-              {% else %}bg-slate-100 text-slate-700{% endif %}">
-              {{ appt['status'] | capitalize }}
+            <span class="status-pill {{ appt['status'] }}">
+              <span class="status-dot"></span>
+              {{ appt['status']|capitalize }}
             </span>
-            <div class="text-xs text-slate-400 mt-1">#{{ appt['id'] }}</div>
+            <div class="text-xs text-muted mt-1">#{{ appt['id'] }}</div>
           </div>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <div class="px-6 py-8 text-center text-slate-500">
-        No appointments yet
+      <div class="empty-state py-8">
+        <div class="text-sm text-tertiary">No appointments yet</div>
       </div>
       {% endif %}
     </div>
 
     <!-- Chat Sessions -->
-    <div class="bg-white rounded-xl border">
-      <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 class="font-medium text-slate-900">Conversations</h2>
-        <span class="text-sm text-slate-500">{{ sessions|length }} shown</span>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Conversations</h3>
+        <span class="badge">{{ sessions|length }}</span>
       </div>
-
       {% if sessions %}
-      <div class="divide-y">
+      <div class="divide-y" style="border-color: var(--border-light);">
         {% for sess in sessions %}
-        <div class="px-6 py-4 hover:bg-slate-50">
+        <div class="px-6 py-4 hover:bg-subtle transition-colors">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-sm font-medium text-slate-900">Session #{{ sess['id'] }}</div>
-            <div class="text-xs text-slate-500">{{ sess['created_at'][:16] if sess['created_at'] else '' }}</div>
+            <div class="text-sm font-medium">Session #{{ sess['id'] }}</div>
+            <div class="text-xs text-tertiary">{{ sess['created_at'][:16] if sess['created_at'] else '' }}</div>
           </div>
-          <div class="flex items-center gap-4 text-sm text-slate-500">
+          <div class="flex items-center gap-3 text-sm text-tertiary">
             <span>{{ sess['message_count'] or 0 }} messages</span>
             {% if sess['channel'] and sess['channel'] != 'web' %}
-            <span class="px-2 py-0.5 bg-slate-100 rounded text-xs">{{ sess['channel'] }}</span>
+            <span class="badge">{{ sess['channel'] }}</span>
             {% endif %}
           </div>
           {% if sess['last_message'] %}
-          <div class="mt-2 text-sm text-slate-600 truncate">
+          <div class="mt-2 text-sm text-secondary truncate">
             "{{ sess['last_message'][:100] }}{% if sess['last_message']|length > 100 %}...{% endif %}"
           </div>
           {% endif %}
@@ -203,26 +199,119 @@
         {% endfor %}
       </div>
       {% else %}
-      <div class="px-6 py-8 text-center text-slate-500">
-        No conversations yet
+      <div class="empty-state py-8">
+        <div class="text-sm text-tertiary">No conversations yet</div>
       </div>
       {% endif %}
     </div>
 
     <!-- Merge Tool -->
-    <div class="bg-white rounded-xl border p-6">
-      <h2 class="font-medium text-slate-900 mb-2">Merge Duplicate</h2>
-      <p class="text-sm text-slate-500 mb-4">If this customer has duplicate records, merge them here. The other customer's appointments and conversations will be moved to this record.</p>
-
-      <form method="post" action="{{ url_for('customers.customer_merge', customer_id=customer['id']) }}" class="flex items-end gap-3" onsubmit="return confirm('This will merge the selected customer into this one and delete the duplicate. Continue?')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="flex-1">
-          <label class="block text-xs text-slate-600 mb-1">Customer ID to merge</label>
-          <input type="number" name="merge_with" placeholder="Enter customer ID" class="input w-full" required min="1">
-        </div>
-        <button type="submit" class="btn bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">Merge</button>
-      </form>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Merge Duplicate</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-secondary mb-4">If this customer has duplicate records, merge them here. The other customer's appointments and conversations will be moved to this record.</p>
+        <form method="post" action="{{ url_for('customers.customer_merge', customer_id=customer['id']) }}" class="flex items-end gap-3" onsubmit="return confirm('This will merge the selected customer into this one and delete the duplicate. Continue?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="flex-1">
+            <label class="form-label">Customer ID to merge</label>
+            <input type="number" name="merge_with" placeholder="Enter customer ID" class="input" required min="1">
+          </div>
+          <button type="submit" class="btn btn-warning">Merge</button>
+        </form>
+      </div>
     </div>
   </div>
 </div>
+
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.customer-avatar-lg {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--text-primary) 0%, #525252 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--text-inverse);
+}
+html[data-theme="dark"] .customer-avatar-lg {
+  background: linear-gradient(135deg, #fafafa 0%, #a3a3a3 100%);
+  color: #171717;
+}
+.contact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.contact-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.contact-icon.blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.contact-icon.green { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
+.stat-box {
+  text-align: center;
+  padding: var(--space-3);
+  background: var(--bg-muted);
+  border-radius: var(--radius-lg);
+}
+.stat-box.green { background: rgba(34, 197, 94, 0.1); }
+.stat-box.green .stat-value { color: #16a34a; }
+.stat-box.red { background: rgba(239, 68, 68, 0.1); }
+.stat-box.red .stat-value { color: #dc2626; }
+.stat-value { font-size: 24px; font-weight: 600; color: var(--text-primary); }
+.stat-label { font-size: 11px; color: var(--text-tertiary); }
+.tag {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  background: rgba(139, 92, 246, 0.1);
+  color: #7c3aed;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-pill .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status-pill.pending { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+.status-pill.confirmed { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
+.status-pill.cancelled { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+.status-pill.completed { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.hover\:bg-subtle:hover { background: var(--bg-muted); }
+.btn-danger { color: #dc2626; border-color: rgba(239, 68, 68, 0.3); }
+.btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
+.btn-warning { color: #d97706; border-color: rgba(245, 158, 11, 0.3); }
+.btn-warning:hover { background: rgba(245, 158, 11, 0.1); }
+</style>
 {% endblock %}

@@ -1,81 +1,182 @@
 {% extends "base.html" %}
 {% block title %}New Appointment — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-semibold">New Appointment</h1>
-  <a class="text-sm text-slate-600 hover:text-indigo-600" href="{{ url_for('appointments.appointments_index', business_id=business_id) }}">← Back to Appointments</a>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('appointments.appointments_index', business_id=business_id) }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="page-title">New Appointment</h1>
+      <p class="page-subtitle">Book a new appointment for a customer</p>
+    </div>
+  </div>
 </div>
 
-<form class="card p-6 grid gap-4" method="get" action="{{ url_for('appointments.appointments_new') }}">
-  <input type="hidden" name="business_id" value="{{ business_id }}">
-  <div class="grid md:grid-cols-3 gap-3">
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Service</label>
-      <select name="service_id" class="w-full border rounded-lg px-3 py-2" required>
-        <option value="">— Select —</option>
-        {% if local_mode %}
-          {% for s in services %}
-            <option value="{{ s['id'] }}" {% if service_id==s['id'] %}selected{% endif %}>{{ s['name'] }} ({{ s['duration_min'] }}m)</option>
-          {% endfor %}
-        {% else %}
-          {% for s in services %}
-            <option value="{{ s['id'] }}" {% if service_id==s['id'] %}selected{% endif %}>{{ s['name'] }} ({{ s['duration_min'] }}m)</option>
-          {% endfor %}
-        {% endif %}
-      </select>
-    </div>
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Date</label>
-      <input type="date" name="date" value="{{ date }}" class="w-full border rounded-lg px-3 py-2">
-    </div>
-    <div class="self-end">
-      <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Check Slots</button>
-    </div>
+<!-- Step 1: Select Service & Date -->
+<div class="card mb-6">
+  <div class="card-header">
+    <h3 class="card-title">1. Select Service & Date</h3>
   </div>
-</form>
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('appointments.appointments_new') }}">
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      <div class="w-56">
+        <label class="form-label">Service</label>
+        <select name="service_id" class="input" required>
+          <option value="">Select service...</option>
+          {% for s in services %}
+          <option value="{{ s['id'] }}" {% if service_id == s['id'] %}selected{% endif %}>{{ s['name'] }} ({{ s['duration_min'] }}m)</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="w-40">
+        <label class="form-label">Date</label>
+        <input type="date" name="date" value="{{ date }}" class="input">
+      </div>
+      <button class="btn btn-primary" type="submit">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        Check Slots
+      </button>
+    </form>
+  </div>
+</div>
 
 {% if slots %}
-<form class="card p-6 grid gap-4 mt-4" method="post" action="{{ url_for('appointments.appointments_new') }}">
-  <input type="hidden" name="business_id" value="{{ business_id }}">
-  <input type="hidden" name="service_id" value="{{ service_id }}">
-  <input type="hidden" name="date" value="{{ date }}">
-
-  <div class="grid md:grid-cols-2 gap-3">
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Customer name</label>
-      <input class="w-full border rounded-lg px-3 py-2" name="customer_name" required value="{{ values.get('customer_name','') }}">
-    </div>
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Phone</label>
-      <input class="w-full border rounded-lg px-3 py-2" name="phone" value="{{ values.get('phone','') }}">
-    </div>
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Email (for .ics)</label>
-      <input class="w-full border rounded-lg px-3 py-2" type="email" name="email" value="{{ values.get('email','') }}">
-    </div>
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Notes</label>
-      <input class="w-full border rounded-lg px-3 py-2" name="notes" value="{{ values.get('notes','') }}">
-    </div>
+<!-- Step 2: Book Appointment -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">2. Complete Booking</h3>
+    <span class="badge badge-success">{{ slots|length }} available</span>
   </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('appointments.appointments_new') }}" class="space-y-4">
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      <input type="hidden" name="service_id" value="{{ service_id }}">
+      <input type="hidden" name="date" value="{{ date }}">
 
-  <div>
-    <label class="block text-xs text-slate-600 mb-1 mt-2">Pick a time</label>
-    <div class="flex flex-wrap gap-2">
-      {% for t in slots %}
-        <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer">
-          <input type="radio" name="slot" value="{{ t }}" {% if values.get('slot')==t %}checked{% endif %}>
-          <span>{{ t[11:] }}</span>
-        </label>
-      {% endfor %}
-    </div>
-  </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Customer Name <span class="text-red-500">*</span></label>
+          <input class="input" name="customer_name" required value="{{ values.get('customer_name','') }}" placeholder="John Smith">
+        </div>
+        <div>
+          <label class="form-label">Phone</label>
+          <input class="input" name="phone" value="{{ values.get('phone','') }}" placeholder="+1 (555) 123-4567">
+        </div>
+        <div>
+          <label class="form-label">Email</label>
+          <input class="input" type="email" name="email" value="{{ values.get('email','') }}" placeholder="john@example.com">
+        </div>
+        <div>
+          <label class="form-label">Notes</label>
+          <input class="input" name="notes" value="{{ values.get('notes','') }}" placeholder="Any special requests...">
+        </div>
+      </div>
 
-  <div>
-    <button class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" type="submit">Book Appointment</button>
+      <div>
+        <label class="form-label">Select Time <span class="text-red-500">*</span></label>
+        <div class="slots-grid">
+          {% for t in slots %}
+          <label class="slot-option">
+            <input type="radio" name="slot" value="{{ t }}" {% if values.get('slot') == t %}checked{% endif %} class="sr-only">
+            <span class="slot-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              {{ t[11:] }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button class="btn btn-primary" type="submit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+          Book Appointment
+        </button>
+      </div>
+    </form>
   </div>
-</form>
+</div>
+
 {% elif service_id %}
-<div class="card p-6 mt-4 text-slate-600">No free slots on {{ date }} for the selected service.</div>
+<!-- No Slots Available -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+    </svg>
+    <div class="empty-state-title">No Available Slots</div>
+    <div class="empty-state-description">No free slots on {{ date }} for the selected service</div>
+  </div>
+</div>
 {% endif %}
+
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.badge-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+.slots-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.slot-option {
+  cursor: pointer;
+}
+.slot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--card-bg);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.slot-option input:checked + .slot-btn {
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  border-color: var(--text-primary);
+}
+html[data-theme="dark"] .slot-option input:checked + .slot-btn {
+  background: #fafafa;
+  color: #171717;
+  border-color: #fafafa;
+}
+.slot-btn:hover {
+  border-color: var(--text-primary);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+</style>
 {% endblock %}

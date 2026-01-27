@@ -1,72 +1,148 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — Closures{% endblock %}
+{% block title %}Closures — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">Closures / Holidays</h1>
-    <a class="text-sm text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back</a>
-  </div>
-
-  <form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('services.closures_index') }}">
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
-      <label class="block text-xs text-slate-600 mb-1">Business</label>
-      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
-        <option value="">— Select —</option>
-        {% for b in businesses %}
-          <option value="{{ b['id'] }}" {% if business_id==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
-        {% endfor %}
-      </select>
+      <h1 class="page-title">Closures & Holidays</h1>
+      <p class="page-subtitle">Manage dates when bookings are unavailable</p>
     </div>
-    <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Open</button>
-  </form>
+  </div>
+</div>
 
-  {% if business_id %}
-    <div class="grid md:grid-cols-2 gap-6">
-      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="font-medium mb-3">Add Closure</h2>
-        <form method="post" action="{{ url_for('services.closures_index') }}" class="grid gap-3">
+<!-- Business Selector -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('services.closures_index') }}">
+      <div class="w-48">
+        <label class="form-label">Business</label>
+        <select name="business_id" class="input" onchange="this.form.submit()">
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business_id == b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not business_id %}
+<!-- No Business Selected -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>
+    <div class="empty-state-title">Select a Business</div>
+    <div class="empty-state-description">Choose a business to manage its closures</div>
+  </div>
+</div>
+
+{% else %}
+<div class="grid lg:grid-cols-5 gap-6">
+  <!-- Add Closure Form -->
+  <div class="lg:col-span-2">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Add Closure</h3>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('services.closures_index') }}" class="space-y-4">
           <input type="hidden" name="business_id" value="{{ business_id }}">
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Date</label>
-            <input class="border rounded-lg px-3 py-2" type="date" name="date" required>
+            <label class="form-label">Date</label>
+            <input type="date" name="date" class="input" required>
           </div>
           <div>
-            <label class="block text-xs text-slate-600 mb-1">Reason (optional)</label>
-            <input class="border rounded-lg px-3 py-2" type="text" name="reason" placeholder="Bank Holiday">
+            <label class="form-label">Reason (optional)</label>
+            <input type="text" name="reason" class="input" placeholder="e.g., Bank Holiday, Staff Training">
           </div>
-          <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save</button>
+          <button class="btn btn-primary w-full" type="submit">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+            Add Closure
+          </button>
         </form>
       </div>
+    </div>
+  </div>
 
-      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm overflow-x-auto">
-        <h2 class="font-medium mb-3">Upcoming Closures</h2>
-        {% if not closures %}
-          <div class="text-slate-600">No closures.</div>
-        {% else %}
-          <table class="min-w-full text-sm">
-            <thead class="bg-slate-50 text-slate-600">
-              <tr>
-                <th class="px-3 py-2 text-left">Date</th>
-                <th class="px-3 py-2 text-left">Reason</th>
-                <th class="px-3 py-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {% for c in closures %}
-                <tr>
-                  <td class="px-3 py-2">{{ c['date'] }}</td>
-                  <td class="px-3 py-2">{{ c['reason'] or '—' }}</td>
-                  <td class="px-3 py-2">
-                    <form method="post" action="{{ url_for('services.closures_delete', cid=c['id']) }}" onsubmit="return confirm('Delete this closure?');">
-                      <input type="hidden" name="business_id" value="{{ business_id }}">
-                      <button class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50" type="submit">Delete</button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+  <!-- Closures List -->
+  <div class="lg:col-span-3">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Upcoming Closures</h3>
+        {% if closures %}
+        <span class="badge">{{ closures|length }}</span>
         {% endif %}
       </div>
+      {% if not closures %}
+      <div class="empty-state py-12">
+        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div class="empty-state-title">No closures scheduled</div>
+        <div class="empty-state-description">Your business is open every operating day</div>
+      </div>
+      {% else %}
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Reason</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in closures %}
+            <tr>
+              <td>
+                <div class="flex items-center gap-3">
+                  <div class="closure-icon">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                  </div>
+                  <span class="font-medium">{{ c['date'] }}</span>
+                </div>
+              </td>
+              <td>
+                <span class="text-secondary">{{ c['reason'] or '—' }}</span>
+              </td>
+              <td class="text-right">
+                <form method="post" action="{{ url_for('services.closures_delete', cid=c['id']) }}" onsubmit="return confirm('Remove this closure?');" class="inline">
+                  <input type="hidden" name="business_id" value="{{ business_id }}">
+                  <button class="btn btn-sm btn-danger" type="submit">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
     </div>
-  {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<style>
+.closure-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  background: rgba(239, 68, 68, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+}
+.btn-danger {
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+</style>
 {% endblock %}

@@ -1,99 +1,172 @@
 {% extends "base.html" %}
 {% block title %}Edit Business — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="page-title">Edit Business</h1>
-  <a class="btn" href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('dashboard') }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="page-title">Edit Business</h1>
+      <p class="page-subtitle">Configure business settings and branding</p>
+    </div>
+  </div>
 </div>
 
-<form class="card p-6 grid gap-4" method="post">
-  <div class="grid-2">
-    <div>
-      <label class="subtle text-xs">Name</label>
-      <input class="input" name="name" value="{{ business['name'] }}">
-    </div>
-    <div>
-      <label class="subtle text-xs">Slug</label>
-      <input class="input" name="slug" value="{{ business['slug'] }}">
-      <div class="subtle text-xs mt-1">Auto-cleaned to lowercase-with-dashes when saved.</div>
-    </div>
+<div class="card mb-6">
+  <div class="card-header">
+    <h3 class="card-title">Business Details</h3>
   </div>
-
-  <div class="grid-3">
-    <div>
-      <label class="subtle text-xs">Hours</label>
-      <input class="input" name="hours" value="{{ business.get('hours','') }}">
-    </div>
-    <div>
-      <label class="subtle text-xs">Escalation phone</label>
-      <input class="input" name="escalation_phone" value="{{ business.get('escalation_phone','') }}">
-    </div>
-    <div>
-      <label class="subtle text-xs">Escalation email</label>
-      <input class="input" name="escalation_email" value="{{ business.get('escalation_email','') }}">
-    </div>
-  </div>
-
-  <div>
-    <label class="subtle text-xs">Address</label>
-    <input class="input" name="address" value="{{ business.get('address','') }}">
-  </div>
-
-  <div>
-    <label class="subtle text-xs">Tone (AI personality notes)</label>
-    <textarea class="input" name="tone" rows="3">{{ business.get('tone','') }}</textarea>
-  </div>
-
-  <div class="grid-3 items-end">
-    <div>
-      <label class="subtle text-xs">Accent color</label>
-      {% set ac = business.get('accent_color') or '#2f6fec' %}
-      <div class="flex items-center gap-2">
-        <input type="color" class="h-10 w-16 input" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value">
-        <input class="input" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value">
+  <div class="card-body">
+    <form class="space-y-4" method="post">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Name</label>
+          <input class="input" name="name" value="{{ business['name'] }}">
+        </div>
+        <div>
+          <label class="form-label">Slug</label>
+          <input class="input" name="slug" value="{{ business['slug'] }}">
+          <p class="text-xs text-tertiary mt-1">Auto-cleaned to lowercase-with-dashes when saved.</p>
+        </div>
       </div>
-      <div id="brandPreview" class="mt-2" style="height:6px; border-radius:999px; background: {{ ac }}"></div>
-      <div class="subtle text-xs mt-2">Professional presets:</div>
-      <div class="flex flex-wrap gap-2 mt-2">
-        {% for c in ['#2f6fec','#2563eb','#0ea5e9','#10b981','#0891b2','#7c3aed','#9333ea','#f97316','#ef4444','#0ea5e9'] %}
-          <button onclick="event.preventDefault(); document.querySelectorAll('input[name=accent_color]').forEach(i=>i.value='{{ c }}'); document.getElementById('brandPreview').style.background='{{ c }}'" class="btn" style="background: {{ c }}; border-color: transparent; color: #fff;">{{ c }}</button>
-        {% endfor %}
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <div>
+          <label class="form-label">Hours</label>
+          <input class="input" name="hours" value="{{ business.get('hours','') }}" placeholder="Mon-Fri 9:00-18:00">
+        </div>
+        <div>
+          <label class="form-label">Escalation Phone</label>
+          <input class="input" name="escalation_phone" value="{{ business.get('escalation_phone','') }}">
+        </div>
+        <div>
+          <label class="form-label">Escalation Email</label>
+          <input class="input" name="escalation_email" value="{{ business.get('escalation_email','') }}">
+        </div>
       </div>
-    </div>
-    <div>
-      <label class="subtle text-xs">Data retention (days)</label>
-      <input class="input" name="data_retention_days" type="number" min="0" value="{{ business.get('data_retention_days') or '' }}">
-    </div>
-    <div class="subtle text-xs">
-      Pick a calm, trustworthy colour (blues/teals/violets are ideal for professional use).
-    </div>
-  </div>
 
-  <div>
-    <button class="btn btn-primary" type="submit">Save changes</button>
-  </div>
-</form>
+      <div>
+        <label class="form-label">Address</label>
+        <input class="input" name="address" value="{{ business.get('address','') }}" placeholder="123 Main Street, City">
+      </div>
 
-<div class="card p-6 mt-6">
-  <div class="font-semibold mb-3">Logo</div>
-  <div class="flex items-center gap-6">
-    <div class="w-24 h-24 rounded-2xl border flex items-center justify-center bg-white">
-      {% if business.get('logo_path') %}
-        <img src="{{ url_for('static', filename=business['logo_path']) }}" class="max-w-full max-h-full object-contain">
-      {% else %}
-        <img src="{{ url_for('static', filename='logo.svg') }}" class="max-w-full max-h-full object-contain">
-      {% endif %}
-    </div>
-    <form method="post" action="{{ url_for('upload_logo', business_id=business['id']) }}" enctype="multipart/form-data" class="flex items-center gap-3">
-      <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg" class="input" style="width:auto;">
-      <button class="btn btn-primary">Upload</button>
+      <div>
+        <label class="form-label">Tone (AI personality notes)</label>
+        <textarea class="input" name="tone" rows="3" placeholder="Describe how the AI should communicate...">{{ business.get('tone','') }}</textarea>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4 items-start">
+        <div>
+          <label class="form-label">Accent Color</label>
+          {% set ac = business.get('accent_color') or '#171717' %}
+          <div class="flex items-center gap-2">
+            <input type="color" class="color-picker" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value; document.getElementById('colorText').value=this.value">
+            <input id="colorText" class="input flex-1" name="accent_color" value="{{ ac }}" oninput="document.getElementById('brandPreview').style.background=this.value">
+          </div>
+          <div id="brandPreview" class="mt-2 h-2 rounded-full" style="background: {{ ac }}"></div>
+          <p class="text-xs text-tertiary mt-2">Professional presets:</p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            {% for c in ['#171717','#2563eb','#0ea5e9','#10b981','#7c3aed','#dc2626'] %}
+            <button type="button" onclick="document.querySelectorAll('input[name=accent_color]').forEach(i=>i.value='{{ c }}'); document.getElementById('brandPreview').style.background='{{ c }}'" class="color-swatch" style="background: {{ c }};"></button>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Data Retention (days)</label>
+          <input class="input" name="data_retention_days" type="number" min="0" value="{{ business.get('data_retention_days') or '' }}" placeholder="365">
+        </div>
+        <div class="pt-6">
+          <p class="text-xs text-tertiary">Pick a calm, trustworthy colour (blues/teals/violets are ideal for professional use).</p>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button class="btn btn-primary" type="submit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+          Save Changes
+        </button>
+      </div>
     </form>
-    {% if business.get('logo_path') %}
-      <form method="post" action="{{ url_for('delete_logo', business_id=business['id']) }}">
-        <button class="btn">Use default</button>
-      </form>
-    {% endif %}
   </div>
-  <p class="subtle text-xs mt-2">PNG/JPG/WebP/SVG up to 5MB. Raster images are auto-squared & optimized.</p>
 </div>
+
+<!-- Logo Section -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Logo</h3>
+  </div>
+  <div class="card-body">
+    <div class="flex items-center gap-6">
+      <div class="logo-preview">
+        {% if business.get('logo_path') %}
+        <img src="{{ url_for('static', filename=business['logo_path']) }}" alt="Logo" class="max-w-full max-h-full object-contain">
+        {% else %}
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Default Logo" class="max-w-full max-h-full object-contain">
+        {% endif %}
+      </div>
+      <div class="space-y-3">
+        <form method="post" action="{{ url_for('upload_logo', business_id=business['id']) }}" enctype="multipart/form-data" class="flex items-center gap-3">
+          <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg" class="input" style="width:auto;">
+          <button class="btn btn-primary">Upload</button>
+        </form>
+        {% if business.get('logo_path') %}
+        <form method="post" action="{{ url_for('delete_logo', business_id=business['id']) }}">
+          <button class="btn">Use Default Logo</button>
+        </form>
+        {% endif %}
+        <p class="text-xs text-tertiary">PNG/JPG/WebP/SVG up to 5MB. Raster images are auto-squared & optimized.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.color-picker {
+  width: 48px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  padding: 2px;
+}
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+.logo-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-light);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+</style>
 {% endblock %}

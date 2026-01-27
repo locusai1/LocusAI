@@ -1,60 +1,79 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — Edit {{ customer['name'] or 'Customer' }}{% endblock %}
+{% block title %}Edit {{ customer['name'] or 'Customer' }} — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center gap-4 mb-6">
-  <a href="{{ url_for('customers.customer_detail', customer_id=customer['id']) }}" class="text-slate-400 hover:text-slate-600">
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-    </svg>
-  </a>
-  <div>
-    <h1 class="text-xl font-semibold">Edit Customer</h1>
-    <p class="text-sm text-slate-500">Update customer information</p>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('customers.customer_detail', customer_id=customer['id']) }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="page-title">Edit Customer</h1>
+      <p class="page-subtitle">Update customer information</p>
+    </div>
   </div>
 </div>
 
-<form method="post" action="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="max-w-xl bg-white rounded-xl border p-6">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div class="card max-w-xl">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('customers.customer_edit', customer_id=customer['id']) }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  <div class="space-y-4">
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Name</label>
-      <input type="text" name="name" value="{{ customer['name'] or '' }}" class="input w-full" placeholder="John Smith">
-    </div>
+      <div>
+        <label class="form-label">Name</label>
+        <input type="text" name="name" value="{{ customer['name'] or '' }}" class="input" placeholder="John Smith">
+      </div>
 
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
-      <input type="email" name="email" value="{{ customer['email'] or '' }}" class="input w-full" placeholder="john@example.com">
-    </div>
+      <div>
+        <label class="form-label">Email</label>
+        <input type="email" name="email" value="{{ customer['email'] or '' }}" class="input" placeholder="john@example.com">
+      </div>
 
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-      <input type="tel" name="phone" value="{{ customer['phone'] or '' }}" class="input w-full" placeholder="+1 (555) 123-4567">
-    </div>
+      <div>
+        <label class="form-label">Phone</label>
+        <input type="tel" name="phone" value="{{ customer['phone'] or '' }}" class="input" placeholder="+1 (555) 123-4567">
+      </div>
 
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Tags</label>
-      <input type="text" name="tags" value="{{ customer['tags'] or '' }}" class="input w-full" placeholder="vip, new patient, referral">
-      <p class="text-xs text-slate-500 mt-1">Comma-separated tags for categorization</p>
-    </div>
+      <div>
+        <label class="form-label">Tags</label>
+        <input type="text" name="tags" value="{{ customer['tags'] or '' }}" class="input" placeholder="vip, new patient, referral">
+        <p class="text-xs text-tertiary mt-1">Comma-separated tags for categorization</p>
+      </div>
 
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-      <textarea name="notes" class="input w-full" rows="4" placeholder="Any notes about this customer...">{{ customer['notes'] or '' }}</textarea>
-    </div>
+      <div>
+        <label class="form-label">Notes</label>
+        <textarea name="notes" class="input" rows="4" placeholder="Any notes about this customer...">{{ customer['notes'] or '' }}</textarea>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{{ url_for('customers.customer_detail', customer_id=customer['id']) }}" class="btn">Cancel</a>
+      </div>
+
+      <div class="pt-4 mt-4 border-t text-xs text-tertiary" style="border-color: var(--border-light);">
+        Customer ID: #{{ customer['id'] }}<br>
+        Created: {{ customer['created_at'][:16] if customer['created_at'] else 'Unknown' }}<br>
+        Last updated: {{ customer['updated_at'][:16] if customer['updated_at'] else 'Never' }}
+      </div>
+    </form>
   </div>
+</div>
 
-  <div class="mt-6 flex items-center gap-3">
-    <button type="submit" class="btn bg-indigo-600 text-white hover:bg-indigo-700">Save Changes</button>
-    <a href="{{ url_for('customers.customer_detail', customer_id=customer['id']) }}" class="btn bg-white border hover:bg-slate-50">Cancel</a>
-  </div>
-
-  <div class="mt-6 pt-6 border-t">
-    <p class="text-xs text-slate-500">
-      Customer ID: #{{ customer['id'] }}<br>
-      Created: {{ customer['created_at'][:16] if customer['created_at'] else 'Unknown' }}<br>
-      Last updated: {{ customer['updated_at'][:16] if customer['updated_at'] else 'Never' }}
-    </p>
-  </div>
-</form>
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+</style>
 {% endblock %}

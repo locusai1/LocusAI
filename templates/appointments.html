@@ -1,89 +1,211 @@
 {% extends "base.html" %}
 {% block title %}Appointments — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-semibold">Appointments</h1>
-  <div class="flex items-center gap-2">
-    {% if business %}
-      <a class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" href="{{ url_for('appointments.appointments_new', business_id=business['id']) }}">+ New</a>
-      <a class="px-3 py-2 rounded-lg border hover:border-indigo-300" href="{{ url_for('appointments.appointments_index', business_id=business['id']) }}">Refresh</a>
-      <a class="px-3 py-2 rounded-lg border hover:border-indigo-300" href="{{ url_for('appointments.appointments_export_csv', business_id=business['id'], status=status) }}">Export CSV</a>
-    {% endif %}
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="page-title">Appointments</h1>
+      <p class="page-subtitle">Manage bookings and track appointment status</p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if business %}
+      <a href="{{ url_for('appointments.appointments_export_csv', business_id=business['id'], status=status) }}" class="btn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export
+      </a>
+      <a href="{{ url_for('appointments.appointments_new', business_id=business['id']) }}" class="btn btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        New Appointment
+      </a>
+      {% endif %}
+    </div>
   </div>
 </div>
 
-<form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('appointments.appointments_index') }}">
-  <div>
-    <label class="block text-xs text-slate-600 mb-1">Business</label>
-    <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
-      <option value="">— Select —</option>
-      {% for b in businesses %}
-        <option value="{{ b['id'] }}" {% if business and business['id']==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
-      {% endfor %}
-    </select>
+<!-- Filters -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('appointments.appointments_index') }}">
+      <div class="w-48">
+        <label class="form-label">Business</label>
+        <select name="business_id" class="input" onchange="this.form.submit()">
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business and business['id']==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="w-40">
+        <label class="form-label">Status</label>
+        <select name="status" class="input">
+          <option value="" {% if not status %}selected{% endif %}>All statuses</option>
+          {% for s in ['pending','confirmed','cancelled','completed'] %}
+          <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">Apply Filters</button>
+      {% if business %}
+      <a href="{{ url_for('appointments.appointments_index', business_id=business['id']) }}" class="btn btn-ghost">Clear</a>
+      {% endif %}
+    </form>
   </div>
-  <div>
-    <label class="block text-xs text-slate-600 mb-1">Status</label>
-    <select name="status" class="border rounded-lg px-3 py-2 bg-white">
-      <option value="" {% if not status %}selected{% endif %}>All</option>
-      {% for s in ['pending','confirmed','cancelled','completed'] %}
-        <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Open</button>
-</form>
+</div>
 
 {% if not business %}
-  <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-slate-600">Select a business.</div>
+<!-- No Business Selected -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+    </svg>
+    <div class="empty-state-title">Select a Business</div>
+    <div class="empty-state-description">Choose a business to view and manage its appointments</div>
+  </div>
+</div>
+{% elif not appts %}
+<!-- No Appointments -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>
+    <div class="empty-state-title">No appointments{% if status %} with status "{{ status }}"{% endif %}</div>
+    <div class="empty-state-description">When customers book, appointments will appear here</div>
+    <a href="{{ url_for('appointments.appointments_new', business_id=business['id']) }}" class="btn btn-primary mt-4">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+      Create First Appointment
+    </a>
+  </div>
+</div>
 {% else %}
-  {% if not appts %}
-    <div class="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">No appointments yet.</div>
-  {% else %}
-    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-50 text-slate-600">
-          <tr>
-            <th class="px-3 py-2 text-left">When</th>
-            <th class="px-3 py-2 text-left">Customer</th>
-            <th class="px-3 py-2 text-left">Contact</th>
-            <th class="px-3 py-2 text-left">Service</th>
-            <th class="px-3 py-2 text-left">Status</th>
-            <th class="px-3 py-2 text-left">ICS</th>
-            <th class="px-3 py-2 text-left">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for a in appts %}
-            <tr>
-              <td class="px-3 py-2">{{ a['start_at'] or '—' }}</td>
-              <td class="px-3 py-2">{{ a['customer_name'] or '—' }}</td>
-              <td class="px-3 py-2">
-                <div>{{ a['phone'] or '' }}</div>
-                <div class="text-xs text-slate-500">{{ a['customer_email'] or '' }}</div>
-              </td>
-              <td class="px-3 py-2">{{ a['service'] or '—' }}</td>
-              <td class="px-3 py-2">{{ a['status'] }}</td>
-              <td class="px-3 py-2">
-                {% if a['start_at'] %}
-                  <a class="px-2 py-1 rounded-lg border hover:bg-slate-50" href="{{ url_for('appointments.appointments_ics', appt_id=a['id']) }}">Download</a>
-                {% else %}—{% endif %}
-              </td>
-              <td class="px-3 py-2">
-                <form method="post" action="{{ url_for('appointments.appointments_set_status', appt_id=a['id']) }}">
-                  <input type="hidden" name="return_to" value="{{ url_for('appointments.appointments_index', business_id=business['id'], status=status) }}">
-                  <select class="border rounded-lg px-2 py-1 text-xs" name="status" onchange="this.form.submit()">
-                    {% for s in ['pending','confirmed','cancelled','completed'] %}
-                      <option value="{{ s }}" {% if a['status']==s %}selected{% endif %}>{{ s|capitalize }}</option>
-                    {% endfor %}
-                  </select>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endif %}
+<!-- Appointments Table -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">{{ appts|length }} Appointment{{ 's' if appts|length != 1 else '' }}</h3>
+    {% if status %}
+    <span class="badge">{{ status|capitalize }}</span>
+    {% endif %}
+  </div>
+  <div class="table-container" style="border: none; border-radius: 0;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Service</th>
+          <th>Date & Time</th>
+          <th>Status</th>
+          <th>Calendar</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in appts %}
+        <tr>
+          <td>
+            <div class="flex items-center gap-3">
+              <div class="appt-avatar">{{ (a['customer_name'] or '?')[0]|upper }}</div>
+              <div>
+                <div class="font-medium text-primary">{{ a['customer_name'] or 'Unknown' }}</div>
+                <div class="text-xs text-tertiary">{{ a['phone'] or a['customer_email'] or 'No contact' }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="font-medium">{{ a['service'] or '—' }}</span>
+          </td>
+          <td>
+            {% if a['start_at'] %}
+            {% set parts = a['start_at'].split(' ') %}
+            <div class="font-medium">{{ parts[0] }}</div>
+            <div class="text-xs text-tertiary">{{ parts[1][:5] if parts|length > 1 else '' }}</div>
+            {% else %}
+            <span class="text-tertiary">Not scheduled</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status-pill {{ a['status'] }}">
+              <span class="status-dot"></span>
+              {{ a['status']|capitalize }}
+            </span>
+          </td>
+          <td>
+            {% if a['start_at'] %}
+            <a href="{{ url_for('appointments.appointments_ics', appt_id=a['id']) }}" class="btn btn-sm btn-ghost">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              ICS
+            </a>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('appointments.appointments_set_status', appt_id=a['id']) }}" class="inline-flex">
+              <input type="hidden" name="return_to" value="{{ url_for('appointments.appointments_index', business_id=business['id'], status=status) }}">
+              <select class="input input-sm" name="status" onchange="this.form.submit()" style="width: auto; min-width: 120px;">
+                {% for s in ['pending','confirmed','cancelled','completed'] %}
+                <option value="{{ s }}" {% if a['status']==s %}selected{% endif %}>{{ s|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endif %}
+
+<style>
+.appt-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-pill .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-pill.pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+.status-pill.confirmed {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+.status-pill.cancelled {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+.status-pill.completed {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+.input-sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+}
+</style>
 {% endblock %}

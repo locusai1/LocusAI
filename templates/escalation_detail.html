@@ -1,193 +1,189 @@
 {% extends "base.html" %}
-{% block title %}Escalation #{{ escalation.id }} - LocusAI{% endblock %}
-
+{% block title %}Escalation #{{ escalation.id }} — LocusAI{% endblock %}
 {% block content %}
-<div class="space-y-6">
-  <!-- Breadcrumb -->
-  <div class="flex items-center gap-2 text-sm">
-    <a href="{{ url_for('escalations.escalations_index') }}" class="subtle hover:underline">Escalations</a>
-    <span class="subtle">/</span>
-    <span class="font-medium">#{{ escalation.id }}</span>
-  </div>
-
-  <!-- Header -->
+<!-- Page Header -->
+<div class="page-header">
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <div class="flex flex-wrap items-center gap-2 mb-2">
-        <h1 class="text-2xl font-bold">Escalation #{{ escalation.id }}</h1>
-        <span class="px-2 py-1 text-xs font-medium rounded border {{ escalation.priority|priority_badge }}">
-          {{ escalation.priority|upper }}
-        </span>
-        <span class="px-2 py-1 text-xs font-medium rounded border {{ escalation.status|status_badge }}">
-          {{ escalation.status|capitalize }}
-        </span>
+    <div class="flex items-center gap-4">
+      <a href="{{ url_for('escalations.escalations_index') }}" class="back-btn">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <div>
+        <div class="flex items-center gap-3 mb-1">
+          <h1 class="page-title">Escalation #{{ escalation.id }}</h1>
+          <span class="priority-badge {{ escalation.priority }}">{{ escalation.priority|upper }}</span>
+          <span class="status-pill {{ escalation.status }}">
+            <span class="status-dot"></span>
+            {{ escalation.status|capitalize }}
+          </span>
+        </div>
+        <p class="page-subtitle">Created {{ escalation.created_at[:16] if escalation.created_at else 'Unknown' }}</p>
       </div>
-      <p class="text-sm subtle">Created {{ escalation.created_at[:16] if escalation.created_at else 'Unknown' }}</p>
     </div>
-
     <div class="flex gap-2">
       {% if escalation.status == 'pending' %}
       <form method="post" action="{{ url_for('escalations.acknowledge_escalation', escalation_id=escalation.id) }}">
         <button type="submit" class="btn">Acknowledge</button>
       </form>
       {% endif %}
-
       {% if escalation.status in ('pending', 'acknowledged') %}
-      <button type="button" onclick="openResolveModal({{ escalation.id }})" class="btn btn-primary">
-        Resolve
-      </button>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="grid md:grid-cols-2 gap-6">
-    <!-- Left Column: Details -->
-    <div class="space-y-6">
-      <!-- Reason -->
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Reason for Escalation</h3>
-        <p class="text-lg">{{ escalation.reason or 'No reason specified' }}</p>
-      </div>
-
-      <!-- Customer Info -->
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Customer Information</h3>
-        <dl class="space-y-3">
-          {% if escalation.customer_name %}
-          <div class="flex justify-between">
-            <dt class="subtle">Name</dt>
-            <dd class="font-medium">{{ escalation.customer_name }}</dd>
-          </div>
-          {% endif %}
-          {% if escalation.customer_phone %}
-          <div class="flex justify-between">
-            <dt class="subtle">Phone</dt>
-            <dd>
-              <a href="tel:{{ escalation.customer_phone }}" class="font-medium hover:underline text-blue-600">
-                {{ escalation.customer_phone }}
-              </a>
-            </dd>
-          </div>
-          {% endif %}
-          {% if escalation.customer_email %}
-          <div class="flex justify-between">
-            <dt class="subtle">Email</dt>
-            <dd>
-              <a href="mailto:{{ escalation.customer_email }}" class="font-medium hover:underline text-blue-600">
-                {{ escalation.customer_email }}
-              </a>
-            </dd>
-          </div>
-          {% endif %}
-          {% if not (escalation.customer_name or escalation.customer_phone or escalation.customer_email) %}
-          <p class="subtle italic">No customer information available</p>
-          {% endif %}
-        </dl>
-
-        <!-- Quick Actions -->
-        {% if escalation.customer_phone or escalation.customer_email %}
-        <div class="mt-4 pt-4 border-t flex gap-2" style="border-color: var(--card-border)">
-          {% if escalation.customer_phone %}
-          <a href="tel:{{ escalation.customer_phone }}" class="btn flex-1 text-center">
-            Call Customer
-          </a>
-          {% endif %}
-          {% if escalation.customer_email %}
-          <a href="mailto:{{ escalation.customer_email }}" class="btn flex-1 text-center">
-            Email Customer
-          </a>
-          {% endif %}
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Timeline -->
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Timeline</h3>
-        <div class="space-y-3">
-          <div class="flex gap-3">
-            <div class="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
-            <div>
-              <p class="font-medium">Created</p>
-              <p class="text-sm subtle">{{ escalation.created_at or 'Unknown' }}</p>
-            </div>
-          </div>
-
-          {% if escalation.notified_at %}
-          <div class="flex gap-3">
-            <div class="w-2 h-2 rounded-full bg-amber-500 mt-2"></div>
-            <div>
-              <p class="font-medium">Notification Sent</p>
-              <p class="text-sm subtle">{{ escalation.notified_at }}</p>
-            </div>
-          </div>
-          {% endif %}
-
-          {% if escalation.status == 'resolved' %}
-          <div class="flex gap-3">
-            <div class="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
-            <div>
-              <p class="font-medium">Resolved</p>
-              <p class="text-sm subtle">
-                {{ escalation.resolved_at or 'Unknown' }}
-                {% if escalation.resolved_by %}
-                by {{ escalation.resolved_by }}
-                {% endif %}
-              </p>
-            </div>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Column: Notes & Context -->
-    <div class="space-y-6">
-      <!-- Notes -->
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Conversation Summary & Notes</h3>
-        {% if escalation.notes %}
-        <div class="prose prose-sm max-w-none">
-          <pre class="whitespace-pre-wrap font-sans text-sm p-3 rounded-lg" style="background: var(--page-bg)">{{ escalation.notes }}</pre>
-        </div>
-        {% else %}
-        <p class="subtle italic">No notes available</p>
-        {% endif %}
-      </div>
-
-      <!-- Session Link -->
-      {% if escalation.session_id %}
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Related Session</h3>
-        <p class="text-sm">Session ID: <span class="font-mono">{{ escalation.session_id }}</span></p>
-        <a href="{{ url_for('chat.chat_index') }}?session={{ escalation.session_id }}" class="btn mt-3 inline-block">
-          View Chat Session
-        </a>
-      </div>
-      {% endif %}
-
-      <!-- Customer Profile Link -->
-      {% if escalation.customer_id %}
-      <div class="card p-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wide subtle mb-3">Customer Profile</h3>
-        <a href="{{ url_for('customers.customer_detail', customer_id=escalation.customer_id) }}" class="btn inline-block">
-          View Customer Profile
-        </a>
-      </div>
+      <button type="button" onclick="openResolveModal()" class="btn btn-primary">Resolve</button>
       {% endif %}
     </div>
   </div>
 </div>
 
+<div class="grid md:grid-cols-2 gap-6">
+  <!-- Left Column -->
+  <div class="space-y-6">
+    <!-- Reason -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Reason for Escalation</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-lg">{{ escalation.reason or 'No reason specified' }}</p>
+      </div>
+    </div>
+
+    <!-- Customer Info -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Customer Information</h3>
+      </div>
+      <div class="card-body">
+        {% if escalation.customer_name or escalation.customer_phone or escalation.customer_email %}
+        <dl class="space-y-3">
+          {% if escalation.customer_name %}
+          <div class="flex justify-between">
+            <dt class="text-tertiary">Name</dt>
+            <dd class="font-medium">{{ escalation.customer_name }}</dd>
+          </div>
+          {% endif %}
+          {% if escalation.customer_phone %}
+          <div class="flex justify-between">
+            <dt class="text-tertiary">Phone</dt>
+            <dd><a href="tel:{{ escalation.customer_phone }}" class="text-primary font-medium hover:underline">{{ escalation.customer_phone }}</a></dd>
+          </div>
+          {% endif %}
+          {% if escalation.customer_email %}
+          <div class="flex justify-between">
+            <dt class="text-tertiary">Email</dt>
+            <dd><a href="mailto:{{ escalation.customer_email }}" class="text-primary font-medium hover:underline">{{ escalation.customer_email }}</a></dd>
+          </div>
+          {% endif %}
+        </dl>
+
+        {% if escalation.customer_phone or escalation.customer_email %}
+        <div class="flex gap-2 mt-4 pt-4 border-t" style="border-color: var(--border-light);">
+          {% if escalation.customer_phone %}
+          <a href="tel:{{ escalation.customer_phone }}" class="btn flex-1 text-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            Call
+          </a>
+          {% endif %}
+          {% if escalation.customer_email %}
+          <a href="mailto:{{ escalation.customer_email }}" class="btn flex-1 text-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            Email
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted">No customer information available</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Timeline</h3>
+      </div>
+      <div class="card-body">
+        <div class="space-y-4">
+          <div class="flex gap-3">
+            <div class="timeline-dot blue"></div>
+            <div>
+              <p class="font-medium">Created</p>
+              <p class="text-sm text-tertiary">{{ escalation.created_at or 'Unknown' }}</p>
+            </div>
+          </div>
+          {% if escalation.notified_at %}
+          <div class="flex gap-3">
+            <div class="timeline-dot amber"></div>
+            <div>
+              <p class="font-medium">Notification Sent</p>
+              <p class="text-sm text-tertiary">{{ escalation.notified_at }}</p>
+            </div>
+          </div>
+          {% endif %}
+          {% if escalation.status == 'resolved' %}
+          <div class="flex gap-3">
+            <div class="timeline-dot green"></div>
+            <div>
+              <p class="font-medium">Resolved</p>
+              <p class="text-sm text-tertiary">{{ escalation.resolved_at or 'Unknown' }}{% if escalation.resolved_by %} by {{ escalation.resolved_by }}{% endif %}</p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column -->
+  <div class="space-y-6">
+    <!-- Notes -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Conversation Summary & Notes</h3>
+      </div>
+      <div class="card-body">
+        {% if escalation.notes %}
+        <pre class="whitespace-pre-wrap font-sans text-sm p-4 rounded-lg bg-subtle">{{ escalation.notes }}</pre>
+        {% else %}
+        <p class="text-muted">No notes available</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if escalation.session_id %}
+    <!-- Session Link -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Related Session</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm mb-3">Session ID: <code class="code-inline">{{ escalation.session_id }}</code></p>
+        <a href="{{ url_for('chat.chat_index') }}?session={{ escalation.session_id }}" class="btn">View Chat Session</a>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if escalation.customer_id %}
+    <!-- Customer Profile -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Customer Profile</h3>
+      </div>
+      <div class="card-body">
+        <a href="{{ url_for('customers.customer_detail', customer_id=escalation.customer_id) }}" class="btn">View Customer Profile</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
 <!-- Resolve Modal -->
-<div id="resolve-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="display: none;">
-  <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" style="background: var(--card-bg)">
+<div id="resolve-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content">
     <h3 class="text-lg font-semibold mb-4">Resolve Escalation</h3>
     <form method="post" action="{{ url_for('escalations.resolve_escalation', escalation_id=escalation.id) }}">
       <div class="mb-4">
-        <label class="block text-sm font-medium mb-2">Resolution Notes</label>
-        <textarea name="resolution_notes" rows="4" class="input w-full"
-                  placeholder="Describe how this was resolved..."></textarea>
+        <label class="form-label">Resolution Notes</label>
+        <textarea name="resolution_notes" rows="4" class="input" placeholder="Describe how this was resolved..."></textarea>
       </div>
       <div class="flex justify-end gap-3">
         <button type="button" onclick="closeResolveModal()" class="btn">Cancel</button>
@@ -197,19 +193,93 @@
   </div>
 </div>
 
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.priority-badge.high { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+.priority-badge.medium { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+.priority-badge.low { background: var(--bg-muted); color: var(--text-secondary); }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-pill .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status-pill.pending { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+.status-pill.acknowledged { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.status-pill.resolved { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.timeline-dot.blue { background: #3b82f6; }
+.timeline-dot.amber { background: #f59e0b; }
+.timeline-dot.green { background: #22c55e; }
+.bg-subtle { background: var(--bg-muted); }
+.code-inline {
+  background: var(--bg-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: monospace;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-content {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  max-width: 28rem;
+  width: 100%;
+  margin: var(--space-4);
+  padding: var(--space-6);
+}
+</style>
+
 <script>
 function openResolveModal() {
   document.getElementById('resolve-modal').style.display = 'flex';
 }
-
 function closeResolveModal() {
   document.getElementById('resolve-modal').style.display = 'none';
 }
-
 document.getElementById('resolve-modal').addEventListener('click', function(e) {
   if (e.target === this) closeResolveModal();
 });
-
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeResolveModal();
 });

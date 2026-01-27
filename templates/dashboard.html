@@ -85,8 +85,8 @@
 </div>
 
 <!-- KPI Stats Grid -->
-<div class="stats-grid mb-6">
-  <div class="stat-card">
+<div class="stats-grid mb-6 stagger-children">
+  <div class="stat-card card-hover">
     <div class="stat-header">
       <div class="stat-icon blue">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -96,7 +96,7 @@
     <div class="stat-label">Today's Appointments</div>
   </div>
 
-  <div class="stat-card">
+  <div class="stat-card card-hover">
     <div class="stat-header">
       <div class="stat-icon amber">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -106,7 +106,7 @@
     <div class="stat-label">Pending</div>
   </div>
 
-  <div class="stat-card">
+  <div class="stat-card card-hover">
     <div class="stat-header">
       <div class="stat-icon green">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -116,7 +116,7 @@
     <div class="stat-label">Confirmed</div>
   </div>
 
-  <div class="stat-card">
+  <div class="stat-card card-hover">
     <div class="stat-header">
       <div class="stat-icon purple">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -144,7 +144,7 @@
   <!-- Chart + Upcoming (2 columns) -->
   <div class="lg:col-span-2 space-y-6">
     <!-- Chart Card -->
-    <div class="card">
+    <div class="card card-hover">
       <div class="card-header">
         <h3 class="card-title">Appointments Overview</h3>
         <div class="flex items-center gap-2">
@@ -351,6 +351,8 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  animation: fadeInUp 300ms var(--ease-out-expo) forwards;
 }
 .escalation-alert .alert-icon {
   width: 40px;
@@ -378,6 +380,11 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+.ai-hero:hover {
+  box-shadow: var(--shadow-card-hover);
 }
 .ai-hero-header {
   display: flex;
@@ -643,6 +650,10 @@ html[data-theme="dark"] .ai-stat-icon.week { background: rgba(250, 250, 250, 0.1
 .quick-action:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+  transform: translateX(4px);
+}
+.quick-action:active {
+  transform: translateX(4px) scale(0.98);
 }
 .quick-action-icon {
   width: 32px;
@@ -768,11 +779,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Update chart on theme change
-  const observer = new MutationObserver(function() {
-    location.reload(); // Simple reload on theme change
-  });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });
 </script>
 {% endblock %}

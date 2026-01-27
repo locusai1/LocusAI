@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
-  <title>Sign in - LocusAI</title>
+  <title>Sign in — LocusAI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -10,89 +10,402 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='locus.css') }}">
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root { --brand1: {{ accent_color or '#000000' }}; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 50%, #fafafa 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+    }
+
+    /* Subtle noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+      animation: fadeInUp 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #171717 0%, #404040 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.1),
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .logo-icon img {
+      width: 26px;
+      height: 26px;
+      filter: invert(1);
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #171717;
+    }
+
+    .login-card {
+      background: white;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.02),
+        0 4px 12px rgba(0, 0, 0, 0.04),
+        0 16px 40px rgba(0, 0, 0, 0.06);
+      position: relative;
+    }
+
+    /* Card top highlight */
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20px;
+      right: 20px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%);
+    }
+
+    .login-header {
+      padding: 28px 28px 24px;
+      border-bottom: 1px solid #f5f5f5;
+      background: linear-gradient(180deg, rgba(250, 250, 250, 0.5) 0%, transparent 100%);
+    }
+
+    .login-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #171717;
+    }
+
+    .login-subtitle {
+      font-size: 14px;
+      color: #737373;
+      margin-top: 6px;
+    }
+
+    .login-body {
+      padding: 28px;
+    }
+
+    .alert {
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: fadeInUp 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .alert-success {
+      background: rgba(34, 197, 94, 0.08);
+      color: #16a34a;
+      border: 1px solid rgba(34, 197, 94, 0.15);
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.08);
+      color: #dc2626;
+      border: 1px solid rgba(239, 68, 68, 0.15);
+    }
+
+    .form-group {
+      margin-bottom: 22px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #171717;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 13px 16px;
+      font-size: 14px;
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      color: #171717;
+      transition:
+        border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1),
+        background-color 180ms cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .form-input:hover {
+      background: #f5f5f5;
+      border-color: #d4d4d4;
+    }
+
+    .form-input:focus {
+      outline: none;
+      background: white;
+      border-color: #171717;
+      box-shadow:
+        0 0 0 3px rgba(23, 23, 23, 0.08),
+        inset 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .form-input::placeholder {
+      color: #a3a3a3;
+    }
+
+    .password-wrapper {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: #737373;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 150ms, background 150ms;
+    }
+
+    .password-toggle:hover {
+      color: #171717;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .remember-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    .remember-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #525252;
+      cursor: pointer;
+      transition: color 150ms;
+    }
+
+    .remember-label:hover {
+      color: #171717;
+    }
+
+    .remember-label input {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      border: 1.5px solid #d4d4d4;
+      accent-color: #171717;
+      cursor: pointer;
+    }
+
+    .forgot-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: #525252;
+      text-decoration: none;
+      transition: color 150ms;
+    }
+
+    .forgot-link:hover {
+      color: #171717;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px 24px;
+      background: linear-gradient(180deg, #262626 0%, #171717 100%);
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.15),
+        0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition:
+        background 180ms,
+        transform 120ms,
+        box-shadow 180ms;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .submit-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .submit-btn:hover {
+      background: linear-gradient(180deg, #404040 0%, #2a2a2a 100%);
+      box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.15),
+        0 8px 20px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0) scale(0.98);
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.15),
+        0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .submit-btn:focus-visible {
+      outline: none;
+      box-shadow:
+        0 0 0 2px white,
+        0 0 0 4px #171717,
+        0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 28px;
+      font-size: 14px;
+      color: #a3a3a3;
+    }
+
+    .login-footer a {
+      color: #171717;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 150ms;
+    }
+
+    .login-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="light"] {
+        /* Respect user preference for light mode */
+      }
+    }
   </style>
 </head>
-<body class="bg-[#fafafa] min-h-screen flex items-center justify-center p-6">
-  <div class="w-full max-w-md">
+<body>
+  <div class="login-container">
     <!-- Logo -->
-    <div class="flex items-center justify-center gap-3 mb-8">
-      <div class="w-10 h-10 rounded-xl bg-white border border-[#ebebeb] flex items-center justify-center shadow-sm">
-        <img src="{{ url_for('static', filename='logo.svg') }}" alt="LocusAI" class="w-6 h-6 object-contain">
+    <div class="logo">
+      <div class="logo-icon">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
       </div>
-      <span class="text-xl font-semibold text-[#171717]">LocusAI</span>
+      <span class="logo-text">LocusAI</span>
     </div>
 
     <!-- Login Card -->
-    <div class="bg-white border border-[#ebebeb] rounded-xl shadow-sm">
-      <div class="p-6 border-b border-[#ebebeb]">
-        <h1 class="text-lg font-semibold text-[#171717]">Welcome back</h1>
-        <p class="text-sm text-[#737373] mt-1">Sign in to your account to continue</p>
+    <div class="login-card">
+      <div class="login-header">
+        <h1 class="login-title">Welcome back</h1>
+        <p class="login-subtitle">Sign in to your account to continue</p>
       </div>
 
-      <div class="p-6">
-        <!-- Flash Messages -->
+      <div class="login-body">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-        <div class="mb-4 space-y-2">
-          {% for category, msg in messages %}
-          <div class="p-3 rounded-lg text-sm {% if category=='ok' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">
-            {{ msg }}
-          </div>
-          {% endfor %}
+        {% for category, msg in messages %}
+        <div class="alert {% if category=='ok' %}alert-success{% else %}alert-error{% endif %}">
+          {{ msg }}
         </div>
+        {% endfor %}
         {% endif %}
         {% endwith %}
 
         <form method="POST" action="{{ url_for('auth.login') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-[#171717] mb-1.5">Email</label>
-            <input type="email" name="email"
-              class="w-full px-3 py-2 text-sm bg-white border border-[#e5e5e5] rounded-lg focus:outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] transition-colors"
-              placeholder="you@company.com"
-              autocomplete="username"
-              required>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-input" placeholder="you@company.com" autocomplete="username" required>
           </div>
 
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-[#171717] mb-1.5">Password</label>
-            <div class="relative">
-              <input type="password" name="password" id="pw"
-                class="w-full px-3 py-2 pr-14 text-sm bg-white border border-[#e5e5e5] rounded-lg focus:outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] transition-colors"
-                placeholder="Enter your password"
-                autocomplete="current-password"
-                required>
-              <button type="button" id="togglePw"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#737373] hover:text-[#171717] transition-colors">
-                Show
-              </button>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="password-wrapper">
+              <input type="password" name="password" id="pw" class="form-input" placeholder="Enter your password" autocomplete="current-password" required style="padding-right: 60px;">
+              <button type="button" id="togglePw" class="password-toggle">Show</button>
             </div>
           </div>
 
-          <div class="flex items-center justify-between mb-6">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="remember" value="1"
-                class="w-4 h-4 rounded border-[#d4d4d4] text-[#171717] focus:ring-[#171717] focus:ring-offset-0">
-              <span class="text-sm text-[#737373]">Remember me</span>
+          <div class="remember-row">
+            <label class="remember-label">
+              <input type="checkbox" name="remember" value="1">
+              <span>Remember me</span>
             </label>
-            <a href="#" class="text-sm font-medium text-[#171717] hover:underline">Forgot password?</a>
+            <a href="#" class="forgot-link">Forgot password?</a>
           </div>
 
-          <button type="submit"
-            class="w-full py-2.5 px-4 bg-[#171717] text-white text-sm font-medium rounded-lg hover:bg-[#404040] transition-colors">
-            Sign in
-          </button>
+          <button type="submit" class="submit-btn">Sign in</button>
         </form>
       </div>
     </div>
 
-    <!-- Footer -->
-    <p class="text-center text-sm text-[#a3a3a3] mt-6">
-      Need an account? <a href="#" class="text-[#171717] font-medium hover:underline">Contact your administrator</a>
+    <p class="login-footer">
+      Need an account? <a href="#">Contact your administrator</a>
     </p>
   </div>
 

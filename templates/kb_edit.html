@@ -1,45 +1,94 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — {{ 'New' if mode=='new' else 'Edit' }} KB Entry{% endblock %}
+{% block title %}{{ 'New' if mode=='new' else 'Edit' }} KB Entry — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">{{ 'New' if mode=='new' else 'Edit' }} KB Entry</h1>
-    <a href="{{ url_for('kb.kb_index', business_id=(business_id or (entry['business_id'] if entry else None))) }}" class="text-sm text-slate-600 hover:text-indigo-600">← Back to KB</a>
-  </div>
-
-  <form method="POST" class="grid gap-4 max-w-3xl bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('kb.kb_index', business_id=(business_id or (entry['business_id'] if entry else None))) }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
     <div>
-      <label class="block text-xs text-slate-600 mb-1">Business</label>
-      <select class="w-full border rounded-lg px-3 py-2 bg-white" name="business_id" required>
-        {% for b in businesses %}
+      <h1 class="page-title">{{ 'New' if mode=='new' else 'Edit' }} KB Entry</h1>
+      <p class="page-subtitle">{{ 'Add knowledge to train your AI' if mode=='new' else 'Update this knowledge entry' }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="card max-w-3xl">
+  <div class="card-body">
+    <form method="POST" class="space-y-4">
+      <div>
+        <label class="form-label">Business</label>
+        <select class="input" name="business_id" required>
+          {% for b in businesses %}
           {% set selected = (b['id']==(business_id or (entry['business_id'] if entry else 0))) %}
           <option value="{{ b['id'] }}" {% if selected %}selected{% endif %}>{{ b['name'] }}</option>
-        {% endfor %}
-      </select>
-    </div>
+          {% endfor %}
+        </select>
+      </div>
 
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Question *</label>
-      <input class="w-full border rounded-lg px-3 py-2" type="text" name="question" required value="{{ entry['question'] if entry else '' }}" />
-    </div>
-
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Answer *</label>
-      <textarea class="w-full border rounded-lg px-3 py-2 min-h-[140px]" name="answer" required>{{ entry['answer'] if entry else '' }}</textarea>
-    </div>
-
-    <div class="grid md:grid-cols-2 gap-4">
       <div>
-        <label class="block text-xs text-slate-600 mb-1">Tags (comma-separated)</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="tags" value="{{ entry['tags'] if entry else '' }}" />
+        <label class="form-label">Question <span class="text-red-500">*</span></label>
+        <input class="input" type="text" name="question" required value="{{ entry['question'] if entry else '' }}" placeholder="What question will customers ask?">
       </div>
-      <div class="flex items-center gap-2 mt-6">
-        <input type="checkbox" id="active" name="active" {% if (entry and entry['active']) or mode=='new' %}checked{% endif %} />
-        <label for="active">Active</label>
-      </div>
-    </div>
 
-    <div>
-      <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">{{ 'Create' if mode=='new' else 'Save' }}</button>
-    </div>
-  </form>
+      <div>
+        <label class="form-label">Answer <span class="text-red-500">*</span></label>
+        <textarea class="input" name="answer" required rows="5" placeholder="Provide the answer the AI should give...">{{ entry['answer'] if entry else '' }}</textarea>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Tags</label>
+          <input class="input" type="text" name="tags" value="{{ entry['tags'] if entry else '' }}" placeholder="pricing, hours, location">
+          <p class="text-xs text-tertiary mt-1">Comma-separated for categorization</p>
+        </div>
+        <div class="flex items-center pt-6">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="active" {% if (entry and entry['active']) or mode=='new' %}checked{% endif %} class="checkbox">
+            <span>Active and searchable</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button class="btn btn-primary" type="submit">
+          {% if mode=='new' %}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          Create Entry
+          {% else %}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+          Save Changes
+          {% endif %}
+        </button>
+        <a href="{{ url_for('kb.kb_index', business_id=(business_id or (entry['business_id'] if entry else None))) }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  accent-color: var(--text-primary);
+}
+</style>
 {% endblock %}

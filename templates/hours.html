@@ -1,55 +1,163 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — Hours{% endblock %}
+{% block title %}Business Hours — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">Business Hours</h1>
-    <div class="text-sm">
-      <a class="text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back</a>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="page-title">Business Hours</h1>
+      <p class="page-subtitle">Set your weekly operating schedule</p>
     </div>
   </div>
+</div>
 
-  <form class="flex items-end gap-3 mb-4" method="get" action="{{ url_for('services.hours_index') }}">
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Business</label>
-      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
-        <option value="">— Select —</option>
-        {% for b in businesses %}
-          <option value="{{ b['id'] }}" {% if business_id==b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Open</button>
-  </form>
+<!-- Business Selector -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('services.hours_index') }}">
+      <div class="w-48">
+        <label class="form-label">Business</label>
+        <select name="business_id" class="input" onchange="this.form.submit()">
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if business_id == b['id'] %}selected{% endif %}>{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
 
-  {% if not business_id %}
-    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-slate-600">Select a business.</div>
-  {% else %}
-    <form method="post" action="{{ url_for('services.hours_index') }}" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <input type="hidden" name="business_id" value="{{ business_id }}">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-50 text-slate-600">
+{% if not business_id %}
+<!-- No Business Selected -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <div class="empty-state-title">Select a Business</div>
+    <div class="empty-state-description">Choose a business to configure its operating hours</div>
+  </div>
+</div>
+
+{% else %}
+<!-- Hours Editor -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Weekly Schedule</h3>
+  </div>
+  <form method="post" action="{{ url_for('services.hours_index') }}">
+    <input type="hidden" name="business_id" value="{{ business_id }}">
+    <div class="table-container" style="border: none; border-radius: 0;">
+      <table class="table">
+        <thead>
           <tr>
-            <th class="px-3 py-2 text-left">Day</th>
-            <th class="px-3 py-2 text-left">Open</th>
-            <th class="px-3 py-2 text-left">Close</th>
-            <th class="px-3 py-2 text-left">Closed</th>
+            <th>Day</th>
+            <th>Opens</th>
+            <th>Closes</th>
+            <th>Closed</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% set days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+        <tbody>
+          {% set days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
           {% for h in hours %}
-            <tr>
-              <td class="px-3 py-2">{{ days[h['weekday']] }}</td>
-              <td class="px-3 py-2"><input class="border rounded-lg px-2 py-1" type="time" name="open_{{ h['weekday'] }}" value="{{ h['open_time'] or '' }}"></td>
-              <td class="px-3 py-2"><input class="border rounded-lg px-2 py-1" type="time" name="close_{{ h['weekday'] }}" value="{{ h['close_time'] or '' }}"></td>
-              <td class="px-3 py-2"><input type="checkbox" name="closed_{{ h['weekday'] }}" {% if h['closed'] %}checked{% endif %}></td>
-            </tr>
+          <tr>
+            <td>
+              <div class="flex items-center gap-3">
+                <div class="day-indicator {% if h['closed'] %}closed{% endif %}">
+                  {{ days[h['weekday']][:3] }}
+                </div>
+                <span class="font-medium">{{ days[h['weekday']] }}</span>
+              </div>
+            </td>
+            <td>
+              <input type="time" class="input input-time" name="open_{{ h['weekday'] }}" value="{{ h['open_time'] or '' }}">
+            </td>
+            <td>
+              <input type="time" class="input input-time" name="close_{{ h['weekday'] }}" value="{{ h['close_time'] or '' }}">
+            </td>
+            <td>
+              <label class="toggle">
+                <input type="checkbox" name="closed_{{ h['weekday'] }}" {% if h['closed'] %}checked{% endif %}>
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
-      <div class="mt-4">
-        <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Save Hours</button>
-      </div>
-    </form>
-  {% endif %}
+    </div>
+    <div class="card-body border-t" style="border-color: var(--border-light);">
+      <button class="btn btn-primary" type="submit">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+        Save Hours
+      </button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<style>
+.day-indicator {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.day-indicator.closed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+.input-time {
+  width: 130px;
+}
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  transition: 0.2s;
+  border-radius: var(--radius-full);
+}
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle input:checked + .toggle-slider {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+.toggle input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+</style>
 {% endblock %}

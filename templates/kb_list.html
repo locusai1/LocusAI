@@ -1,78 +1,211 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — Knowledge Base{% endblock %}
+{% block title %}Knowledge Base — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">Knowledge Base</h1>
-    <div class="flex items-center gap-3">
-      {% if business_id %}
-        <a class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" href="{{ url_for('kb.kb_new', business_id=business_id) }}">+ New Entry</a>
-      {% endif %}
-      <a class="text-sm text-slate-600 hover:text-indigo-600" href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
-    </div>
-  </div>
-
-  <form class="flex flex-wrap items-end gap-3 mb-4" method="get" action="{{ url_for('kb.kb_index') }}">
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
-      <label class="block text-xs text-slate-600 mb-1">Business</label>
-      <select name="business_id" class="border rounded-lg px-3 py-2 bg-white">
-        <option value="">— Select —</option>
-        {% for b in businesses %}
-          <option value="{{ b['id'] }}" {% if b['id'] == business_id %}selected{% endif %}>{{ b['name'] }}</option>
-        {% endfor %}
-      </select>
+      <h1 class="page-title">Knowledge Base</h1>
+      <p class="page-subtitle">Train your AI with FAQs and business information</p>
     </div>
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Search</label>
-      <input class="border rounded-lg px-3 py-2 bg-white" type="text" name="q" placeholder="question, answer, tags…" value="{{ q }}" />
-    </div>
-    <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Apply</button>
-  </form>
-
-  {% if not business_id %}
-    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-slate-600">
-      Select a business to view its knowledge base.
-    </div>
-  {% else %}
-    {% if not entries %}
-      <div class="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">
-        No entries yet. Click “New Entry” to add FAQs.
-      </div>
-    {% else %}
-      <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-50 text-slate-600">
-            <tr>
-              <th class="px-4 py-3 text-left">ID</th>
-              <th class="px-4 py-3 text-left">Question</th>
-              <th class="px-4 py-3 text-left">Answer</th>
-              <th class="px-4 py-3 text-left">Tags</th>
-              <th class="px-4 py-3 text-left">Active</th>
-              <th class="px-4 py-3 text-left">Updated</th>
-              <th class="px-4 py-3 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            {% for e in entries %}
-              <tr class="hover:bg-slate-50">
-                <td class="px-4 py-3">{{ e['id'] }}</td>
-                <td class="px-4 py-3 font-medium">{{ e['question'] }}</td>
-                <td class="px-4 py-3 text-slate-700">{{ e['answer'][:140] }}{% if e['answer']|length > 140 %}…{% endif %}</td>
-                <td class="px-4 py-3">{{ e['tags'] or '—' }}</td>
-                <td class="px-4 py-3">{{ 'Yes' if e['active'] else 'No' }}</td>
-                <td class="px-4 py-3">{{ e['updated_at'] }}</td>
-                <td class="px-4 py-3">
-                  <div class="flex flex-wrap gap-2">
-                    <a class="px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:text-indigo-700" href="{{ url_for('kb.kb_edit', entry_id=e['id']) }}">Edit</a>
-                    <form method="post" action="{{ url_for('kb.kb_delete', entry_id=e['id']) }}" onsubmit="return confirm('Delete this entry?');">
-                      <button class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50" type="submit">Delete</button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    {% if business_id %}
+    <a href="{{ url_for('kb.kb_new', business_id=business_id) }}" class="btn btn-primary">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+      New Entry
+    </a>
     {% endif %}
-  {% endif %}
+  </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form class="flex flex-wrap items-end gap-4" method="get" action="{{ url_for('kb.kb_index') }}">
+      <div class="w-48">
+        <label class="form-label">Business</label>
+        <select name="business_id" class="input" onchange="this.form.submit()">
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}" {% if b['id'] == business_id %}selected{% endif %}>{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if business_id %}
+      <div class="flex-1 min-w-[200px]">
+        <label class="form-label">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Search questions, answers, tags..." class="input" />
+      </div>
+      <button type="submit" class="btn btn-primary">Search</button>
+      {% if q %}
+      <a href="{{ url_for('kb.kb_index', business_id=business_id) }}" class="btn btn-ghost">Clear</a>
+      {% endif %}
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if not business_id %}
+<!-- No Business Selected -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+    </svg>
+    <div class="empty-state-title">Select a Business</div>
+    <div class="empty-state-description">Choose a business to manage its knowledge base</div>
+  </div>
+</div>
+
+{% elif not entries %}
+<!-- Empty State -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+    </svg>
+    {% if q %}
+    <div class="empty-state-title">No entries found</div>
+    <div class="empty-state-description">No entries match "{{ q }}"</div>
+    <a href="{{ url_for('kb.kb_index', business_id=business_id) }}" class="btn mt-4">Clear Search</a>
+    {% else %}
+    <div class="empty-state-title">No knowledge entries yet</div>
+    <div class="empty-state-description">Add FAQs and information to train your AI</div>
+    <a href="{{ url_for('kb.kb_new', business_id=business_id) }}" class="btn btn-primary mt-4">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+      Add First Entry
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% else %}
+<!-- Results Summary -->
+<div class="flex items-center justify-between mb-4">
+  <p class="text-sm text-tertiary">
+    {{ entries|length }} entr{{ 'y' if entries|length == 1 else 'ies' }}
+    {% if q %}<span class="text-secondary">matching "{{ q }}"</span>{% endif %}
+  </p>
+</div>
+
+<!-- Knowledge Base Table -->
+<div class="card">
+  <div class="table-container" style="border: none; border-radius: 0;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Answer</th>
+          <th>Tags</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>
+            <div class="flex items-start gap-3">
+              <div class="kb-icon">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <div>
+                <div class="font-medium text-primary">{{ e['question'] }}</div>
+                <div class="text-xs text-tertiary mt-1">#{{ e['id'] }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <p class="text-sm text-secondary line-clamp-2">{{ e['answer'][:140] }}{% if e['answer']|length > 140 %}...{% endif %}</p>
+          </td>
+          <td>
+            {% if e['tags'] %}
+            <div class="flex flex-wrap gap-1">
+              {% for tag in e['tags'].split(',')[:3] %}
+              {% if tag.strip() %}
+              <span class="tag">{{ tag.strip() }}</span>
+              {% endif %}
+              {% endfor %}
+              {% if e['tags'].split(',')|length > 3 %}
+              <span class="tag">+{{ e['tags'].split(',')|length - 3 }}</span>
+              {% endif %}
+            </div>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e['active'] %}
+            <span class="status-badge active">Active</span>
+            {% else %}
+            <span class="status-badge inactive">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-2">
+              <a href="{{ url_for('kb.kb_edit', entry_id=e['id']) }}" class="btn btn-sm">Edit</a>
+              <form method="post" action="{{ url_for('kb.kb_delete', entry_id=e['id']) }}" onsubmit="return confirm('Delete this entry?');" class="inline">
+                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<style>
+.kb-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+.status-badge.inactive {
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
+}
+.btn-danger {
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
 {% endblock %}

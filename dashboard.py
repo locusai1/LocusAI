@@ -754,6 +754,100 @@ def edit_business(business_id: int):
     return render_template("edit_business.html", business=b)
 
 
+@app.route("/business/<int:business_id>/logo", methods=["POST"])
+def upload_logo(business_id: int):
+    """Upload a logo for a business."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+
+    user = session.get("user")
+    if user and user.get("role") != "admin":
+        if not user_can_access_business(user, business_id):
+            abort(403)
+
+    b = get_business_by_id(business_id)
+    if not b:
+        flash("Business not found.", "err")
+        return redirect(url_for("dashboard"))
+
+    if "logo" not in request.files:
+        flash("No file selected.", "err")
+        return redirect(url_for("edit_business", business_id=business_id))
+
+    file = request.files["logo"]
+    if file.filename == "":
+        flash("No file selected.", "err")
+        return redirect(url_for("edit_business", business_id=business_id))
+
+    # Validate file extension
+    allowed_extensions = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        flash("Invalid file type. Please upload PNG, JPG, WebP, or SVG.", "err")
+        return redirect(url_for("edit_business", business_id=business_id))
+
+    # Generate unique filename
+    filename = f"logo_{business_id}_{uuid.uuid4().hex[:8]}{ext}"
+    logo_dir = os.path.join(app.static_folder, "logos")
+    os.makedirs(logo_dir, exist_ok=True)
+    filepath = os.path.join(logo_dir, filename)
+
+    # Remove old logo if exists
+    old_logo = b.get("logo_path")
+    if old_logo:
+        old_path = os.path.join(app.static_folder, old_logo)
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    # Save new logo
+    file.save(filepath)
+
+    # Update database
+    logo_path = f"logos/{filename}"
+    update_business(business_id, logo_path=logo_path)
+
+    flash("Logo uploaded successfully.", "ok")
+    return redirect(url_for("edit_business", business_id=business_id))
+
+
+@app.route("/business/<int:business_id>/logo/delete", methods=["POST"])
+def delete_logo(business_id: int):
+    """Delete a business logo and revert to default."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+
+    user = session.get("user")
+    if user and user.get("role") != "admin":
+        if not user_can_access_business(user, business_id):
+            abort(403)
+
+    b = get_business_by_id(business_id)
+    if not b:
+        flash("Business not found.", "err")
+        return redirect(url_for("dashboard"))
+
+    # Remove logo file if exists
+    logo_path = b.get("logo_path")
+    if logo_path:
+        full_path = os.path.join(app.static_folder, logo_path)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except OSError:
+                pass
+
+        # Clear logo_path in database
+        update_business(business_id, logo_path=None)
+        flash("Logo removed. Using default logo.", "ok")
+    else:
+        flash("No custom logo to remove.", "err")
+
+    return redirect(url_for("edit_business", business_id=business_id))
+
+
 @app.route("/health")
 def health():
     """Basic health check endpoint for load balancers."""

@@ -8,7 +8,7 @@ AI receptionist SaaS for SMBs - handles customer chat, appointment booking, sent
 cd /Users/paulomartinez/LocusAI
 .venv/bin/python -m flask --app dashboard run --host=0.0.0.0 --port=5050
 
-# http://127.0.0.1:5050 | Login: admin / admin
+# http://127.0.0.1:5050 | Login: admin@locusai.local / admin
 
 # Tests
 .venv/bin/python -m pytest tests/ -v
@@ -156,7 +156,7 @@ TWILIO_PHONE_NUMBER=...
 | test_reminders.py | 19 | Reminder scheduling |
 | test_escalation.py | 18 | Human handoff |
 | test_authz.py | 12 | Authorization checks |
-| test_booking.py | 1 | Booking commit smoke test |
+| test_booking.py | 1 | Booking commit basic test |
 
 ```bash
 .venv/bin/python -m pytest tests/ -v                    # All

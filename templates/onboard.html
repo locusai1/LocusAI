@@ -1,62 +1,97 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — New Business{% endblock %}
+{% block title %}New Business — LocusAI{% endblock %}
 {% block content %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-semibold">New Business</h1>
-    <a href="{{ url_for('dashboard') }}" class="text-sm text-slate-600 hover:text-indigo-600">← Back to Dashboard</a>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('dashboard') }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="page-title">New Business</h1>
+      <p class="page-subtitle">Set up a new business with AI receptionist</p>
+    </div>
   </div>
+</div>
 
-  <form method="POST" class="grid gap-4 max-w-3xl bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-    <div class="grid md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Name *</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="name" value="{{ form.get('name','') }}" required />
+<div class="card max-w-3xl">
+  <div class="card-body">
+    <form method="POST" class="space-y-4">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Name <span class="text-red-500">*</span></label>
+          <input class="input" type="text" name="name" value="{{ form.get('name','') }}" required placeholder="Acme Dental Clinic">
+        </div>
+        <div>
+          <label class="form-label">Slug</label>
+          <input class="input" type="text" name="slug" value="{{ form.get('slug','') }}" placeholder="auto-generated if blank">
+          <p class="text-xs text-tertiary mt-1">Used in URLs and API calls</p>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Slug *</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="slug" value="{{ form.get('slug','') }}" placeholder="auto-generated if blank" />
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Hours</label>
+          <input class="input" type="text" name="hours" value="{{ form.get('hours','') }}" placeholder="Mon-Fri 9:00-18:00">
+        </div>
+        <div>
+          <label class="form-label">Tone</label>
+          <input class="input" type="text" name="tone" value="{{ form.get('tone','') }}" placeholder="friendly and professional">
+        </div>
       </div>
-    </div>
 
-    <div class="grid md:grid-cols-2 gap-4">
       <div>
-        <label class="block text-xs text-slate-600 mb-1">Hours</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="hours" value="{{ form.get('hours','') }}" placeholder="Mon–Fri 9:00–18:00" />
+        <label class="form-label">Address</label>
+        <input class="input" type="text" name="address" value="{{ form.get('address','') }}" placeholder="123 High Street, London">
       </div>
+
       <div>
-        <label class="block text-xs text-slate-600 mb-1">Tone</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="tone" value="{{ form.get('tone','') }}" placeholder="friendly and professional" />
+        <label class="form-label">Services (comma-separated)</label>
+        <textarea class="input" name="services" rows="3" placeholder="Checkups, Fillings, Whitening, Root Canal">{{ form.get('services','') }}</textarea>
       </div>
-    </div>
 
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Address</label>
-      <input class="w-full border rounded-lg px-3 py-2" type="text" name="address" value="{{ form.get('address','') }}" placeholder="123 High Street, London" />
-    </div>
-
-    <div>
-      <label class="block text-xs text-slate-600 mb-1">Services (comma-separated)</label>
-      <textarea class="w-full border rounded-lg px-3 py-2 min-h-[90px]" name="services" placeholder="Checkups, fillings, whitening">{{ form.get('services','') }}</textarea>
-    </div>
-
-    <div class="grid md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Escalation Phone</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="text" name="escalation_phone" value="{{ form.get('escalation_phone','') }}" />
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="form-label">Escalation Phone</label>
+          <input class="input" type="text" name="escalation_phone" value="{{ form.get('escalation_phone','') }}" placeholder="+44 20 1234 5678">
+        </div>
+        <div>
+          <label class="form-label">Escalation Email</label>
+          <input class="input" type="email" name="escalation_email" value="{{ form.get('escalation_email','') }}" placeholder="manager@example.com">
+        </div>
       </div>
-      <div>
-        <label class="block text-xs text-slate-600 mb-1">Escalation Email</label>
-        <input class="w-full border rounded-lg px-3 py-2" type="email" name="escalation_email" value="{{ form.get('escalation_email','') }}" />
+
+      <div class="max-w-xs">
+        <label class="form-label">Data Retention (days)</label>
+        <input class="input" type="number" min="1" name="data_retention_days" value="{{ form.get('data_retention_days','365') }}">
       </div>
-    </div>
 
-    <div class="max-w-xs">
-      <label class="block text-xs text-slate-600 mb-1">Data Retention (days)</label>
-      <input class="w-full border rounded-lg px-3 py-2" type="number" min="1" name="data_retention_days" value="{{ form.get('data_retention_days','365') }}" />
-    </div>
+      <div class="flex items-center gap-3 pt-2">
+        <button class="btn btn-primary" type="submit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          Create Business
+        </button>
+        <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
 
-    <div>
-      <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" type="submit">Create</button>
-    </div>
-  </form>
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+</style>
 {% endblock %}

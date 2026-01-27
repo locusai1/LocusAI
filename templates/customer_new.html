@@ -1,68 +1,92 @@
 {% extends "base.html" %}
-{% block title %}LocusAI — New Customer{% endblock %}
+{% block title %}New Customer — LocusAI{% endblock %}
 {% block content %}
-<div class="flex items-center gap-4 mb-6">
-  <a href="{{ url_for('customers.customers_index', business_id=business_id) }}" class="text-slate-400 hover:text-slate-600">
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-    </svg>
-  </a>
-  <div>
-    <h1 class="text-xl font-semibold">New Customer</h1>
-    <p class="text-sm text-slate-500">Add a new customer to your database</p>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('customers.customers_index', business_id=business_id) }}" class="back-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="page-title">New Customer</h1>
+      <p class="page-subtitle">Add a new customer to your database</p>
+    </div>
   </div>
 </div>
 
-<form method="post" action="{{ url_for('customers.customer_new') }}" class="max-w-xl bg-white rounded-xl border p-6">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div class="card max-w-xl">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('customers.customer_new') }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-  {% if not business_id %}
-  <div class="mb-4">
-    <label class="block text-sm font-medium text-slate-700 mb-1">Business *</label>
-    <select name="business_id" class="input w-full" required>
-      <option value="">— Select —</option>
-      {% for b in businesses %}
-        <option value="{{ b['id'] }}">{{ b['name'] }}</option>
-      {% endfor %}
-    </select>
+      {% if not business_id %}
+      <div>
+        <label class="form-label">Business <span class="text-red-500">*</span></label>
+        <select name="business_id" class="input" required>
+          <option value="">Select business...</option>
+          {% for b in businesses %}
+          <option value="{{ b['id'] }}">{{ b['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      {% endif %}
+
+      <div>
+        <label class="form-label">Name</label>
+        <input type="text" name="name" class="input" placeholder="John Smith">
+      </div>
+
+      <div>
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="input" placeholder="john@example.com">
+      </div>
+
+      <div>
+        <label class="form-label">Phone</label>
+        <input type="tel" name="phone" class="input" placeholder="+1 (555) 123-4567">
+      </div>
+
+      <div>
+        <label class="form-label">Tags</label>
+        <input type="text" name="tags" class="input" placeholder="vip, new patient, referral">
+        <p class="text-xs text-tertiary mt-1">Comma-separated tags for categorization</p>
+      </div>
+
+      <div>
+        <label class="form-label">Notes</label>
+        <textarea name="notes" class="input" rows="3" placeholder="Any notes about this customer..."></textarea>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          Create Customer
+        </button>
+        <a href="{{ url_for('customers.customers_index', business_id=business_id) }}" class="btn">Cancel</a>
+      </div>
+
+      <p class="text-xs text-tertiary pt-2">* At least one of name, email, or phone is required.</p>
+    </form>
   </div>
-  {% else %}
-  <input type="hidden" name="business_id" value="{{ business_id }}">
-  {% endif %}
+</div>
 
-  <div class="space-y-4">
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Name</label>
-      <input type="text" name="name" class="input w-full" placeholder="John Smith">
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
-      <input type="email" name="email" class="input w-full" placeholder="john@example.com">
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-      <input type="tel" name="phone" class="input w-full" placeholder="+1 (555) 123-4567">
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Tags</label>
-      <input type="text" name="tags" class="input w-full" placeholder="vip, new patient, referral">
-      <p class="text-xs text-slate-500 mt-1">Comma-separated tags for categorization</p>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-      <textarea name="notes" class="input w-full" rows="3" placeholder="Any notes about this customer..."></textarea>
-    </div>
-  </div>
-
-  <div class="mt-6 flex items-center gap-3">
-    <button type="submit" class="btn bg-indigo-600 text-white hover:bg-indigo-700">Create Customer</button>
-    <a href="{{ url_for('customers.customers_index', business_id=business_id) }}" class="btn bg-white border hover:bg-slate-50">Cancel</a>
-  </div>
-
-  <p class="text-xs text-slate-500 mt-4">* At least one of name, email, or phone is required.</p>
-</form>
+<style>
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.back-btn:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+</style>
 {% endblock %}

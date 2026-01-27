@@ -1,11 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Something went wrong — LocusAI{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-lg text-center">
-  <div class="text-7xl font-black text-rose-300">500</div>
-  <h1 class="text-xl font-semibold mt-2">We hit a snag</h1>
-  <p class="text-slate-600 mt-2">Our team has been notified. Please try again.</p>
-  <p class="text-xs text-slate-400 mt-1">Request ID: {{ rid }}</p>
-  <a href="{{ url_for('dashboard') }}" class="inline-block mt-6 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Back to Dashboard</a>
+<div class="error-container">
+  <div class="error-code error-500">500</div>
+  <h1 class="error-title">We hit a snag</h1>
+  <p class="error-description">Something unexpected happened. Our team has been notified.</p>
+  <p class="error-rid">Request ID: {{ rid }}</p>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-6">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    Back to Dashboard
+  </a>
 </div>
+
+<style>
+.error-container {
+  max-width: 400px;
+  margin: 80px auto;
+  text-align: center;
+}
+.error-code {
+  font-size: 96px;
+  font-weight: 800;
+  color: var(--border-default);
+  line-height: 1;
+}
+.error-code.error-500 {
+  color: rgba(239, 68, 68, 0.3);
+}
+.error-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 8px;
+}
+.error-description {
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+.error-rid {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+}
+</style>
 {% endblock %}

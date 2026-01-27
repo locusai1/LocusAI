@@ -1,65 +1,158 @@
 {% extends "base.html" %}
 {% block title %}Search — LocusAI{% endblock %}
 {% block content %}
-<div class="mb-4">
-  <h1 class="text-xl font-semibold">Search</h1>
-  <form class="mt-3 flex gap-2" action="{{ url_for('search.search_index') }}">
-    <input name="q" value="{{ q }}" placeholder="Search businesses, customers, services, phone…" class="flex-1 border rounded-lg px-3 py-2">
-    <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Search</button>
-  </form>
+<!-- Page Header -->
+<div class="page-header">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="page-title">Search</h1>
+      <p class="page-subtitle">Find businesses, customers, and appointments</p>
+    </div>
+  </div>
+</div>
+
+<!-- Search Form -->
+<div class="card mb-6">
+  <div class="card-body">
+    <form action="{{ url_for('search.search_index') }}" class="flex gap-3">
+      <div class="flex-1 relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input name="q" value="{{ q }}" placeholder="Search businesses, customers, services, phone..." class="input pl-10">
+      </div>
+      <button class="btn btn-primary">Search</button>
+    </form>
+  </div>
 </div>
 
 {% if q and not businesses and not appts %}
-  <div class="card p-6 text-slate-600">No results for “{{ q }}”.</div>
-{% else %}
-  {% if businesses %}
-    <div class="card p-4 mb-4">
-      <div class="font-semibold mb-2">Businesses</div>
-      <div class="grid md:grid-cols-2 gap-3">
-        {% for b in businesses %}
-          <div class="border rounded-lg p-3">
-            <div class="font-medium">{{ b['name'] }}</div>
-            <div class="text-xs text-slate-500">{{ b['slug'] }}</div>
-            <div class="mt-2 flex gap-2">
-              <a class="px-2 py-1 rounded border" href="{{ url_for('appointments.appointments_index', business_id=b['id']) }}">Appointments</a>
-              <a class="px-2 py-1 rounded border" href="{{ url_for('kb.kb_index', business_id=b['id']) }}">Knowledge</a>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+<!-- No Results -->
+<div class="card">
+  <div class="empty-state">
+    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <div class="empty-state-title">No results found</div>
+    <div class="empty-state-description">No results match "{{ q }}"</div>
+  </div>
+</div>
 
-  {% if appts %}
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Appointments</div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-50 text-slate-600">
-            <tr>
-              <th class="px-3 py-2 text-left">When</th>
-              <th class="px-3 py-2 text-left">Customer</th>
-              <th class="px-3 py-2 text-left">Phone</th>
-              <th class="px-3 py-2 text-left">Service</th>
-              <th class="px-3 py-2 text-left">Business</th>
-              <th class="px-3 py-2 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            {% for a in appts %}
-              <tr>
-                <td class="px-3 py-2">{{ a['start_at'] or '—' }}</td>
-                <td class="px-3 py-2">{{ a['customer_name'] or '—' }}</td>
-                <td class="px-3 py-2">{{ a['phone'] or '' }}</td>
-                <td class="px-3 py-2">{{ a['service'] or '—' }}</td>
-                <td class="px-3 py-2">{{ a['business_name'] }}</td>
-                <td class="px-3 py-2">{{ a['status'] }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+{% else %}
+{% if businesses %}
+<!-- Businesses Results -->
+<div class="card mb-6">
+  <div class="card-header">
+    <h3 class="card-title">Businesses</h3>
+    <span class="badge">{{ businesses|length }}</span>
+  </div>
+  <div class="card-body">
+    <div class="grid md:grid-cols-2 gap-4">
+      {% for b in businesses %}
+      <div class="result-card">
+        <div class="result-icon">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="font-medium">{{ b['name'] }}</div>
+          <div class="text-xs text-tertiary">{{ b['slug'] }}</div>
+        </div>
+        <div class="flex gap-2">
+          <a href="{{ url_for('appointments.appointments_index', business_id=b['id']) }}" class="btn btn-sm">Appointments</a>
+          <a href="{{ url_for('kb.kb_index', business_id=b['id']) }}" class="btn btn-sm">Knowledge</a>
+        </div>
       </div>
+      {% endfor %}
     </div>
-  {% endif %}
+  </div>
+</div>
 {% endif %}
+
+{% if appts %}
+<!-- Appointments Results -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Appointments</h3>
+    <span class="badge">{{ appts|length }}</span>
+  </div>
+  <div class="table-container" style="border: none; border-radius: 0;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Customer</th>
+          <th>Phone</th>
+          <th>Service</th>
+          <th>Business</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in appts %}
+        <tr>
+          <td>
+            <span class="font-medium">{{ a['start_at'] or '—' }}</span>
+          </td>
+          <td>{{ a['customer_name'] or '—' }}</td>
+          <td class="text-secondary">{{ a['phone'] or '' }}</td>
+          <td>{{ a['service'] or '—' }}</td>
+          <td>
+            <span class="badge">{{ a['business_name'] }}</span>
+          </td>
+          <td>
+            <span class="status-pill {{ a['status'] }}">
+              <span class="status-dot"></span>
+              {{ a['status']|capitalize }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<style>
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  transition: box-shadow 0.15s ease;
+}
+.result-card:hover {
+  box-shadow: var(--shadow-md);
+}
+.result-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-pill .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-pill.pending { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+.status-pill.confirmed { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
+.status-pill.cancelled { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+.status-pill.completed { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+</style>
 {% endblock %}

@@ -4,12 +4,12 @@ from core.db import init_db, get_conn, create_session, get_business_by_id
 # Use the booking helper after imports so providers can lazy-load
 from core.booking import maybe_commit_booking
 
-def test_booking_commit_smoke():
+def test_booking_commit_basic():
     init_db()
     # Ensure a business exists
     with get_conn() as con:
-        con.execute("INSERT OR IGNORE INTO businesses(name,slug) VALUES('Smoke Clinic','smoke_clinic')")
-        row = con.execute("SELECT id FROM businesses WHERE slug='smoke_clinic'").fetchone()
+        con.execute("INSERT OR IGNORE INTO businesses(name,slug) VALUES('Test Clinic','test_clinic')")
+        row = con.execute("SELECT id FROM businesses WHERE slug='test_clinic'").fetchone()
         bid = row["id"]
 
         # Seed a Checkup service (30m) and Mon-Fri hours 09:00–18:00
