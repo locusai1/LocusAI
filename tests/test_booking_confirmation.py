@@ -570,12 +570,14 @@ class TestAvailabilityFunctions:
             with patch('core.booking._find_local_service_id', return_value=1):
                 with patch('core.booking.get_conn'):
                     mock_prov = MagicMock()
-                    # Different slots per day
+                    # Return slots for any date (first call gets slots, rest empty)
+                    call_count = [0]
                     def fake_fetch_slots(service_id, date_str):
-                        if "01-27" in date_str:
-                            return ["2026-01-27 10:00", "2026-01-27 11:00"]
-                        elif "01-28" in date_str:
-                            return ["2026-01-28 14:00"]
+                        call_count[0] += 1
+                        if call_count[0] == 1:
+                            return [f"{date_str} 10:00", f"{date_str} 11:00"]
+                        elif call_count[0] == 2:
+                            return [f"{date_str} 14:00"]
                         return []
 
                     mock_prov.fetch_slots.side_effect = fake_fetch_slots
