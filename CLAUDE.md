@@ -99,12 +99,69 @@ reminders     (id, appointment_id, type[24h|1h|15m], channel[email|sms], schedul
 ```bash
 OPENAI_API_KEY=sk-...           # Required - AI conversations
 FLASK_SECRET_KEY=...            # Required - session encryption
-RETELL_API_KEY=key_...          # Voice AI
+RETELL_API_KEY=key_...          # Voice AI (Retell)
+TELNYX_API_KEY=KEY...           # Voice telephony (Telnyx SIP)
 ENCRYPTION_KEY=...              # PII field encryption (optional)
 TWILIO_ACCOUNT_SID=...          # SMS (optional)
 TWILIO_AUTH_TOKEN=...
 TWILIO_PHONE_NUMBER=...
 ```
+
+## Voice AI Integration (Telnyx + Retell)
+
+**Phone Number**: +442046203253 (UK)
+
+### Architecture
+```
+Inbound Call → Telnyx SIP → Retell AI → Response
+                   ↓
+         FQDN Connection: sip.retellai.com:5060 (TCP)
+```
+
+### Retell Configuration
+| Setting | Value |
+|---------|-------|
+| Agent ID | `agent_7fe6433627a68c931f05b7ae84` |
+| Agent Name | LocusAI Receptionist |
+| LLM ID | `llm_b41019c52636d5321f084e5bdbbb` |
+| Voice | `11labs-Dorothy` (British female) |
+| Language | en-GB |
+| Response Engine | Retell LLM (native, not custom WebSocket) |
+
+### Telnyx Configuration
+| Setting | Value |
+|---------|-------|
+| Phone Number ID | `2879031589981914356` |
+| FQDN Connection ID | `2882485623761929727` |
+| SIP Target | `sip.retellai.com:5060` |
+| Transport | TCP |
+
+### Updating the Agent
+```bash
+# Update agent settings
+curl -X PATCH "https://api.retellai.com/update-agent/agent_7fe6433627a68c931f05b7ae84" \
+  -H "Authorization: Bearer $RETELL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"voice_id": "11labs-Dorothy"}'
+
+# Update LLM prompt
+curl -X PATCH "https://api.retellai.com/update-retell-llm/llm_b41019c52636d5321f084e5bdbbb" \
+  -H "Authorization: Bearer $RETELL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"general_prompt": "Your new prompt here..."}'
+
+# List available voices
+curl -X GET "https://api.retellai.com/list-voices" \
+  -H "Authorization: Bearer $RETELL_API_KEY"
+```
+
+### Custom LLM Mode (Optional)
+For full control over AI responses (KB access, booking, sentiment), use custom LLM mode:
+1. Start WebSocket server: `.venv/bin/python voice_ws.py`
+2. Expose via tunnel: `cloudflared tunnel --url http://localhost:8080`
+3. Update agent to use custom-llm with the tunnel URL
+
+Note: Custom LLM adds latency. Native Retell LLM is faster but less integrated.
 
 ## Key Flows
 
@@ -167,9 +224,10 @@ TWILIO_PHONE_NUMBER=...
 
 - ✅ Rebranding complete: AxisAI → LocusAI (all references updated)
 - ✅ Test suite expanded: 307 → 554 tests
-- ✅ Voice AI: Retell integration working (WebSocket + webhooks)
+- ✅ Voice AI: Telnyx SIP + Retell integration live (+442046203253)
 - ✅ Booking confirmation flow: User must confirm before commit
 - ✅ Security hardened: Lockout, encryption, rate limiting, validation
+- ✅ Premium UI: Linear/Stripe-inspired visual overhaul
 
 ---
 
