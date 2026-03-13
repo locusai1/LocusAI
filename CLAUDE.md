@@ -73,7 +73,7 @@ Core Modules (25):
 
 templates/             # 31 Jinja2 templates
 static/                # locus.css, app.js, widget.js, logo.svg
-tests/                 # 554 tests across 18 files
+tests/                 # 580 tests across 18 files
 ```
 
 ## Database Schema
@@ -266,7 +266,7 @@ Note: Custom LLM adds latency. Native Retell LLM is faster but less integrated.
 - **Input Validation**: Email, phone, name, slug, redirect URL validation
 - **Webhook Verification**: HMAC, Twilio, Stripe signature verification
 
-## Test Suite (554 tests)
+## Test Suite (580 tests)
 
 | File | Tests | Coverage |
 |------|-------|----------|
@@ -294,11 +294,11 @@ Note: Custom LLM adds latency. Native Retell LLM is faster but less integrated.
 .venv/bin/python -m pytest tests/test_sentiment.py -v   # Specific
 ```
 
-## Current State (Jan 2026)
+## Current State (Feb 2026)
 
 ### What's Working
 - ✅ Rebranding complete: AxisAI → LocusAI (all references updated)
-- ✅ Test suite: 554 tests passing
+- ✅ Test suite: 580 tests passing
 - ✅ Voice AI: Telnyx SIP + Retell integration live (+442046203253)
 - ✅ Chat Widget: Embeddable with booking confirmation flow
 - ✅ SMS: Twilio integration ready
