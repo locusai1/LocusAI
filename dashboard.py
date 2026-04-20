@@ -1249,12 +1249,11 @@ def voice_dashboard():
 
 @app.route("/setup-admin")
 def setup_admin():
-    """One-time admin seed — auto-disables once any user exists."""
+    """Upsert admin user and default business."""
     from werkzeug.security import generate_password_hash
     with get_conn() as conn:
-        existing = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if existing > 0:
-            return Response(json.dumps({"status": "already_seeded", "users": existing}), mimetype="application/json")
+        users = conn.execute("SELECT id, email, role FROM users").fetchall()
+        conn.execute("DELETE FROM users WHERE email=?", ("admin@locusai.local",))
         conn.execute(
             "INSERT INTO users (email, name, password_hash, role, email_verified) VALUES (?,?,?,?,?)",
             ("admin@locusai.local", "Admin", generate_password_hash("admin"), "admin", 1)
@@ -1263,7 +1262,7 @@ def setup_admin():
         conn.execute("INSERT OR IGNORE INTO businesses (id, name, slug, tenant_key) VALUES (9,'StyleCuts Hair Studio','stylecuts','test-tenant-key-001')")
         conn.execute("INSERT OR IGNORE INTO business_users (user_id, business_id) VALUES (?,9)", (user_id,))
         conn.commit()
-    return Response(json.dumps({"status": "ok", "email": "admin@locusai.local", "password": "admin"}), mimetype="application/json")
+    return Response(json.dumps({"status": "ok", "email": "admin@locusai.local", "password": "admin", "existing_users": [dict(u) for u in users]}), mimetype="application/json")
 
 
 @app.route("/health")
