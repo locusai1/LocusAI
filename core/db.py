@@ -176,6 +176,8 @@ def init_db() -> None:
             external_id TEXT,
             source TEXT CHECK(source IN ('ai','owner','api') OR source IS NULL),
             notes TEXT,
+            no_show_sms_sent INTEGER DEFAULT 0,
+            review_request_sent INTEGER DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
@@ -378,6 +380,11 @@ def init_db() -> None:
             transfer_number TEXT,
             transfer_reason TEXT,
             cost_cents INTEGER,
+            call_intent TEXT,
+            call_outcome TEXT,
+            action_items TEXT,
+            caller_message TEXT,
+            containment INTEGER DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
@@ -434,6 +441,41 @@ def init_db() -> None:
 
         # Appointments: customer_id
         _safe_alter_add_column(cur, "appointments", "customer_id", "ALTER TABLE appointments ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
+
+        # ---- email_verification_tokens ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS email_verification_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            expires_at TEXT NOT NULL,
+            verified_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_evt_token ON email_verification_tokens(token);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_evt_user ON email_verification_tokens(user_id);")
+
+        # Users: trial and verification columns
+        user_extra_columns = [
+            ("email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"),
+            ("trial_ends_at", "ALTER TABLE users ADD COLUMN trial_ends_at TEXT"),
+            ("signup_source", "ALTER TABLE users ADD COLUMN signup_source TEXT"),
+        ]
+        for col, ddl in user_extra_columns:
+            _safe_alter_add_column(cur, "users", col, ddl)
+
+        # ---- password_reset_tokens ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_prt_token ON password_reset_tokens(token);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_prt_user ON password_reset_tokens(user_id);")
 
         con.commit()
         logger.info("Database schema initialized successfully")

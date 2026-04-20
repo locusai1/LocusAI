@@ -159,6 +159,80 @@
 
 <div class="divider"></div>
 
+<!-- Google Calendar Section -->
+<div class="mb-8">
+  <div class="flex items-center gap-3 mb-4">
+    <div class="section-icon">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    </div>
+    <div>
+      <h2 class="text-lg font-semibold">Google Calendar</h2>
+      <p class="text-sm text-tertiary">Two-way sync — appointments appear in your calendar, busy times block new bookings</p>
+    </div>
+  </div>
+
+  <div class="card max-w-2xl">
+    <div class="card-header">
+      <h3 class="card-title">Calendar Sync</h3>
+      {% if gcal_connected %}
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#16a34a;background:rgba(34,197,94,.1);padding:3px 10px;border-radius:999px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;flex-shrink:0;"></span> Connected
+      </span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if not gcal_configured %}
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;">
+        <p class="text-sm" style="color:#b45309;font-weight:500;margin:0 0 4px;">Setup required</p>
+        <p class="text-xs" style="color:#92400e;margin:0;">
+          Add <code class="code-inline">GOOGLE_CLIENT_ID</code> and <code class="code-inline">GOOGLE_CLIENT_SECRET</code> to your .env file.
+          Create credentials at <strong>console.cloud.google.com</strong> → APIs &amp; Services → Credentials.
+        </p>
+      </div>
+      {% endif %}
+
+      {% if gcal_connected %}
+      <div class="space-y-4">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-muted);border-radius:var(--radius-lg);">
+          <svg style="width:20px;height:20px;color:#16a34a;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div>
+            <div style="font-size:13px;font-weight:600;">Google Calendar Connected</div>
+            <div style="font-size:11px;color:var(--text-muted);">Syncing to: {{ gcal_calendar_id or 'primary' }}</div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('integrations.google_disconnect') }}">
+          <input type="hidden" name="business_id" value="{{ business_id }}">
+          <button class="btn" type="submit" style="color:#dc2626;border-color:rgba(220,38,38,.3);">
+            Disconnect Google Calendar
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <div class="space-y-4">
+        <p class="text-sm text-secondary">Connect Google Calendar to automatically sync appointments and check real-time availability during booking.</p>
+        <ul class="text-sm text-secondary space-y-1" style="list-style:none;padding:0;">
+          <li style="display:flex;gap:8px;"><span style="color:#16a34a;">✓</span> New bookings appear in your Google Calendar instantly</li>
+          <li style="display:flex;gap:8px;"><span style="color:#16a34a;">✓</span> Cancelled appointments removed automatically</li>
+          <li style="display:flex;gap:8px;"><span style="color:#16a34a;">✓</span> Google Calendar events block new bookings (no double-booking)</li>
+          <li style="display:flex;gap:8px;"><span style="color:#16a34a;">✓</span> Works with Google Workspace and personal Gmail</li>
+        </ul>
+        {% if gcal_configured %}
+        <a href="{{ url_for('integrations.google_connect', business_id=business_id) }}" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Connect Google Calendar
+        </a>
+        {% else %}
+        <button class="btn" disabled style="opacity:.5;cursor:not-allowed;">Configure credentials first</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
 <!-- Scheduling Provider Section -->
 <div>
   <div class="flex items-center gap-3 mb-4">
@@ -167,7 +241,7 @@
     </div>
     <div>
       <h2 class="text-lg font-semibold">Scheduling Provider</h2>
-      <p class="text-sm text-tertiary">Connect to Google Calendar, Calendly, or use built-in scheduler</p>
+      <p class="text-sm text-tertiary">Connect to Calendly, Acuity, or use built-in scheduler</p>
     </div>
   </div>
 

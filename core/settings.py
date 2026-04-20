@@ -35,6 +35,7 @@ OPENAI_MODEL    = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET")
 RETELL_DEFAULT_AGENT_ID = os.getenv("RETELL_DEFAULT_AGENT_ID")
+RETELL_LLM_ID = os.getenv("RETELL_LLM_ID", "llm_b41019c52636d5321f084e5bdbbb")
 # Voice call limits
 VOICE_TRANSFER_TIMEOUT = int(os.getenv("VOICE_TRANSFER_TIMEOUT", "300"))  # seconds
 VOICE_MAX_DURATION = int(os.getenv("VOICE_MAX_DURATION", "600"))  # seconds (10 min)

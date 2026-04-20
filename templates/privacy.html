@@ -1,0 +1,193 @@
+{% extends "public_base.html" %}
+{% block title %}Privacy Policy — LocusAI{% endblock %}
+{% block meta_description %}LocusAI Privacy Policy — how we collect, use, and protect your data.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-hero {
+    background: white;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    padding: 64px 32px 48px;
+    text-align: center;
+  }
+  .page-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    background: #f5f5f5;
+    border: 1px solid #e5e5e5;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #525252;
+    margin-bottom: 20px;
+  }
+  .page-title { font-size: 36px; font-weight: 700; letter-spacing: -0.03em; color: #171717; margin-bottom: 12px; }
+  .page-subtitle { font-size: 16px; color: #737373; max-width: 520px; margin: 0 auto; }
+  .content-wrapper { max-width: 760px; margin: 0 auto; padding: 64px 32px 96px; }
+  .doc-section { margin-bottom: 48px; }
+  .doc-section h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: #171717; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+  .doc-section h3 { font-size: 15px; font-weight: 600; color: #171717; margin: 20px 0 8px; }
+  .doc-section p { font-size: 15px; color: #404040; margin-bottom: 14px; }
+  .doc-section ul, .doc-section ol { padding-left: 20px; margin-bottom: 14px; }
+  .doc-section li { font-size: 15px; color: #404040; margin-bottom: 6px; }
+  .doc-section a { color: #171717; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+  .info-card { background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; font-size: 14px; color: #525252; }
+  .info-card strong { color: #171717; }
+  .processor-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  .processor-table th { text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #a3a3a3; padding: 0 12px 10px 0; border-bottom: 1px solid #e5e5e5; }
+  .processor-table td { font-size: 14px; color: #404040; padding: 10px 12px 10px 0; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="page-badge">Legal</div>
+  <h1 class="page-title">Privacy Policy</h1>
+  <p class="page-subtitle">How LocusAI collects, uses, and protects your information</p>
+</div>
+
+<div class="content-wrapper">
+
+  <div class="info-card">
+    <strong>Last updated: March 2026.</strong> This is a working draft document. A fully reviewed version prepared by a qualified solicitor will replace this document before LocusAI's public launch. If you have questions about your data in the meantime, contact <strong>privacy@locusai.co.uk</strong>.
+  </div>
+
+  <div class="doc-section">
+    <h2>1. Who we are</h2>
+    <p>LocusAI ("LocusAI", "we", "us", "our") provides an AI receptionist platform for small and medium-sized businesses. We process personal data on behalf of our business customers and, in some cases, directly with their end customers.</p>
+    <p>Our primary jurisdiction is the United Kingdom. Our phone number (+442046203253) and primary operations are UK-based. This policy is written to comply with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.</p>
+    <p><strong>Data controller contact:</strong> privacy@locusai.co.uk</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>2. What data we collect</h2>
+    <h3>Business customers (dashboard users)</h3>
+    <ul>
+      <li>Name and email address (account registration)</li>
+      <li>Business name, address, and contact details</li>
+      <li>Payment information (processed by Stripe — we do not store card numbers)</li>
+      <li>Configuration data (services, hours, knowledge base content)</li>
+      <li>Usage data (conversations handled, appointments booked, calls answered)</li>
+    </ul>
+    <h3>End customers (callers and chat users)</h3>
+    <ul>
+      <li>Name and phone number (provided during conversations)</li>
+      <li>Email address (if provided during booking)</li>
+      <li>Appointment details (service requested, date, time)</li>
+      <li>Conversation transcripts (voice and chat)</li>
+      <li>Call recordings (where enabled by the business — callers are informed before recording begins)</li>
+      <li>Sentiment and intent data (AI-derived from conversation content)</li>
+    </ul>
+    <h3>Technical data</h3>
+    <ul>
+      <li>IP addresses (for security and rate limiting)</li>
+      <li>Session identifiers</li>
+      <li>Error logs and performance metrics</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>3. Legal basis for processing</h2>
+    <p>We process personal data on the following legal bases under UK GDPR Article 6:</p>
+    <ul>
+      <li><strong>Contract performance (Art. 6(1)(b))</strong> — processing necessary to provide our service to business customers and to fulfil appointment bookings for end customers.</li>
+      <li><strong>Legitimate interests (Art. 6(1)(f))</strong> — security monitoring, fraud prevention, product improvement, and analytics. We have conducted a legitimate interests assessment and determined our interests do not override the rights of data subjects.</li>
+      <li><strong>Legal obligation (Art. 6(1)(c))</strong> — compliance with applicable law, including responding to lawful requests from authorities.</li>
+      <li><strong>Consent (Art. 6(1)(a))</strong> — where we send marketing communications or use optional cookies, we rely on consent which can be withdrawn at any time.</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>4. Third-party processors</h2>
+    <p>We share data with the following sub-processors to operate our service. Each is subject to a Data Processing Agreement. Data transfers from the UK to the US are conducted under the UK International Data Transfer Agreement (IDTA) or Standard Contractual Clauses (SCCs).</p>
+    <table class="processor-table">
+      <thead>
+        <tr><th>Processor</th><th>Purpose</th><th>Location</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>OpenAI</strong></td><td>AI conversation processing</td><td>United States</td></tr>
+        <tr><td><strong>Retell AI</strong></td><td>Voice AI and call management</td><td>United States</td></tr>
+        <tr><td><strong>Telnyx</strong></td><td>Telephony and SMS</td><td>United States</td></tr>
+        <tr><td><strong>Stripe</strong></td><td>Payment processing</td><td>United States / EU</td></tr>
+        <tr><td><strong>Google</strong></td><td>Calendar integration (where enabled)</td><td>United States</td></tr>
+      </tbody>
+    </table>
+    <p>We do not sell personal data to third parties and do not use personal data for advertising purposes.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>5. Data retention</h2>
+    <p>We retain personal data only for as long as necessary for the purposes described in this policy:</p>
+    <ul>
+      <li><strong>Business customer accounts</strong> — for the duration of the subscription plus 90 days after termination, then deleted.</li>
+      <li><strong>Conversation transcripts and call recordings</strong> — configurable per business (default: 365 days). Businesses can reduce this in their settings.</li>
+      <li><strong>Appointment records</strong> — 3 years (for audit and dispute resolution purposes).</li>
+      <li><strong>Payment records</strong> — 7 years (UK tax/accounting legal requirement).</li>
+      <li><strong>Security and access logs</strong> — 90 days.</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>6. Your rights under UK GDPR</h2>
+    <p>If you are an end customer whose data has been processed through LocusAI, you have the following rights:</p>
+    <ul>
+      <li><strong>Right of access</strong> — request a copy of your personal data.</li>
+      <li><strong>Right to rectification</strong> — request correction of inaccurate data.</li>
+      <li><strong>Right to erasure ("right to be forgotten")</strong> — request deletion of your data where there is no overriding legal basis to retain it.</li>
+      <li><strong>Right to data portability</strong> — receive your data in a structured, machine-readable format.</li>
+      <li><strong>Right to object</strong> — object to processing based on legitimate interests.</li>
+      <li><strong>Right to restrict processing</strong> — request we limit how we use your data.</li>
+    </ul>
+    <p>To exercise any of these rights, contact us at <strong>privacy@locusai.co.uk</strong>. We will respond within 30 days. You also have the right to lodge a complaint with the <a href="https://ico.org.uk" target="_blank" rel="noopener">Information Commissioner's Office (ICO)</a>.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>7. Cookies</h2>
+    <p>We use the following cookies:</p>
+    <ul>
+      <li><strong>Session cookie (functional)</strong> — keeps you logged in to the dashboard. This cookie is strictly necessary and does not require consent.</li>
+      <li><strong>CSRF token (functional)</strong> — protects form submissions from cross-site request forgery. Strictly necessary.</li>
+    </ul>
+    <p>We do not currently use analytics or advertising cookies. If we add analytics in future, we will update this policy and request consent via our cookie banner.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>8. Call recordings</h2>
+    <p>Where voice call recording is enabled by a business customer, all callers are informed at the start of the call with the statement: <em>"This call may be recorded for quality and training purposes."</em> Callers who do not consent should end the call at that point. Recordings are stored securely and accessible only to the relevant business.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>9. Security</h2>
+    <p>We implement appropriate technical and organisational measures to protect personal data, including:</p>
+    <ul>
+      <li>Encryption of personal data fields at rest (AES-128 via Fernet)</li>
+      <li>Encrypted data transmission (HTTPS/TLS)</li>
+      <li>Access controls and account lockout protections</li>
+      <li>Multi-tenant data isolation — each business can only access their own data</li>
+      <li>Rate limiting on all public-facing APIs</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>10. Data Processing Agreements (B2B)</h2>
+    <p>When LocusAI processes personal data on behalf of a business customer, we act as a data processor and the business acts as the data controller. A Data Processing Agreement (DPA) is available on request at <strong>privacy@locusai.co.uk</strong>. Business customers are responsible for ensuring they have the appropriate legal basis to use LocusAI to process their customers' data.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>11. Changes to this policy</h2>
+    <p>We may update this policy from time to time. When we make material changes, we will update the "Last updated" date at the top and notify business customers by email. Continued use of LocusAI after changes constitutes acceptance of the updated policy.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>12. Contact</h2>
+    <p>For any questions, requests, or complaints about how we handle your personal data:</p>
+    <ul>
+      <li><strong>Email:</strong> privacy@locusai.co.uk</li>
+      <li><strong>Response time:</strong> We aim to respond within 5 business days and will always respond within 30 days as required by UK GDPR.</li>
+    </ul>
+    <p>You also have the right to complain to the Information Commissioner's Office: <a href="https://ico.org.uk/make-a-complaint/" target="_blank" rel="noopener">ico.org.uk/make-a-complaint</a></p>
+  </div>
+
+</div>
+{% endblock %}

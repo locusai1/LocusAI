@@ -4,94 +4,599 @@
 <!-- Page Header -->
 <div class="page-header">
   <div class="flex items-center gap-4">
-    <a href="{{ url_for('dashboard') }}" class="back-btn">
+    <a href="{{ url_for('dashboard') }}" class="ob-back-btn">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div>
-      <h1 class="page-title">New Business</h1>
-      <p class="page-subtitle">Set up a new business with AI receptionist</p>
+      <h1 class="page-title">Set Up a New Business</h1>
+      <p class="page-subtitle">Takes about 5 minutes &middot; You can edit everything later</p>
     </div>
   </div>
 </div>
 
-<div class="card max-w-3xl">
-  <div class="card-body">
-    <form method="POST" class="space-y-4">
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="form-label">Name <span class="text-red-500">*</span></label>
-          <input class="input" type="text" name="name" value="{{ form.get('name','') }}" required placeholder="Acme Dental Clinic">
-        </div>
-        <div>
-          <label class="form-label">Slug</label>
-          <input class="input" type="text" name="slug" value="{{ form.get('slug','') }}" placeholder="auto-generated if blank">
-          <p class="text-xs text-tertiary mt-1">Used in URLs and API calls</p>
-        </div>
-      </div>
-
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="form-label">Hours</label>
-          <input class="input" type="text" name="hours" value="{{ form.get('hours','') }}" placeholder="Mon-Fri 9:00-18:00">
-        </div>
-        <div>
-          <label class="form-label">Tone</label>
-          <input class="input" type="text" name="tone" value="{{ form.get('tone','') }}" placeholder="friendly and professional">
-        </div>
-      </div>
-
-      <div>
-        <label class="form-label">Address</label>
-        <input class="input" type="text" name="address" value="{{ form.get('address','') }}" placeholder="123 High Street, London">
-      </div>
-
-      <div>
-        <label class="form-label">Services (comma-separated)</label>
-        <textarea class="input" name="services" rows="3" placeholder="Checkups, Fillings, Whitening, Root Canal">{{ form.get('services','') }}</textarea>
-      </div>
-
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="form-label">Escalation Phone</label>
-          <input class="input" type="text" name="escalation_phone" value="{{ form.get('escalation_phone','') }}" placeholder="+44 20 1234 5678">
-        </div>
-        <div>
-          <label class="form-label">Escalation Email</label>
-          <input class="input" type="email" name="escalation_email" value="{{ form.get('escalation_email','') }}" placeholder="manager@example.com">
-        </div>
-      </div>
-
-      <div class="max-w-xs">
-        <label class="form-label">Data Retention (days)</label>
-        <input class="input" type="number" min="1" name="data_retention_days" value="{{ form.get('data_retention_days','365') }}">
-      </div>
-
-      <div class="flex items-center gap-3 pt-2">
-        <button class="btn btn-primary" type="submit">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-          Create Business
-        </button>
-        <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>
-      </div>
-    </form>
+<!-- Progress Bar -->
+<div class="ob-progress-wrap">
+  <div class="ob-progress-steps">
+    <div class="ob-step active" data-step="1">
+      <div class="ob-step-circle">1</div>
+      <span class="ob-step-label">Basics</span>
+    </div>
+    <div class="ob-step-line"></div>
+    <div class="ob-step" data-step="2">
+      <div class="ob-step-circle">2</div>
+      <span class="ob-step-label">Services</span>
+    </div>
+    <div class="ob-step-line"></div>
+    <div class="ob-step" data-step="3">
+      <div class="ob-step-circle">3</div>
+      <span class="ob-step-label">AI Setup</span>
+    </div>
+    <div class="ob-step-line"></div>
+    <div class="ob-step" data-step="4">
+      <div class="ob-step-circle">4</div>
+      <span class="ob-step-label">Review</span>
+    </div>
   </div>
 </div>
 
+<form method="POST" id="onboardForm" class="max-w-3xl">
+  <!-- ===== STEP 1: Business Basics ===== -->
+  <div class="ob-panel active" id="step-1">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Business Basics</h3>
+      </div>
+      <div class="card-body space-y-5">
+
+        <!-- Industry Template Picker -->
+        <div>
+          <label class="form-label">Industry (optional — pre-fills defaults)</label>
+          <div class="ob-industry-grid">
+            <button type="button" class="ob-industry-btn" data-industry="salon">
+              <span class="ob-industry-icon">💇</span>
+              <span>Salon / Spa</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="medical">
+              <span class="ob-industry-icon">🏥</span>
+              <span>Medical / Dental</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="auto">
+              <span class="ob-industry-icon">🚗</span>
+              <span>Auto / Repair</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="fitness">
+              <span class="ob-industry-icon">🏋️</span>
+              <span>Fitness / Gym</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="restaurant">
+              <span class="ob-industry-icon">🍽️</span>
+              <span>Restaurant</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="legal">
+              <span class="ob-industry-icon">⚖️</span>
+              <span>Legal / Finance</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="cleaning">
+              <span class="ob-industry-icon">🧹</span>
+              <span>Cleaning</span>
+            </button>
+            <button type="button" class="ob-industry-btn" data-industry="other">
+              <span class="ob-industry-icon">🏢</span>
+              <span>Other</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="form-label">Business Name <span class="text-red-500">*</span></label>
+            <input class="input" type="text" name="name" id="biz-name" value="{{ form.get('name','') }}" required placeholder="e.g. StyleCuts Hair Studio" autocomplete="organization">
+          </div>
+          <div>
+            <label class="form-label">Slug <span class="ob-auto-badge">auto</span></label>
+            <input class="input" type="text" name="slug" id="biz-slug" value="{{ form.get('slug','') }}" placeholder="stylecutshair">
+            <p class="text-xs text-tertiary mt-1">Used in URLs. Auto-generated from name.</p>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Address</label>
+          <input class="input" type="text" name="address" value="{{ form.get('address','') }}" placeholder="123 High Street, London EC1A 1BB">
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="form-label">Escalation Phone</label>
+            <input class="input" type="tel" name="escalation_phone" value="{{ form.get('escalation_phone','') }}" placeholder="+44 7700 900000">
+            <p class="text-xs text-tertiary mt-1">Staff are called when AI can't help</p>
+          </div>
+          <div>
+            <label class="form-label">Escalation Email</label>
+            <input class="input" type="email" name="escalation_email" value="{{ form.get('escalation_email','') }}" placeholder="manager@example.com">
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Business Hours</label>
+          <input class="input" type="text" name="hours" id="biz-hours" value="{{ form.get('hours','') }}" placeholder="Mon-Fri 9:00-18:00, Sat 10:00-16:00">
+          <p class="text-xs text-tertiary mt-1">The AI uses this to answer "are you open?" questions</p>
+        </div>
+
+      </div>
+    </div>
+    <div class="ob-nav">
+      <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>
+      <button type="button" class="btn btn-primary" onclick="goToStep(2)">
+        Next: Services
+        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 2: Services ===== -->
+  <div class="ob-panel" id="step-2">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Services You Offer</h3>
+      </div>
+      <div class="card-body space-y-4">
+        <p class="text-sm text-secondary">Add the services your business provides. The AI will use these to answer questions and book appointments.</p>
+
+        <!-- Services quick-add textarea (simple) -->
+        <div>
+          <label class="form-label">Services (one per line, or comma-separated)</label>
+          <textarea class="input" name="services" id="biz-services" rows="6" placeholder="Haircut — 45 min — £35&#10;Colour — 90 min — £75&#10;Blowdry — 30 min — £25">{{ form.get('services','') }}</textarea>
+          <p class="text-xs text-tertiary mt-1">Include duration and price if you want the AI to share these details</p>
+        </div>
+
+        <!-- Quick-add template buttons -->
+        <div id="service-templates" class="hidden">
+          <div class="text-xs text-tertiary mb-2">Suggested for your industry:</div>
+          <div class="flex flex-wrap gap-2" id="service-chips"></div>
+        </div>
+
+        <div>
+          <label class="form-label">Data Retention (days)</label>
+          <input class="input max-w-xs" type="number" min="30" max="3650" name="data_retention_days" value="{{ form.get('data_retention_days','365') }}">
+          <p class="text-xs text-tertiary mt-1">How long to keep customer conversations. 365 days recommended.</p>
+        </div>
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button type="button" class="btn" onclick="goToStep(1)">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <button type="button" class="btn btn-primary" onclick="goToStep(3)">
+        Next: AI Setup
+        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 3: AI Personality ===== -->
+  <div class="ob-panel" id="step-3">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">AI Receptionist Personality</h3>
+      </div>
+      <div class="card-body space-y-5">
+        <p class="text-sm text-secondary">Customise how your AI receptionist sounds to customers.</p>
+
+        <div>
+          <label class="form-label">Tone / Personality</label>
+          <div class="ob-tone-grid">
+            <label class="ob-tone-opt">
+              <input type="radio" name="tone" value="warm and friendly" {% if form.get('tone','warm and friendly') == 'warm and friendly' %}checked{% endif %}>
+              <div class="ob-tone-card">
+                <div class="ob-tone-emoji">😊</div>
+                <div class="ob-tone-name">Warm & Friendly</div>
+                <div class="ob-tone-desc">Approachable, casual, great for salons &amp; wellness</div>
+              </div>
+            </label>
+            <label class="ob-tone-opt">
+              <input type="radio" name="tone" value="professional and efficient" {% if form.get('tone') == 'professional and efficient' %}checked{% endif %}>
+              <div class="ob-tone-card">
+                <div class="ob-tone-emoji">💼</div>
+                <div class="ob-tone-name">Professional</div>
+                <div class="ob-tone-desc">Formal, precise, great for medical &amp; legal</div>
+              </div>
+            </label>
+            <label class="ob-tone-opt">
+              <input type="radio" name="tone" value="energetic and enthusiastic" {% if form.get('tone') == 'energetic and enthusiastic' %}checked{% endif %}>
+              <div class="ob-tone-card">
+                <div class="ob-tone-emoji">⚡</div>
+                <div class="ob-tone-name">Energetic</div>
+                <div class="ob-tone-desc">Upbeat, motivating, great for fitness &amp; sports</div>
+              </div>
+            </label>
+            <label class="ob-tone-opt">
+              <input type="radio" name="tone" value="calm and reassuring" {% if form.get('tone') == 'calm and reassuring' %}checked{% endif %}>
+              <div class="ob-tone-card">
+                <div class="ob-tone-emoji">🕊️</div>
+                <div class="ob-tone-name">Calm</div>
+                <div class="ob-tone-desc">Composed, reassuring, great for healthcare</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Widget Welcome Message</label>
+          <textarea class="input" name="welcome_message" id="ob-welcome" rows="3" placeholder="Hi! Welcome to StyleCuts. How can I help you today?">{{ form.get('welcome_message', '') }}</textarea>
+          <p class="text-xs text-tertiary mt-1">First message customers see when opening the chat widget</p>
+        </div>
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button type="button" class="btn" onclick="goToStep(2)">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <button type="button" class="btn btn-primary" onclick="goToStep(4)">
+        Review &amp; Create
+        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== STEP 4: Review ===== -->
+  <div class="ob-panel" id="step-4">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Review & Create</h3>
+      </div>
+      <div class="card-body">
+        <div id="ob-review" class="space-y-4"></div>
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button type="button" class="btn" onclick="goToStep(3)">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <button type="submit" class="btn btn-primary" id="ob-submit-btn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+        Create Business
+      </button>
+    </div>
+  </div>
+
+  <!-- hidden field for welcome message (stored in widget_settings separately) -->
+  <input type="hidden" name="welcome_message_hidden" id="ob-welcome-hidden">
+</form>
+
 <style>
-.back-btn {
-  width: 36px;
-  height: 36px;
+.ob-back-btn {
+  width: 36px; height: 36px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   color: var(--text-secondary);
   transition: all 0.15s ease;
 }
-.back-btn:hover {
+.ob-back-btn:hover { background: var(--bg-muted); color: var(--text-primary); }
+
+/* Progress */
+.ob-progress-wrap {
+  margin-bottom: var(--space-6);
+  max-width: 48rem;
+}
+.ob-progress-steps {
+  display: flex; align-items: center; gap: 0;
+}
+.ob-step {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.ob-step-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
+  background: var(--bg-surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-tertiary);
+  transition: all 0.2s ease;
+}
+.ob-step.active .ob-step-circle {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+}
+.ob-step.done .ob-step-circle {
+  border-color: #16a34a;
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+.ob-step-label {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-tertiary);
+  transition: color 0.2s ease;
+}
+.ob-step.active .ob-step-label { color: var(--text-primary); }
+.ob-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border-light);
+  margin-bottom: 18px;
+}
+
+/* Panels */
+.ob-panel { display: none; }
+.ob-panel.active { display: block; }
+
+/* Nav row */
+.ob-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: var(--space-4);
+}
+
+/* Auto badge */
+.ob-auto-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  font-size: 10px; font-weight: 500;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* Industry grid */
+.ob-industry-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 640px) { .ob-industry-grid { grid-template-columns: repeat(2, 1fr); } }
+.ob-industry-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 8px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: 12px; font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.ob-industry-btn:hover, .ob-industry-btn.selected {
+  border-color: var(--text-primary);
   background: var(--bg-muted);
   color: var(--text-primary);
 }
+.ob-industry-icon { font-size: 20px; }
+
+/* Tone grid */
+.ob-tone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (max-width: 480px) { .ob-tone-grid { grid-template-columns: 1fr; } }
+.ob-tone-opt input[type="radio"] { display: none; }
+.ob-tone-card {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ob-tone-opt input[type="radio"]:checked + .ob-tone-card {
+  border-color: var(--text-primary);
+  background: var(--bg-muted);
+}
+.ob-tone-emoji { font-size: 22px; margin-bottom: 6px; }
+.ob-tone-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ob-tone-desc { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* Review */
+.ob-review-row {
+  display: flex; gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.ob-review-row:last-child { border-bottom: none; }
+.ob-review-label { min-width: 140px; font-size: 12px; color: var(--text-tertiary); padding-top: 2px; }
+.ob-review-value { font-size: 14px; color: var(--text-primary); }
+.ob-review-empty { color: var(--text-tertiary); font-style: italic; }
 </style>
+
+<script>
+const INDUSTRY_TEMPLATES = {
+  salon: {
+    hours: 'Mon-Sat 9:00-19:00, Sun 10:00-17:00',
+    services: 'Haircut — 45 min — £35\nColour & Highlights — 90 min — £75\nBlowdry & Style — 30 min — £25\nManicure — 45 min — £30\nPedicure — 60 min — £40\nEyebrow Tint — 20 min — £15',
+    tone: 'warm and friendly',
+    welcome: 'Hi there! Welcome to {name}. I can help you book an appointment, check availability, or answer any questions. How can I help? ✨'
+  },
+  medical: {
+    hours: 'Mon-Fri 8:00-18:00, Sat 9:00-13:00',
+    services: 'New Patient Consultation — 60 min\nFollow-up Appointment — 30 min\nCheckup & Examination — 45 min\nEmergency Appointment — same-day',
+    tone: 'calm and reassuring',
+    welcome: 'Hello! Welcome to {name}. I\'m here to help you schedule an appointment or answer your questions. How can I assist you today?'
+  },
+  auto: {
+    hours: 'Mon-Fri 7:30-18:00, Sat 8:00-14:00',
+    services: 'Full Service & MOT — from £120\nOil & Filter Change — from £45\nTyre Fitting — from £20 per tyre\nBrake Inspection — free\nDiagnostic Check — from £35',
+    tone: 'professional and efficient',
+    welcome: 'Hi! Thanks for contacting {name}. I can help you book a service, get a quote, or check on your vehicle. How can I help?'
+  },
+  fitness: {
+    hours: 'Mon-Fri 6:00-22:00, Sat-Sun 7:00-20:00',
+    services: '1-on-1 Personal Training — 60 min — £55\nGroup Class — 45 min — £15\nNutrition Consultation — 60 min — £40\nFitness Assessment — 45 min — £30\nOnline Coaching — monthly — £80',
+    tone: 'energetic and enthusiastic',
+    welcome: 'Hey! Welcome to {name}! Ready to crush your goals? I can help you book a session, find a class, or get info about our programmes. Let\'s go! 💪'
+  },
+  restaurant: {
+    hours: 'Mon-Sun 12:00-22:00',
+    services: 'Table Reservation — lunch\nTable Reservation — dinner\nPrivate Dining — events\nTakeaway Order',
+    tone: 'warm and friendly',
+    welcome: 'Welcome to {name}! I can help you make a reservation, check availability, or answer questions about our menu. How can I help?'
+  },
+  legal: {
+    hours: 'Mon-Fri 9:00-17:30',
+    services: 'Initial Consultation — 30 min — free\nContract Review\nLegal Advice\nDocument Preparation',
+    tone: 'professional and efficient',
+    welcome: 'Good day. Thank you for contacting {name}. I can assist you with scheduling a consultation or directing your enquiry to the appropriate team.'
+  },
+  cleaning: {
+    hours: 'Mon-Sat 7:00-19:00',
+    services: 'Regular Cleaning — 2-3 hrs — from £60\nDeep Clean — 4-6 hrs — from £120\nEnd of Tenancy — from £150\nOne-off Clean — from £80\nOffice Cleaning — quote required',
+    tone: 'warm and friendly',
+    welcome: 'Hi! Welcome to {name}. I can help you get a quote, book a clean, or answer any questions. How can I help?'
+  },
+  other: {
+    hours: 'Mon-Fri 9:00-17:00',
+    services: '',
+    tone: 'warm and friendly',
+    welcome: 'Hi! Welcome to {name}. How can I help you today?'
+  }
+};
+
+let currentStep = 1;
+let selectedIndustry = null;
+
+function goToStep(n) {
+  if (n === 4) buildReview();
+
+  // Validate step 1 required fields
+  if (currentStep === 1 && n > 1) {
+    const name = document.getElementById('biz-name').value.trim();
+    if (!name) {
+      document.getElementById('biz-name').focus();
+      document.getElementById('biz-name').reportValidity();
+      return;
+    }
+  }
+
+  document.querySelectorAll('.ob-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+
+  document.querySelectorAll('.ob-step').forEach((s, i) => {
+    s.classList.remove('active', 'done');
+    if (i + 1 < n) s.classList.add('done');
+    if (i + 1 === n) s.classList.add('active');
+  });
+
+  currentStep = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function slugify(s) {
+  return s.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim().replace(/\s+/g, '-')
+    .replace(/-+/g, '-').substring(0, 50);
+}
+
+// Auto-slug from name
+const nameEl = document.getElementById('biz-name');
+const slugEl = document.getElementById('biz-slug');
+nameEl.addEventListener('input', () => {
+  if (!slugEl._userEdited) {
+    slugEl.value = slugify(nameEl.value);
+  }
+});
+slugEl.addEventListener('input', () => { slugEl._userEdited = true; });
+
+// Industry buttons
+document.querySelectorAll('.ob-industry-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ob-industry-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const ind = btn.dataset.industry;
+    selectedIndustry = ind;
+    const tmpl = INDUSTRY_TEMPLATES[ind];
+    if (!tmpl) return;
+
+    // Pre-fill hours
+    const hoursEl = document.getElementById('biz-hours');
+    if (!hoursEl.value) hoursEl.value = tmpl.hours;
+
+    // Pre-fill services
+    const svcEl = document.getElementById('biz-services');
+    if (!svcEl.value) svcEl.value = tmpl.services;
+
+    // Pre-fill tone
+    const toneRadios = document.querySelectorAll('input[name="tone"]');
+    toneRadios.forEach(r => { r.checked = (r.value === tmpl.tone); });
+
+    // Show service suggestion chips
+    showServiceChips(ind);
+  });
+});
+
+function showServiceChips(ind) {
+  const wrap = document.getElementById('service-templates');
+  const chips = document.getElementById('service-chips');
+  wrap.classList.remove('hidden');
+  chips.innerHTML = '';
+  const services = (INDUSTRY_TEMPLATES[ind]?.services || '').split('\n').filter(s => s.trim());
+  services.forEach(svc => {
+    const name = svc.split('—')[0].trim();
+    if (!name) return;
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'btn btn-sm';
+    c.textContent = '+ ' + name;
+    c.style.fontSize = '11px';
+    c.onclick = () => {
+      const el = document.getElementById('biz-services');
+      const lines = el.value ? el.value.split('\n') : [];
+      if (!lines.some(l => l.includes(name))) {
+        el.value = (el.value ? el.value + '\n' : '') + svc;
+      }
+    };
+    chips.appendChild(c);
+  });
+}
+
+function buildReview() {
+  const fields = [
+    { label: 'Business Name', value: document.getElementById('biz-name').value },
+    { label: 'Slug', value: document.getElementById('biz-slug').value },
+    { label: 'Address', value: document.querySelector('[name="address"]').value },
+    { label: 'Hours', value: document.getElementById('biz-hours').value },
+    { label: 'Escalation Phone', value: document.querySelector('[name="escalation_phone"]').value },
+    { label: 'Escalation Email', value: document.querySelector('[name="escalation_email"]').value },
+    { label: 'Services', value: document.getElementById('biz-services').value },
+    { label: 'Tone', value: (() => {
+      const r = document.querySelector('input[name="tone"]:checked');
+      return r ? r.value : '';
+    })() },
+    { label: 'Welcome Message', value: document.getElementById('ob-welcome').value },
+  ];
+
+  const rev = document.getElementById('ob-review');
+  rev.innerHTML = fields.map(f => `
+    <div class="ob-review-row">
+      <div class="ob-review-label">${f.label}</div>
+      <div class="ob-review-value">${f.value
+        ? f.value.replace(/\n/g, '<br>')
+        : '<span class="ob-review-empty">Not set</span>'
+      }</div>
+    </div>
+  `).join('');
+}
+
+// Pre-fill welcome message from template on name change
+nameEl.addEventListener('blur', () => {
+  const welcome = document.getElementById('ob-welcome');
+  if (!welcome.value && selectedIndustry) {
+    const tmpl = INDUSTRY_TEMPLATES[selectedIndustry];
+    if (tmpl) welcome.value = tmpl.welcome.replace('{name}', nameEl.value || 'us');
+  }
+});
+
+// Submit: sync welcome_message to hidden field for backend to handle separately
+document.getElementById('onboardForm').addEventListener('submit', () => {
+  document.getElementById('ob-welcome-hidden').value = document.getElementById('ob-welcome').value;
+  document.getElementById('ob-submit-btn').disabled = true;
+  document.getElementById('ob-submit-btn').textContent = 'Creating…';
+});
+</script>
 {% endblock %}

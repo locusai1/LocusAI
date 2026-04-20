@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 WS_HOST = os.getenv("VOICE_WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("VOICE_WS_PORT", "8080"))
-DEFAULT_BUSINESS_ID = int(os.getenv("DEFAULT_BUSINESS_ID", "9"))  # StyleCuts Hair Studio
+DEFAULT_BUSINESS_ID = int(os.getenv("DEFAULT_BUSINESS_ID", "1"))  # Style Cuts
 
 
 class RetellLLMWebSocket:

@@ -396,7 +396,7 @@
               <input type="checkbox" name="remember" value="1">
               <span>Remember me</span>
             </label>
-            <a href="#" class="forgot-link">Forgot password?</a>
+            <a href="{{ url_for('auth.forgot_password') }}" class="forgot-link">Forgot password?</a>
           </div>
 
           <button type="submit" class="submit-btn">Sign in</button>
@@ -405,7 +405,7 @@
     </div>
 
     <p class="login-footer">
-      Need an account? <a href="#">Contact your administrator</a>
+      No account yet? <a href="{{ url_for('auth.signup') }}">Start your free trial</a>
     </p>
   </div>
 

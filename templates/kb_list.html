@@ -9,10 +9,16 @@
       <p class="page-subtitle">Train your AI with FAQs and business information</p>
     </div>
     {% if business_id %}
-    <a href="{{ url_for('kb.kb_new', business_id=business_id) }}" class="btn btn-primary">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-      New Entry
-    </a>
+    <div class="flex items-center gap-2">
+      <button class="btn" onclick="document.getElementById('importModal').classList.remove('hidden')">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Import CSV
+      </button>
+      <a href="{{ url_for('kb.kb_new', business_id=business_id) }}" class="btn btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        New Entry
+      </a>
+    </div>
     {% endif %}
   </div>
 </div>
@@ -152,6 +158,38 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- CSV Import Modal -->
+{% if business_id %}
+<div id="importModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
+  <div class="card" style="width: 600px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+    <div class="card-header">
+      <h3 class="card-title">Import Knowledge Base (CSV)</h3>
+      <button onclick="document.getElementById('importModal').classList.add('hidden')" class="btn btn-sm">✕</button>
+    </div>
+    <div class="card-body space-y-4">
+      <div class="p-3 rounded-lg text-sm" style="background: var(--bg-muted); color: var(--text-secondary);">
+        <strong>Format:</strong> Paste CSV with columns: <code>question, answer, tags</code> (tags optional). First row is the header.
+        <br>Example:
+        <pre style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">question,answer,tags
+What are your hours?,We are open Mon-Fri 9-6,hours
+How do I book?,Call us or use our chat,booking</pre>
+      </div>
+      <form method="POST" action="{{ url_for('kb.kb_import', business_id=business_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div>
+          <label class="form-label">Paste CSV data</label>
+          <textarea class="input font-mono text-sm" name="csv_data" rows="12" placeholder="question,answer,tags&#10;What are your hours?,We're open Mon-Fri 9am to 6pm,hours&#10;Do you offer refunds?,Yes within 30 days,policy,returns" required></textarea>
+        </div>
+        <div class="flex gap-3 mt-4">
+          <button type="submit" class="btn btn-primary">Import Entries</button>
+          <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')" class="btn">Cancel</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 {% endif %}

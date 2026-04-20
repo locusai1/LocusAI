@@ -513,6 +513,119 @@ def _get_customer_insights(business_id: int, start_date: str, end_date: str) -> 
         }
 
 
+def _get_revenue_metrics(business_id: int, start_date: str, end_date: str) -> Dict[str, Any]:
+    """Calculate actual and projected revenue from appointments."""
+    with get_conn() as con:
+        # Revenue from completed/confirmed appointments with known prices
+        revenue = con.execute("""
+            SELECT
+                COALESCE(SUM(CASE WHEN a.status IN ('confirmed','completed') THEN COALESCE(s.price, 0) ELSE 0 END), 0) as earned,
+                COALESCE(SUM(COALESCE(s.price, 0)), 0) as potential,
+                COUNT(CASE WHEN a.status IN ('confirmed','completed') THEN 1 END) as paid_appts,
+                COUNT(*) as total_appts
+            FROM appointments a
+            LEFT JOIN services s ON a.service = s.name AND s.business_id = a.business_id
+            WHERE a.business_id = ?
+              AND date(a.created_at) BETWEEN ? AND ?
+        """, (business_id, start_date, end_date)).fetchone()
+
+        # Daily revenue trend
+        daily_rev = con.execute("""
+            SELECT strftime('%Y-%m-%d', a.created_at) as day,
+                   COALESCE(SUM(CASE WHEN a.status IN ('confirmed','completed') THEN COALESCE(s.price, 0) ELSE 0 END), 0) as revenue
+            FROM appointments a
+            LEFT JOIN services s ON a.service = s.name AND s.business_id = a.business_id
+            WHERE a.business_id = ?
+              AND date(a.created_at) BETWEEN ? AND ?
+            GROUP BY day ORDER BY day
+        """, (business_id, start_date, end_date)).fetchall()
+
+    # Calculate projection: annualize the earned revenue over the period
+    from datetime import datetime as _dt
+    start = _dt.fromisoformat(start_date).date()
+    end = _dt.fromisoformat(end_date).date()
+    period_days = (end - start).days + 1
+    earned = revenue["earned"] or 0
+    daily_avg = earned / period_days if period_days > 0 else 0
+    monthly_projection = round(daily_avg * 30, 2)
+    annual_projection = round(daily_avg * 365, 2)
+
+    return {
+        "earned": round(earned, 2),
+        "potential": round(revenue["potential"] or 0, 2),
+        "paid_appointments": revenue["paid_appts"] or 0,
+        "avg_per_appointment": round(earned / max(revenue["paid_appts"] or 1, 1), 2),
+        "monthly_projection": monthly_projection,
+        "annual_projection": annual_projection,
+        "daily_trend": {
+            "labels": [r["day"] for r in daily_rev],
+            "amounts": [r["revenue"] for r in daily_rev],
+        }
+    }
+
+
+def _get_voice_analytics(business_id: int, start_date: str, end_date: str) -> Dict[str, Any]:
+    """Get voice call analytics."""
+    with get_conn() as con:
+        # Check table exists
+        tbl = con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='voice_calls'"
+        ).fetchone()
+        if not tbl:
+            return {"available": False}
+
+        # "missed" = call never answered (duration NULL or 0, or status error/registered)
+        summary = con.execute("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN (duration_seconds IS NULL OR duration_seconds = 0
+                                 OR call_status IN ('error','registered')) THEN 1 END) as missed,
+                COUNT(CASE WHEN duration_seconds > 0 AND call_status NOT IN ('error','registered') THEN 1 END) as answered,
+                ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END), 0) as avg_duration,
+                ROUND(SUM(COALESCE(duration_seconds, 0)) / 60.0, 1) as total_minutes
+            FROM voice_calls
+            WHERE business_id = ?
+              AND date(started_at) BETWEEN ? AND ?
+        """, (business_id, start_date, end_date)).fetchone()
+
+        # Call intents breakdown
+        intents = con.execute("""
+            SELECT call_intent, COUNT(*) as count
+            FROM voice_calls
+            WHERE business_id = ? AND date(started_at) BETWEEN ? AND ?
+              AND call_intent IS NOT NULL AND call_intent != ''
+            GROUP BY call_intent ORDER BY count DESC LIMIT 6
+        """, (business_id, start_date, end_date)).fetchall()
+
+        # Daily call volume
+        daily = con.execute("""
+            SELECT strftime('%Y-%m-%d', started_at) as day, COUNT(*) as count
+            FROM voice_calls
+            WHERE business_id = ? AND date(started_at) BETWEEN ? AND ?
+            GROUP BY day ORDER BY day
+        """, (business_id, start_date, end_date)).fetchall()
+
+        total = summary["total"] or 0
+        answered = summary["answered"] or 0
+        return {
+            "available": True,
+            "total": total,
+            "missed": summary["missed"] or 0,
+            "answered": answered,
+            "answer_rate": round(answered / max(total, 1) * 100, 1),
+            "avg_duration": int(summary["avg_duration"] or 0),
+            "total_minutes": summary["total_minutes"] or 0,
+            "intents": {
+                "labels": [r["call_intent"].replace("_", " ").title() for r in intents],
+                "counts": [r["count"] for r in intents],
+            },
+            "daily": {
+                "labels": [r["day"] for r in daily],
+                "counts": [r["count"] for r in daily],
+            }
+        }
+
+
 def _calculate_change(current: int, previous: int) -> Dict[str, Any]:
     """Calculate percentage change between two values."""
     if previous == 0:
@@ -583,6 +696,8 @@ def analytics_index():
     funnel = _get_conversion_funnel(business_id, start_date, end_date)
     response_metrics = _get_response_metrics(business_id, start_date, end_date)
     customer_insights = _get_customer_insights(business_id, start_date, end_date)
+    revenue = _get_revenue_metrics(business_id, start_date, end_date)
+    voice_analytics = _get_voice_analytics(business_id, start_date, end_date)
 
     return render_template(
         "analytics.html",
@@ -597,6 +712,8 @@ def analytics_index():
         funnel=funnel,
         response_metrics=response_metrics,
         customer_insights=customer_insights,
+        revenue=revenue,
+        voice_analytics=voice_analytics,
         range_key=range_key,
         range_label=range_label,
         start_date=start_date,

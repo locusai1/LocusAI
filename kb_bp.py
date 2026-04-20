@@ -1,5 +1,7 @@
 # kb_bp.py — Knowledge Base management (RBAC-ready)
 import re
+import csv
+import io
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from core.db import get_conn, list_businesses
 from core.authz import user_can_access_business
@@ -126,6 +128,51 @@ def kb_edit(entry_id:int):
         return redirect(url_for("kb.kb_index", business_id=business_id))
     businesses = list_businesses(limit=500)
     return render_template("kb_edit.html", mode="edit", businesses=businesses, entry=entry, business_id=entry["business_id"])
+
+@bp.route("/kb/import/<int:business_id>", methods=["POST"])
+def kb_import(business_id: int):
+    """Bulk import KB entries from pasted CSV data."""
+    if not _logged_in():
+        return redirect(url_for("auth.login"))
+    if not _can_access(business_id):
+        flash("Access denied.", "err")
+        return redirect(url_for("kb.kb_index"))
+
+    csv_data = (request.form.get("csv_data") or "").strip()
+    if not csv_data:
+        flash("No CSV data provided.", "err")
+        return redirect(url_for("kb.kb_index", business_id=business_id))
+
+    try:
+        reader = csv.DictReader(io.StringIO(csv_data))
+        # Normalize field names to lowercase stripped
+        imported = 0
+        errors = 0
+        with get_conn() as con:
+            for row in reader:
+                row = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
+                question = row.get("question", "")
+                answer = row.get("answer", "")
+                tags = row.get("tags", "")
+                if not question or not answer:
+                    errors += 1
+                    continue
+                con.execute("""
+                    INSERT INTO kb_entries (business_id, question, answer, tags, active, updated_at)
+                    VALUES (?, ?, ?, ?, 1, datetime('now', 'localtime'))
+                """, (business_id, question, answer, tags))
+                imported += 1
+
+        if imported:
+            flash(f"Imported {imported} KB entr{'y' if imported == 1 else 'ies'}" +
+                  (f" ({errors} skipped due to missing fields)" if errors else "") + ".", "ok")
+        else:
+            flash("No entries imported. Check your CSV format — columns must be: question, answer, tags.", "err")
+    except Exception as e:
+        flash(f"Import failed: {e}", "err")
+
+    return redirect(url_for("kb.kb_index", business_id=business_id))
+
 
 @bp.route("/kb/<int:entry_id>/delete", methods=["POST"])
 def kb_delete(entry_id:int):

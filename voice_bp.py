@@ -23,6 +23,8 @@ from core.voice import (
     confirm_voice_booking,
     cancel_voice_booking,
     get_voice_pending_booking,
+    get_caller_info,
+    _get_business_by_phone,
     RetellClientError,
 )
 
@@ -53,6 +55,53 @@ def _verify_retell_request() -> bool:
         return False
 
     return True
+
+
+# ============================================================================
+# Inbound Dynamic Variables — Caller Recognition (fires before call is answered)
+# ============================================================================
+
+@bp.route("/call-setup", methods=["POST"])
+def call_setup():
+    """Called by Retell before an inbound call is answered.
+
+    We return dynamic variables that get injected into the agent's prompt,
+    enabling personalised greetings like "Hi Sarah, calling about your haircut?"
+
+    Retell injects variables with {{var_name}} syntax in the LLM prompt.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({}), 200
+
+    from_number = data.get("from_number") or data.get("caller_number", "")
+    to_number = data.get("to_number") or data.get("called_number", "")
+
+    # Look up the business by the called number
+    business_id = _get_business_by_phone(to_number)
+    if not business_id:
+        business_id = 1  # fallback to Style Cuts
+
+    # Build dynamic variables
+    dynamic_vars = {}
+
+    if from_number and business_id:
+        customer = get_caller_info(business_id, from_number)
+        if customer:
+            dynamic_vars["caller_name"] = customer.get("name", "")
+            dynamic_vars["caller_known"] = "true"
+            dynamic_vars["caller_visit_count"] = str(customer.get("visit_count", 0))
+            if customer.get("last_service"):
+                dynamic_vars["caller_last_service"] = customer["last_service"]
+            if customer.get("last_visit"):
+                dynamic_vars["caller_last_visit"] = customer["last_visit"]
+            logger.info(f"Caller recognised: {customer.get('name')} ({from_number})")
+        else:
+            dynamic_vars["caller_known"] = "false"
+            dynamic_vars["caller_name"] = ""
+
+    return jsonify({"dynamic_variables": dynamic_vars})
 
 
 # ============================================================================
@@ -493,6 +542,60 @@ def voice_status():
         result["has_phone"] = bool(settings.get("retell_phone_number"))
 
     return jsonify(result)
+
+
+# ============================================================================
+# Prompt Sync — push live KB/services/hours to Retell native LLM
+# ============================================================================
+
+@bp.route("/sync-calls", methods=["POST"])
+def sync_calls():
+    """Pull recent calls from Retell API and store them in the local DB.
+
+    Quick fix for when webhooks can't reach the local server.
+    Safe to call repeatedly — skips calls already stored.
+    """
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"error": "No business selected"}), 400
+
+    from core.voice import sync_calls_from_retell
+    success, message = sync_calls_from_retell(business_id)
+
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"success": False, "error": message}), 500
+
+
+@bp.route("/sync-prompt", methods=["POST"])
+def sync_prompt():
+    """Sync the business KB, services, and hours to the Retell voice agent prompt.
+
+    This keeps the native Retell LLM (no added latency) while giving it
+    up-to-date knowledge of services, hours, and FAQs from the database.
+    """
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"error": "No business selected"}), 400
+
+    from core.voice import sync_retell_prompt
+    # Pass the current server URL so caller-recognition webhook can be auto-configured
+    webhook_base_url = request.url_root.rstrip("/")
+    success, message = sync_retell_prompt(business_id, webhook_base_url=webhook_base_url)
+
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"success": False, "error": message}), 500
 
 
 # ============================================================================

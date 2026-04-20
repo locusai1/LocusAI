@@ -1,0 +1,800 @@
+{% extends "public_base.html" %}
+
+{% block title %}LocusAI — AI Receptionist for Small Business{% endblock %}
+{% block meta_description %}LocusAI answers every call, books appointments, and handles enquiries 24/7. Set up in under 10 minutes. No per-minute pricing.{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Hero ── */
+  .hero {
+    background: white;
+    padding: 96px 48px 80px;
+    text-align: center;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: #f5f5f5;
+    border: 1px solid #e5e5e5;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #525252;
+    letter-spacing: 0.01em;
+    margin-bottom: 28px;
+  }
+
+  .hero-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+  }
+
+  .hero-headline {
+    font-size: 56px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.08;
+    color: #171717;
+    max-width: 780px;
+    margin: 0 auto 22px;
+  }
+
+  .hero-sub {
+    font-size: 19px;
+    color: #525252;
+    max-width: 520px;
+    margin: 0 auto 36px;
+    line-height: 1.65;
+    font-weight: 400;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .hero-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 28px;
+    background: #171717;
+    color: white;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 150ms, transform 100ms;
+    letter-spacing: -0.01em;
+  }
+
+  .hero-cta:hover { background: #2a2a2a; color: white; transform: translateY(-1px); }
+  .hero-cta:active { transform: translateY(0); }
+
+  .hero-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 24px;
+    background: transparent;
+    color: #525252;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 150ms;
+  }
+
+  .hero-secondary:hover { background: #f5f5f5; color: #171717; border-color: #d4d4d4; }
+
+  .hero-trust {
+    margin-top: 20px;
+    font-size: 13px;
+    color: #a3a3a3;
+    font-weight: 400;
+  }
+
+  /* ── Trust bar ── */
+  .trust-bar {
+    background: #fafafa;
+    border-bottom: 1px solid #ebebeb;
+    padding: 20px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    flex-wrap: wrap;
+  }
+
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    color: #525252;
+    font-weight: 500;
+  }
+
+  .trust-item svg { color: #171717; flex-shrink: 0; }
+
+  /* ── Section shared ── */
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #a3a3a3;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #171717;
+    margin-bottom: 14px;
+    line-height: 1.15;
+  }
+
+  .section-sub {
+    font-size: 17px;
+    color: #525252;
+    max-width: 520px;
+    line-height: 1.65;
+  }
+
+  /* ── Features ── */
+  .features-section {
+    background: #f7f7f8;
+    padding: 96px 48px;
+    border-bottom: 1px solid #ebebeb;
+  }
+
+  .features-header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  .features-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .feature-card {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    padding: 28px;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+
+  .feature-card:hover {
+    border-color: #d4d4d4;
+    box-shadow: 0 4px 20px rgba(0,0,0,.06);
+  }
+
+  .feature-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .feature-icon svg { width: 20px; height: 20px; color: #171717; }
+
+  .feature-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #171717;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .feature-desc {
+    font-size: 14px;
+    color: #737373;
+    line-height: 1.65;
+  }
+
+  /* ── How it works ── */
+  .hiw-section {
+    background: white;
+    padding: 96px 48px;
+    border-bottom: 1px solid #ebebeb;
+  }
+
+  .hiw-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .hiw-header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  .hiw-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    position: relative;
+  }
+
+  .hiw-steps::before {
+    content: '';
+    position: absolute;
+    top: 24px;
+    left: calc(16.67% + 24px);
+    right: calc(16.67% + 24px);
+    height: 1px;
+    background: #e5e5e5;
+  }
+
+  .hiw-step {
+    padding: 0 32px;
+    text-align: center;
+  }
+
+  .hiw-step-num {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #171717;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 auto 20px;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  .hiw-step-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #171717;
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .hiw-step-desc {
+    font-size: 14px;
+    color: #737373;
+    line-height: 1.65;
+  }
+
+  /* ── Pricing ── */
+  .pricing-section {
+    background: #f7f7f8;
+    padding: 96px 48px;
+    border-bottom: 1px solid #ebebeb;
+  }
+
+  .pricing-header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .pricing-grid {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .pricing-card {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 16px;
+    padding: 32px;
+    position: relative;
+  }
+
+  .pricing-card.featured {
+    border: 2px solid #171717;
+    box-shadow: 0 8px 32px rgba(0,0,0,.1);
+  }
+
+  .pricing-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #171717;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+
+  .pricing-tier {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #737373;
+    margin-bottom: 8px;
+  }
+
+  .pricing-price {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .pricing-amount {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #171717;
+  }
+
+  .pricing-period {
+    font-size: 14px;
+    color: #737373;
+    font-weight: 400;
+  }
+
+  .pricing-desc {
+    font-size: 14px;
+    color: #737373;
+    margin-bottom: 24px;
+    line-height: 1.5;
+    min-height: 40px;
+  }
+
+  .pricing-cta {
+    display: block;
+    width: 100%;
+    padding: 11px 20px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    transition: all 150ms;
+    margin-bottom: 24px;
+    border: none;
+    cursor: pointer;
+  }
+
+  .pricing-cta-outline {
+    border: 1px solid #e5e5e5;
+    background: transparent;
+    color: #171717;
+  }
+
+  .pricing-cta-outline:hover { background: #f5f5f5; border-color: #d4d4d4; }
+
+  .pricing-cta-solid {
+    background: #171717;
+    color: white;
+  }
+
+  .pricing-cta-solid:hover { background: #2a2a2a; color: white; }
+
+  .pricing-divider {
+    height: 1px;
+    background: #f0f0f0;
+    margin-bottom: 24px;
+  }
+
+  .pricing-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pricing-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: #525252;
+  }
+
+  .pricing-features li svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #22c55e;
+  }
+
+  .pricing-note {
+    text-align: center;
+    margin-top: 32px;
+    font-size: 14px;
+    color: #a3a3a3;
+  }
+
+  /* ── Final CTA ── */
+  .final-cta {
+    background: #171717;
+    padding: 96px 48px;
+    text-align: center;
+  }
+
+  .final-cta-title {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: white;
+    margin-bottom: 16px;
+    line-height: 1.1;
+  }
+
+  .final-cta-sub {
+    font-size: 17px;
+    color: #737373;
+    margin-bottom: 36px;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .final-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 32px;
+    background: white;
+    color: #171717;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 150ms;
+    letter-spacing: -0.01em;
+  }
+
+  .final-cta-btn:hover { background: #f5f5f5; color: #171717; transform: translateY(-1px); }
+
+  .final-cta-trust {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #525252;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .hero-headline { font-size: 40px; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .hiw-steps { grid-template-columns: 1fr; gap: 40px; }
+    .hiw-steps::before { display: none; }
+    .hiw-step { padding: 0; }
+    .pricing-grid { grid-template-columns: 1fr; max-width: 420px; }
+    .section-title { font-size: 28px; }
+    .final-cta-title { font-size: 30px; }
+  }
+
+  @media (max-width: 640px) {
+    .hero { padding: 64px 20px 56px; }
+    .hero-headline { font-size: 32px; }
+    .hero-sub { font-size: 16px; }
+    .trust-bar { padding: 16px 20px; gap: 20px; flex-direction: column; align-items: flex-start; }
+    .features-section, .hiw-section, .pricing-section, .final-cta { padding: 64px 20px; }
+    .features-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="hero-badge-dot"></span>
+    AI-powered · UK-based · No per-minute pricing
+  </div>
+  <h1 class="hero-headline">The AI receptionist that never takes a day off</h1>
+  <p class="hero-sub">LocusAI answers every call, books appointments, and handles enquiries 24/7 — so you can focus on running your business.</p>
+  <div class="hero-actions">
+    <a href="{{ url_for('auth.signup') }}" class="hero-cta">
+      Start free trial
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+      </svg>
+    </a>
+    <a href="#how-it-works" class="hero-secondary">See how it works</a>
+  </div>
+  <p class="hero-trust">14-day free trial · No credit card required · Cancel anytime</p>
+</section>
+
+<!-- Trust bar -->
+<div class="trust-bar">
+  <div class="trust-item">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+    </svg>
+    Answers every call, 24/7
+  </div>
+  <div class="trust-item">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>
+    Books appointments automatically
+  </div>
+  <div class="trust-item">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+    </svg>
+    Web chat + SMS included
+  </div>
+  <div class="trust-item">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Set up in under 10 minutes
+  </div>
+</div>
+
+<!-- Features -->
+<section class="features-section" id="features">
+  <div class="features-header">
+    <p class="section-label">Features</p>
+    <h2 class="section-title">Everything a receptionist does.<br>Without the salary.</h2>
+    <p class="section-sub" style="margin:0 auto;">Voice, SMS, and web chat — all in one AI that knows your business inside out.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">Voice AI receptionist</h3>
+      <p class="feature-desc">A natural-sounding British voice answers every inbound call, handles enquiries, and recognises repeat callers by name.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">Smart appointment booking</h3>
+      <p class="feature-desc">Checks your real-time availability and confirms bookings on the spot — with automatic reminders sent to customers.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">Web chat widget</h3>
+      <p class="feature-desc">Embed a chat widget on your website in seconds. The same AI handles web enquiries alongside calls and SMS.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">SMS responses</h3>
+      <p class="feature-desc">Automatically texts customers after missed calls, sends booking confirmations, and replies to inbound SMS enquiries.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">Analytics &amp; call transcripts</h3>
+      <p class="feature-desc">Full call transcripts, sentiment analysis, revenue projections, and a dashboard that shows exactly what your AI is doing.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+      </div>
+      <h3 class="feature-title">Calendar integrations</h3>
+      <p class="feature-desc">Connects with Google Calendar, Calendly, and more. Works with tools your business already uses — no switching required.</p>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="hiw-section" id="how-it-works">
+  <div class="hiw-inner">
+    <div class="hiw-header">
+      <p class="section-label">How it works</p>
+      <h2 class="section-title">Up and running in 10 minutes</h2>
+      <p class="section-sub" style="margin:0 auto;">No technical knowledge needed. If you can fill in a form, you can set up LocusAI.</p>
+    </div>
+    <div class="hiw-steps">
+      <div class="hiw-step">
+        <div class="hiw-step-num">1</div>
+        <h3 class="hiw-step-title">Sign up and describe your business</h3>
+        <p class="hiw-step-desc">Tell us your services, your hours, and how you'd like calls handled. Our onboarding wizard takes about 5 minutes.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-step-num">2</div>
+        <h3 class="hiw-step-title">We configure your AI receptionist</h3>
+        <p class="hiw-step-desc">Your AI is trained on your business details, connected to your phone number, and ready to answer in your brand's voice.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-step-num">3</div>
+        <h3 class="hiw-step-title">Never miss a call again</h3>
+        <p class="hiw-step-desc">Your AI handles enquiries, books appointments, and escalates to you only when a human is genuinely needed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section" id="pricing">
+  <div class="pricing-header">
+    <p class="section-label">Pricing</p>
+    <h2 class="section-title">Simple, transparent pricing</h2>
+    <p class="section-sub" style="margin:0 auto;">No per-minute charges. No hidden fees. Just a flat monthly rate that grows with your business.</p>
+  </div>
+  <div class="pricing-grid">
+
+    <!-- Starter -->
+    <div class="pricing-card">
+      <p class="pricing-tier">Starter</p>
+      <div class="pricing-price">
+        <span class="pricing-amount">$49</span>
+        <span class="pricing-period">/mo</span>
+      </div>
+      <p class="pricing-desc">Perfect for businesses that want to start with web chat before adding voice.</p>
+      <a href="{{ url_for('auth.signup') }}" class="pricing-cta pricing-cta-outline">Get started</a>
+      <div class="pricing-divider"></div>
+      <ul class="pricing-features">
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Web chat widget
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          100 conversations/month
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Appointment booking
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          1 business location
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Basic analytics
+        </li>
+      </ul>
+    </div>
+
+    <!-- Professional -->
+    <div class="pricing-card featured">
+      <span class="pricing-badge">Most popular</span>
+      <p class="pricing-tier">Professional</p>
+      <div class="pricing-price">
+        <span class="pricing-amount">$149</span>
+        <span class="pricing-period">/mo</span>
+      </div>
+      <p class="pricing-desc">The full AI receptionist — voice, SMS, and web chat all working together.</p>
+      <a href="{{ url_for('auth.signup') }}" class="pricing-cta pricing-cta-solid">Start free trial</a>
+      <div class="pricing-divider"></div>
+      <ul class="pricing-features">
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Voice AI receptionist
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Web chat + SMS
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          500 conversations/month
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          3 users
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Google Calendar sync
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Full analytics dashboard
+        </li>
+      </ul>
+    </div>
+
+    <!-- Business -->
+    <div class="pricing-card">
+      <p class="pricing-tier">Business</p>
+      <div class="pricing-price">
+        <span class="pricing-amount">$299</span>
+        <span class="pricing-period">/mo</span>
+      </div>
+      <p class="pricing-desc">For growing businesses that need unlimited capacity and priority support.</p>
+      <a href="{{ url_for('auth.signup') }}" class="pricing-cta pricing-cta-outline">Get started</a>
+      <div class="pricing-divider"></div>
+      <ul class="pricing-features">
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Everything in Professional
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Unlimited conversations
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          10 users
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Priority support
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Advanced analytics &amp; exports
+        </li>
+        <li>
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Custom AI personality
+        </li>
+      </ul>
+    </div>
+
+  </div>
+  <p class="pricing-note">All plans include a 14-day free trial. No credit card required. Annual billing saves 2 months.</p>
+</section>
+
+<!-- Final CTA -->
+<section class="final-cta">
+  <h2 class="final-cta-title">Ready to never miss a call again?</h2>
+  <p class="final-cta-sub">Join businesses already using LocusAI to answer every call, 24/7.</p>
+  <a href="{{ url_for('auth.signup') }}" class="final-cta-btn">
+    Start your free trial
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+    </svg>
+  </a>
+  <p class="final-cta-trust">14-day free trial · No credit card required</p>
+</section>
+
+{% endblock %}

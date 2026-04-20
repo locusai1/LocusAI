@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}LocusAI — AI Receptionist for Small Business{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{% block meta_description %}LocusAI answers every call, books appointments, and handles enquiries 24/7 — so you can focus on running your business.{% endblock %}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='locus.css') }}">
+  {% block extra_head %}{% endblock %}
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #fafafa;
+      color: #171717;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .pub-header {
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,.07);
+      padding: 0 48px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .pub-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .pub-logo-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #171717;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pub-logo-icon svg { width: 17px; height: 17px; color: white; }
+
+    .pub-logo-text {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #171717;
+    }
+
+    .pub-nav {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+    }
+
+    .pub-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .pub-nav-links a {
+      font-size: 14px;
+      color: #525252;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 150ms;
+    }
+
+    .pub-nav-links a:hover { color: #171717; }
+
+    .pub-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pub-btn-ghost {
+      padding: 8px 16px;
+      background: transparent;
+      color: #525252;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 150ms;
+      white-space: nowrap;
+    }
+
+    .pub-btn-ghost:hover { background: #f5f5f5; color: #171717; border-color: #d4d4d4; }
+
+    .pub-btn-primary {
+      padding: 8px 18px;
+      background: #171717;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 150ms;
+      white-space: nowrap;
+    }
+
+    .pub-btn-primary:hover { background: #2a2a2a; color: white; }
+
+    /* ── Footer ── */
+    .pub-footer {
+      background: #111111;
+      padding: 56px 48px 32px;
+    }
+
+    .pub-footer-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 48px;
+    }
+
+    .pub-footer-brand .pub-logo-text { color: white; }
+    .pub-footer-brand .pub-logo-icon { background: rgba(255,255,255,0.1); }
+
+    .pub-footer-tagline {
+      margin-top: 14px;
+      font-size: 14px;
+      color: #737373;
+      line-height: 1.7;
+      max-width: 260px;
+    }
+
+    .pub-footer-contact {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pub-footer-contact a {
+      font-size: 13px;
+      color: #525252;
+      text-decoration: none;
+      transition: color 150ms;
+    }
+
+    .pub-footer-contact a:hover { color: #a3a3a3; }
+
+    .pub-footer-col h4 {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #525252;
+      margin-bottom: 16px;
+    }
+
+    .pub-footer-col ul { list-style: none; }
+
+    .pub-footer-col li { margin-bottom: 11px; }
+
+    .pub-footer-col a {
+      font-size: 14px;
+      color: #737373;
+      text-decoration: none;
+      transition: color 150ms;
+    }
+
+    .pub-footer-col a:hover { color: white; }
+
+    .pub-footer-bottom {
+      max-width: 1200px;
+      margin: 40px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #525252;
+    }
+
+    .pub-footer-bottom a { color: #525252; text-decoration: none; }
+    .pub-footer-bottom a:hover { color: #737373; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .pub-header { padding: 0 20px; }
+      .pub-nav-links { display: none; }
+      .pub-btn-ghost { display: none; }
+      .pub-footer { padding: 40px 20px 24px; }
+      .pub-footer-grid { grid-template-columns: 1fr; gap: 32px; }
+      .pub-footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="pub-header">
+  <a href="{{ url_for('home') }}" class="pub-logo">
+    <div class="pub-logo-icon">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+      </svg>
+    </div>
+    <span class="pub-logo-text">LocusAI</span>
+  </a>
+
+  <nav class="pub-nav">
+    <ul class="pub-nav-links">
+      <li><a href="{{ url_for('home') }}#features">Features</a></li>
+      <li><a href="{{ url_for('home') }}#pricing">Pricing</a></li>
+    </ul>
+    <div class="pub-nav-actions">
+      <a href="{{ url_for('auth.login') }}" class="pub-btn-ghost">Sign in</a>
+      <a href="{{ url_for('auth.signup') }}" class="pub-btn-primary">Start free trial →</a>
+    </div>
+  </nav>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="background:#fafafa;padding:12px 48px;">
+      {% for cat, msg in messages %}
+        <div style="padding:10px 16px;border-radius:8px;font-size:14px;margin-bottom:8px;
+          {% if cat == 'error' %}background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;
+          {% else %}background:#dcfce7;color:#166534;border:1px solid #86efac;{% endif %}">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+
+<footer class="pub-footer">
+  <div class="pub-footer-grid">
+    <div class="pub-footer-brand">
+      <a href="{{ url_for('home') }}" class="pub-logo">
+        <div class="pub-logo-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="17" height="17">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+          </svg>
+        </div>
+        <span class="pub-logo-text">LocusAI</span>
+      </a>
+      <p class="pub-footer-tagline">AI receptionist for small businesses. Answers every call, books every appointment, 24/7.</p>
+      <div class="pub-footer-contact">
+        <a href="tel:+442046203253">+44 (0) 204 620 3253</a>
+      </div>
+    </div>
+
+    <div class="pub-footer-col">
+      <h4>Product</h4>
+      <ul>
+        <li><a href="{{ url_for('home') }}#features">Features</a></li>
+        <li><a href="{{ url_for('home') }}#pricing">Pricing</a></li>
+        <li><a href="{{ url_for('home') }}#how-it-works">How it works</a></li>
+        <li><a href="{{ url_for('auth.signup') }}">Start free trial</a></li>
+        <li><a href="{{ url_for('auth.login') }}">Sign in</a></li>
+      </ul>
+    </div>
+
+    <div class="pub-footer-col">
+      <h4>Legal</h4>
+      <ul>
+        <li><a href="{{ url_for('privacy') }}">Privacy Policy</a></li>
+        <li><a href="{{ url_for('terms') }}">Terms of Service</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="pub-footer-bottom">
+    <span>© 2026 LocusAI Ltd. Made in the UK.</span>
+    <span>
+      <a href="{{ url_for('privacy') }}">Privacy</a> ·
+      <a href="{{ url_for('terms') }}">Terms</a>
+    </span>
+  </div>
+</footer>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

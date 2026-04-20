@@ -11,7 +11,7 @@ from core.settings import OPENAI_API_KEY
 from core.db import get_session_messages, get_business_by_id
 
 try:
-    from core.kb import kb_search
+    from core.kb import search_kb as kb_search
 except Exception:
     kb_search = None
 
@@ -152,15 +152,19 @@ def _kb_snippets(business_id: int, query: str, limit: int = 3):
     if not (kb_search and business_id and query):
         return []
     try:
-        rows = kb_search(business_id, query, limit=limit) or []
+        rows = kb_search(query, business_id, limit=limit) or []
         snips = []
         for r in rows:
-            title = r.get("title") if isinstance(r, dict) else r["title"]
-            content = r.get("content") if isinstance(r, dict) else r["content"]
-            if title:
-                snips.append(f"- {title}: {content}")
+            if isinstance(r, dict):
+                question = r.get("question") or r.get("title", "")
+                answer = r.get("answer") or r.get("content", "")
             else:
-                snips.append(f"- {content}")
+                question = r["question"] if "question" in r.keys() else ""
+                answer = r["answer"] if "answer" in r.keys() else ""
+            if question and answer:
+                snips.append(f"Q: {question}\nA: {answer}")
+            elif answer:
+                snips.append(answer)
         return snips
     except Exception:
         return []
@@ -671,7 +675,7 @@ def _get_kb_entries_for_voice(business_id: int, query: str, limit: int = 5) -> L
     if not kb_search or not business_id:
         return []
     try:
-        rows = kb_search(business_id, query, limit=limit) or []
+        rows = kb_search(query, business_id, limit=limit) or []
         entries = []
         for r in rows:
             if isinstance(r, dict):

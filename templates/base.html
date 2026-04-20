@@ -60,6 +60,10 @@
         <!-- AI Section -->
         <div class="nav-section">
           <div class="nav-section-title">AI Assistant</div>
+          <a href="{{ url_for('voice_dashboard') }}" class="nav-item {% if request.endpoint == 'voice_dashboard' %}active{% endif %}">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            Voice
+          </a>
           <a href="{{ url_for('chat.chat_index') }}" class="nav-item {% if request.endpoint and request.endpoint.startswith('chat.') %}active{% endif %}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
             Conversations
@@ -89,6 +93,12 @@
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
             New Business
           </a>
+          {% if session.user and session.user.role == 'admin' %}
+          <a href="{{ url_for('auth.users_list') }}" class="nav-item {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            Users
+          </a>
+          {% endif %}
         </div>
       </nav>
 
@@ -140,6 +150,44 @@
           </a>
         </div>
       </header>
+
+      <!-- Trial Banner -->
+      {% if session.user and session.user.trial_ends_at %}
+      {# Days remaining calculated in JS below #}
+      <div id="trial-banner" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-bottom: 1px solid #f59e0b; padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #92400e;">
+        <span id="trial-banner-text">
+          <strong>Free trial active</strong> — upgrade any time to keep your AI receptionist running.
+        </span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span id="trial-days-remaining" style="font-weight: 600;"></span>
+          <a href="#" style="padding: 5px 14px; background: #d97706; color: white; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 12px; transition: background 150ms;"
+             onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
+            Upgrade
+          </a>
+          <button onclick="document.getElementById('trial-banner').style.display='none'"
+                  style="background: none; border: none; color: #92400e; cursor: pointer; padding: 2px; opacity: 0.6; font-size: 16px; line-height: 1;"
+                  title="Dismiss">×</button>
+        </div>
+      </div>
+      <script>
+        (function() {
+          var endDate = new Date("{{ session.user.trial_ends_at[:10] }}");
+          var today = new Date();
+          today.setHours(0,0,0,0);
+          var diff = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+          var el = document.getElementById('trial-days-remaining');
+          if (el) {
+            if (diff > 1) el.textContent = diff + ' days left';
+            else if (diff === 1) el.textContent = 'Last day!';
+            else { el.textContent = 'Trial expired'; el.style.color = '#dc2626'; }
+          }
+          if (diff <= 3) {
+            var banner = document.getElementById('trial-banner');
+            if (banner) banner.style.background = 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)';
+          }
+        })();
+      </script>
+      {% endif %}
 
       <!-- Page Content -->
       <main class="page-content">

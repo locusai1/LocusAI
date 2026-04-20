@@ -1,5 +1,5 @@
 # integrations_bp.py — pick provider + store config per business
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, g
 from core.db import get_conn, list_businesses, get_business_by_id, ensure_tenant_key
 import json
 
@@ -89,6 +89,17 @@ def integrations_index():
             try: cfg = json.loads(row["account_json"] or "{}")
             except: cfg = {}
 
+    # Google Calendar status
+    gcal_connected = False
+    gcal_calendar_id = None
+    try:
+        from core.google_calendar import get_business_gcal_config, GOOGLE_CONFIGURED as GCAL_CONFIGURED
+        gcal_cfg = get_business_gcal_config(business_id) if business_id else None
+        gcal_connected = bool(gcal_cfg)
+        gcal_calendar_id = gcal_cfg.get("calendar_id") if gcal_cfg else None
+    except Exception:
+        GCAL_CONFIGURED = False
+
     return render_template("integrations.html",
                            businesses=businesses,
                            business_id=business_id,
@@ -97,7 +108,10 @@ def integrations_index():
                            current=current,
                            cfg=cfg,
                            widget=widget,
-                           tenant_key=tenant_key)
+                           tenant_key=tenant_key,
+                           gcal_configured=GCAL_CONFIGURED,
+                           gcal_connected=gcal_connected,
+                           gcal_calendar_id=gcal_calendar_id)
 
 
 @bp.route("/integrations/widget", methods=["POST"])
@@ -160,4 +174,153 @@ def widget_settings():
         con.commit()
 
     flash("Widget settings saved.", "ok")
+    return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+
+# ============================================================================
+# Google Calendar OAuth
+# ============================================================================
+
+@bp.route("/integrations/google/connect")
+def google_connect():
+    """Start Google Calendar OAuth flow."""
+    if _need_login():
+        return redirect(url_for("auth.login"))
+
+    business_id = int(request.args.get("business_id") or 0)
+    if not business_id:
+        flash("Select a business first.", "err")
+        return redirect(url_for("integrations.integrations_index"))
+
+    try:
+        from core.google_calendar import get_authorization_url, GOOGLE_CONFIGURED
+        if not GOOGLE_CONFIGURED:
+            flash("Google Calendar credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env", "err")
+            return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+        # Use the current server URL for the redirect URI
+        redirect_uri = request.url_root.rstrip("/") + "/integrations/google/callback"
+        # Store redirect_uri in session for callback
+        session["gcal_redirect_uri"] = redirect_uri
+        session["gcal_business_id"] = business_id
+
+        auth_url = get_authorization_url(business_id, redirect_uri=redirect_uri)
+        if not auth_url:
+            flash("Failed to generate Google authorization URL.", "err")
+            return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+        return redirect(auth_url)
+
+    except Exception as e:
+        flash(f"Google Calendar error: {e}", "err")
+        return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+
+@bp.route("/integrations/google/callback")
+def google_callback():
+    """Handle Google Calendar OAuth callback."""
+    if _need_login():
+        return redirect(url_for("auth.login"))
+
+    code = request.args.get("code")
+    error = request.args.get("error")
+    state = request.args.get("state", "")
+
+    if error:
+        flash(f"Google authorization denied: {error}", "err")
+        return redirect(url_for("integrations.integrations_index"))
+
+    if not code:
+        flash("No authorization code received from Google.", "err")
+        return redirect(url_for("integrations.integrations_index"))
+
+    # Extract business_id from state or session
+    business_id = session.pop("gcal_business_id", None)
+    redirect_uri = session.pop("gcal_redirect_uri", None)
+
+    if not business_id:
+        try:
+            business_id = int(state.split(":")[0])
+        except Exception:
+            flash("Invalid OAuth state.", "err")
+            return redirect(url_for("integrations.integrations_index"))
+
+    if not redirect_uri:
+        redirect_uri = request.url_root.rstrip("/") + "/integrations/google/callback"
+
+    try:
+        from core.google_calendar import (
+            exchange_code_for_tokens,
+            list_calendars,
+            save_business_gcal_config,
+        )
+
+        tokens = exchange_code_for_tokens(code, redirect_uri=redirect_uri)
+        if not tokens:
+            flash("Failed to exchange authorization code for tokens.", "err")
+            return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+        # Get list of calendars and default to primary
+        calendars = list_calendars(tokens)
+        primary_id = "primary"
+        for cal in calendars:
+            if cal.get("primary"):
+                primary_id = cal["id"]
+                break
+
+        config = {
+            "tokens": tokens,
+            "calendar_id": primary_id,
+            "calendars": calendars,
+            "connected_at": json.dumps(None),  # placeholder
+        }
+
+        save_business_gcal_config(business_id, config)
+        flash("Google Calendar connected successfully!", "ok")
+
+    except Exception as e:
+        flash(f"Failed to connect Google Calendar: {e}", "err")
+
+    return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+
+@bp.route("/integrations/google/disconnect", methods=["POST"])
+def google_disconnect():
+    """Disconnect Google Calendar for a business."""
+    if _need_login():
+        return redirect(url_for("auth.login"))
+
+    business_id = int(request.form.get("business_id") or 0)
+
+    try:
+        from core.google_calendar import disconnect_gcal
+        disconnect_gcal(business_id)
+        flash("Google Calendar disconnected.", "ok")
+    except Exception as e:
+        flash(f"Error disconnecting: {e}", "err")
+
+    return redirect(url_for("integrations.integrations_index", business_id=business_id))
+
+
+@bp.route("/integrations/google/select-calendar", methods=["POST"])
+def google_select_calendar():
+    """Update which Google Calendar to use for a business."""
+    if _need_login():
+        return redirect(url_for("auth.login"))
+
+    business_id = int(request.form.get("business_id") or 0)
+    calendar_id = request.form.get("calendar_id", "primary")
+
+    try:
+        from core.google_calendar import get_business_gcal_config, save_business_gcal_config
+        config = get_business_gcal_config(business_id)
+        if config:
+            config["calendar_id"] = calendar_id
+            save_business_gcal_config(business_id, config)
+            flash(f"Calendar updated.", "ok")
+        else:
+            flash("Google Calendar not connected.", "err")
+    except Exception as e:
+        flash(f"Error: {e}", "err")
+
     return redirect(url_for("integrations.integrations_index", business_id=business_id))

@@ -384,7 +384,8 @@ def update_voice_call(retell_call_id: str, **fields) -> bool:
         "transcript_json", "call_summary", "sentiment", "recording_url",
         "recording_duration_seconds", "booking_discussed", "booking_confirmed",
         "appointment_id", "transferred", "transfer_number", "transfer_reason",
-        "cost_cents", "customer_id"
+        "cost_cents", "customer_id",
+        "call_intent", "call_outcome", "action_items", "caller_message", "containment",
     }
 
     safe_fields = {k: v for k, v in fields.items() if k in allowed}
@@ -1243,7 +1244,7 @@ def handle_call_ended(data: Dict) -> Dict:
     duration_seconds = int(duration_ms / 1000) if duration_ms else None
 
     # Get transcript
-    transcript = call.get("transcript")
+    transcript = call.get("transcript") or ""
     transcript_json = json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
 
     # Get recording URL
@@ -1252,6 +1253,9 @@ def handle_call_ended(data: Dict) -> Dict:
     # Get cost
     cost_data = call.get("call_cost", {})
     cost_cents = cost_data.get("total_cost_cents") if cost_data else None
+
+    # Detect missed calls (< 8s with no real transcript)
+    is_missed = (duration_seconds is not None and duration_seconds < 8 and len(transcript.strip()) < 20)
 
     # Update call record
     update_voice_call(
@@ -1263,14 +1267,56 @@ def handle_call_ended(data: Dict) -> Dict:
         transcript_json=transcript_json,
         recording_url=recording_url,
         cost_cents=cost_cents,
+        call_outcome="missed" if is_missed else None,
+        call_intent="missed" if is_missed else None,
+        containment=0 if is_missed else 1,
     )
 
     # Clear any pending bookings
     clear_voice_pending_booking(call_id)
 
-    logger.info(f"Call ended: {call_id}, duration={duration_seconds}s")
+    logger.info(f"Call ended: {call_id}, duration={duration_seconds}s, missed={is_missed}")
 
-    return {"call_id": call_id, "duration_seconds": duration_seconds}
+    # Fetch voice call record once (for business_id, from_number)
+    voice_call = get_voice_call(call_id)
+    business_id = voice_call.get("business_id", 1) if voice_call else 1
+
+    # Send missed-call auto-SMS
+    if is_missed and voice_call:
+        from_number = voice_call.get("from_number", "")
+        if from_number:
+            _trigger_missed_call_sms(from_number, business_id)
+
+    # Trigger post-call AI analysis in background (non-blocking)
+    if transcript and not is_missed:
+        trigger_post_call_analysis(call_id, transcript, business_id)
+
+    return {"call_id": call_id, "duration_seconds": duration_seconds, "missed": is_missed}
+
+
+def _trigger_missed_call_sms(caller_phone: str, business_id: int) -> None:
+    """Fire a missed-call auto-SMS in a background thread so the webhook returns instantly."""
+    import threading
+
+    def _send():
+        try:
+            from core.db import get_business_by_id
+            from core.sms import send_sms, TWILIO_CONFIGURED
+            if not TWILIO_CONFIGURED:
+                return
+            biz = get_business_by_id(business_id)
+            biz_name = dict(biz).get("name", "us") if biz else "us"
+            msg = (
+                f"Hi! You just called {biz_name} but we couldn't pick up. "
+                f"Reply here to chat with our AI assistant, or call back when convenient. "
+                f"We're happy to help!"
+            )
+            send_sms(to=caller_phone, message=msg)
+            logger.info(f"Missed-call SMS sent to {caller_phone}")
+        except Exception as e:
+            logger.warning(f"Could not send missed-call SMS to {caller_phone}: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 def handle_call_analyzed(data: Dict) -> Dict:
@@ -1384,3 +1430,594 @@ def create_outbound_call(
     except RetellClientError as e:
         logger.error(f"Failed to create outbound call: {e}")
         return False, str(e), None
+
+
+# ============================================================================
+# Retell Call Sync — pull recent calls from Retell API into local DB
+# ============================================================================
+
+def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str]:
+    """Fetch recent calls from Retell API and store any missing ones in the DB.
+
+    This is the quick fix for when webhooks can't reach the local server.
+    Safe to run repeatedly — skips calls already in the DB.
+
+    Args:
+        business_id: Business to associate calls with.
+        limit: Max calls to fetch from Retell.
+
+    Returns:
+        (success, message)
+    """
+    import urllib.request
+    import urllib.error
+    from core.settings import RETELL_API_KEY
+    from core.db import get_conn, transaction
+
+    if not RETELL_API_KEY:
+        return False, "RETELL_API_KEY is not configured."
+
+    # ── 1. Fetch calls from Retell ────────────────────────────────────────────
+    url = f"{RETELL_BASE_URL}/{RETELL_API_VERSION}/list-calls"
+    payload = json.dumps({"limit": limit}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {RETELL_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            calls = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        return False, f"Retell API error {e.code}: {body[:200]}"
+    except Exception as e:
+        return False, f"Failed to fetch calls: {e}"
+
+    if not isinstance(calls, list):
+        return False, f"Unexpected response format from Retell."
+
+    # ── 2. Get existing call IDs so we don't duplicate ────────────────────────
+    with get_conn() as con:
+        existing = {
+            r["retell_call_id"]
+            for r in con.execute("SELECT retell_call_id FROM voice_calls").fetchall()
+            if r["retell_call_id"]
+        }
+
+    # ── 3. Insert missing calls ───────────────────────────────────────────────
+    inserted = 0
+    for call in calls:
+        call_id = call.get("call_id")
+        if not call_id or call_id in existing:
+            continue
+
+        direction = call.get("direction", "inbound")
+        from_number = call.get("from_number", "")
+        to_number = call.get("to_number", "")
+        agent_id = call.get("agent_id", "")
+        status = call.get("call_status", "ended")
+        duration_ms = call.get("duration_ms") or call.get("call_duration_ms")
+        duration_seconds = int(duration_ms / 1000) if duration_ms else None
+        transcript = call.get("transcript", "")
+        transcript_json = json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
+        recording_url = call.get("recording_url")
+        cost_data = call.get("call_cost", {})
+        cost_cents = cost_data.get("total_cost_cents") if cost_data else None
+
+        # Convert timestamps (ms → ISO string)
+        start_ts = call.get("start_timestamp")
+        end_ts = call.get("end_timestamp")
+        started_at = datetime.fromtimestamp(start_ts / 1000).isoformat() if start_ts else None
+        ended_at = datetime.fromtimestamp(end_ts / 1000).isoformat() if end_ts else None
+        created_at = started_at or datetime.now().isoformat()
+
+        # Create a session for the call
+        phone = from_number if direction == "inbound" else to_number
+        try:
+            session_id = get_or_create_voice_session(business_id, phone, call_id)
+        except Exception:
+            session_id = None
+
+        try:
+            with transaction() as con:
+                con.execute("""
+                    INSERT INTO voice_calls(
+                        business_id, session_id, retell_call_id, retell_agent_id,
+                        direction, from_number, to_number, call_status,
+                        started_at, ended_at, duration_seconds,
+                        transcript, transcript_json, recording_url, cost_cents, created_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    business_id, session_id, call_id, agent_id,
+                    direction, from_number, to_number, status,
+                    started_at, ended_at, duration_seconds,
+                    transcript, transcript_json, recording_url, cost_cents, created_at
+                ))
+            inserted += 1
+        except Exception as e:
+            logger.warning(f"Could not insert call {call_id}: {e}")
+
+    logger.info(f"Synced {inserted} new calls from Retell for business {business_id}")
+    return True, f"Synced {inserted} new call(s) from Retell ({len(calls) - inserted} already up to date)."
+
+
+# ============================================================================
+# Retell Prompt Sync — push live KB/services/hours to the native Retell LLM
+# ============================================================================
+
+def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None) -> Tuple[bool, str]:
+    """Build a context-rich system prompt from the DB and push it to the Retell LLM.
+
+    This keeps the native Retell LLM (zero-latency) while giving it real
+    knowledge of the business: services, hours, KB Q&A, address, and tone.
+
+    Args:
+        business_id: The business whose data should be synced.
+
+    Returns:
+        (success, message)
+    """
+    import urllib.request
+    import urllib.error
+    from core.settings import RETELL_API_KEY, RETELL_LLM_ID, RETELL_DEFAULT_AGENT_ID
+    from core.db import get_conn, get_business_by_id
+
+    if not RETELL_API_KEY:
+        return False, "RETELL_API_KEY is not configured."
+
+    if not RETELL_LLM_ID:
+        return False, "RETELL_LLM_ID is not configured."
+
+    # ── 1. Fetch business record ──────────────────────────────────────────────
+    business = get_business_by_id(business_id)
+    if not business:
+        return False, f"Business {business_id} not found."
+
+    try:
+        business = dict(business)
+    except Exception:
+        pass
+
+    biz_name = business.get("name", "this business")
+    biz_hours = business.get("hours", "")
+    biz_address = business.get("address", "")
+    biz_tone = business.get("tone", "friendly and professional")
+
+    # ── 2. Fetch active services ──────────────────────────────────────────────
+    services_lines = []
+    try:
+        with get_conn() as con:
+            rows = con.execute("""
+                SELECT name, duration_min, price FROM services
+                WHERE business_id = ? AND active = 1
+                ORDER BY name
+            """, (business_id,)).fetchall()
+            for r in rows:
+                line = f"- {r['name']}"
+                if r["duration_min"]:
+                    line += f" ({r['duration_min']} min)"
+                if r["price"]:
+                    line += f" — {r['price']}"
+                services_lines.append(line)
+    except Exception as e:
+        logger.warning(f"Could not fetch services for prompt sync: {e}")
+
+    # ── 3. Fetch KB entries ───────────────────────────────────────────────────
+    kb_lines = []
+    try:
+        with get_conn() as con:
+            rows = con.execute("""
+                SELECT question, answer FROM kb_entries
+                WHERE business_id = ? AND active = 1
+                ORDER BY id DESC LIMIT 30
+            """, (business_id,)).fetchall()
+            for r in rows:
+                if r["question"] and r["answer"]:
+                    kb_lines.append(f"Q: {r['question']}\nA: {r['answer']}")
+    except Exception as e:
+        logger.warning(f"Could not fetch KB entries for prompt sync: {e}")
+
+    # ── 4. Fetch upcoming availability (next 7 days) ──────────────────────────
+    availability_lines = []
+    try:
+        today = datetime.now()
+        with get_conn() as con:
+            # Get booked slots for next 7 days
+            rows = con.execute("""
+                SELECT start_at, service FROM appointments
+                WHERE business_id = ?
+                  AND status IN ('pending','confirmed')
+                  AND date(start_at) BETWEEN date('now') AND date('now', '+7 days')
+                ORDER BY start_at
+            """, (business_id,)).fetchall()
+            if rows:
+                availability_lines.append("The following slots are already booked in the next 7 days:")
+                for r in rows:
+                    try:
+                        dt = datetime.fromisoformat(r["start_at"].replace("Z",""))
+                        availability_lines.append(
+                            f"- {dt.strftime('%A %d %b at %I:%M %p')} ({r['service']})"
+                        )
+                    except Exception:
+                        pass
+            else:
+                availability_lines.append("No appointments are currently booked in the next 7 days.")
+    except Exception as e:
+        logger.warning(f"Could not fetch availability for prompt sync: {e}")
+
+    # ── 5. Build prompt ───────────────────────────────────────────────────────
+    now_str = datetime.now().strftime("%A, %d %B %Y")
+
+    prompt_parts = [
+        f"You are the AI phone receptionist for {biz_name}.",
+        f"If anyone asks what company this is, always say \"{biz_name}\" — never say anything else.",
+        f"Today is {now_str}. Use this when discussing dates and availability.",
+        f"Be {biz_tone} — warm, natural, and genuinely helpful.",
+        "You are speaking on the phone so keep every response to 1-2 sentences.",
+        "Never use bullet points, lists, or markdown — just natural speech.",
+        "Use contractions naturally (I'll, you're, we've). Sound human, not robotic.",
+        "",
+        "## Call Opening (MANDATORY)",
+        "Every call MUST begin with this exact opening — no exceptions:",
+        f"\"Hello, thanks for calling {biz_name}. Just to let you know, this call may be recorded for quality purposes. How can I help you today?\"",
+        "If caller_known is 'true', personalise after the recording notice: 'Hi {{caller_name}}! Just to let you know this call may be recorded — how can I help you today?'",
+        "Never skip the recording notice. It must always be the first thing said.",
+        "",
+        "## Caller Recognition",
+        "When a call connects, you are given context about the caller:",
+        "- {{caller_name}} — the caller's name if they're a known customer, or empty if unknown",
+        "- {{caller_known}} — 'true' if they're a returning customer, 'false' if new",
+        "- {{caller_visit_count}} — how many times they've visited",
+        "- {{caller_last_service}} — their last service (if any)",
+        "- {{caller_last_visit}} — when they last visited (if any)",
+        "If caller_known is 'true', greet them by name: 'Hi {{caller_name}}, great to hear from you!'",
+        "If they've been before, you can personalise: 'Last time you had a {{caller_last_service}} — shall we book the same again?'",
+        "If caller_known is 'false', give a warm standard greeting.",
+        "",
+        "## Your job",
+        "- Answer questions about the business",
+        "- Help callers book appointments (collect: service, preferred date/time, name, phone)",
+        "- Manage existing appointments (cancel or reschedule)",
+        "- Transfer to a human if the caller asks for one",
+        "",
+    ]
+
+    if biz_hours:
+        prompt_parts += ["## Business Hours", biz_hours, ""]
+
+    if biz_address:
+        prompt_parts += ["## Address", biz_address, ""]
+
+    if services_lines:
+        prompt_parts += ["## Services Offered"] + services_lines + [""]
+
+    if availability_lines:
+        prompt_parts += ["## Current Availability"] + availability_lines + [""]
+
+    if kb_lines:
+        prompt_parts += ["## Frequently Asked Questions"] + kb_lines + [""]
+
+    # ── After-hours status ────────────────────────────────────────────────────
+    try:
+        is_open, hours_msg = is_business_open(business_id)
+    except Exception:
+        is_open, hours_msg = True, ""
+
+    if not is_open:
+        prompt_parts += [
+            "## IMPORTANT — Currently Outside Business Hours",
+            f"{hours_msg}",
+            "Tell the caller we're currently closed and when we'll next be open.",
+            "Offer to: (1) take a message so we can call them back, or (2) help them book in advance.",
+            "If they want to leave a message, ask for their name, number, and what it's about.",
+            "Then say exactly: <VOICE_MESSAGE>{{\"name\":\"NAME\",\"phone\":\"PHONE\",\"message\":\"MESSAGE\"}}</VOICE_MESSAGE>",
+            "",
+        ]
+    else:
+        prompt_parts += [
+            f"## Current Status",
+            f"{hours_msg}",
+            "",
+        ]
+
+    prompt_parts += [
+        "## Booking Instructions",
+        "When a caller wants to book, ask for: (1) which service, (2) preferred date and time, (3) their name and phone number.",
+        "Once you have all details, read them back clearly: \"So that's a [service] on [day] at [time] for [name] — shall I book that in?\"",
+        "Wait for the caller to confirm before finalising.",
+        "When booking is confirmed by the caller, say: \"Perfect, I've got that booked for you!\"",
+        "",
+        "## If a Caller Wants to Speak to a Human",
+        "Say: \"Of course, let me get someone for you — just a moment.\"",
+        "Then transfer the call.",
+        "",
+        "## Taking Messages",
+        "If a caller wants to leave a message or have someone call them back:",
+        "Ask: their name, their number, and what it's about.",
+        "Then say exactly (hidden from caller): <VOICE_MESSAGE>{\"name\":\"NAME\",\"phone\":\"PHONE\",\"message\":\"MESSAGE\"}</VOICE_MESSAGE>",
+        "Then say: \"Got it, I'll pass that on and someone will be in touch shortly.\"",
+        "",
+        "## What NEVER to do",
+        "- Never say 'as an AI' or mention you're artificial",
+        "- Never give long responses — one or two sentences maximum",
+        "- Never make up information — if unsure, say 'I'm not sure about that, let me have someone call you back'",
+        "- Never say 'I don't have access to' — just say 'I'm not sure about that'",
+        "- Never read out a long list — summarise naturally",
+    ]
+
+    prompt = "\n".join(prompt_parts).strip()
+
+    # ── 5. Push to Retell LLM ─────────────────────────────────────────────────
+    url = f"https://api.retellai.com/update-retell-llm/{RETELL_LLM_ID}"
+    payload = json.dumps({"general_prompt": prompt}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {RETELL_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers=headers, method="PATCH")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+
+        logger.info(
+            f"Retell LLM prompt synced for business {business_id} "
+            f"({len(services_lines)} services, {len(kb_lines)} KB entries)"
+        )
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        logger.error(f"Retell LLM update failed ({e.code}): {body}")
+        return False, f"Retell API error {e.code}: {body[:200]}"
+    except Exception as e:
+        logger.error(f"Failed to sync Retell prompt: {e}")
+        return False, f"Sync failed: {e}"
+
+    # ── 6. Update agent's inbound_dynamic_variables_webhook_url (caller recognition) ──
+    agent_id = RETELL_DEFAULT_AGENT_ID
+    if webhook_base_url and agent_id:
+        call_setup_url = webhook_base_url.rstrip("/") + "/api/voice/call-setup"
+        agent_url = f"https://api.retellai.com/update-agent/{agent_id}"
+        agent_payload = json.dumps({"inbound_dynamic_variables_webhook_url": call_setup_url}).encode("utf-8")
+        try:
+            req2 = urllib.request.Request(agent_url, data=agent_payload, headers=headers, method="PATCH")
+            with urllib.request.urlopen(req2, timeout=15) as resp2:
+                resp2.read()
+            logger.info(f"Retell agent caller-recognition webhook set to {call_setup_url}")
+        except Exception as e:
+            # Non-fatal — prompt already synced, just log
+            logger.warning(f"Could not set inbound_dynamic_variables_webhook_url: {e}")
+
+    return True, (
+        f"Prompt synced: {len(services_lines)} services and "
+        f"{len(kb_lines)} KB entries pushed to voice agent."
+        + (" Caller recognition activated." if webhook_base_url and agent_id else "")
+    )
+
+
+# ============================================================================
+# Post-Call AI Intelligence — intent, outcome, action items, voicemail
+# ============================================================================
+
+def analyse_call_transcript(retell_call_id: str, transcript: str, business_id: int) -> None:
+    """Use OpenAI to classify a call's intent, outcome, and extract action items.
+
+    Runs in a background thread so it never blocks the webhook response.
+    Updates the voice_calls record with the results.
+    """
+    from core.settings import OPENAI_API_KEY, OPENAI_MODEL
+    if not OPENAI_API_KEY or not transcript or len(transcript.strip()) < 30:
+        return
+
+    try:
+        import urllib.request as _req
+
+        prompt = f"""Analyse this voice call transcript and return a JSON object with these fields:
+
+call_intent: one of: booking | reschedule | cancel | faq | complaint | transfer_request | missed | general
+call_outcome: one of: booked | resolved | escalated | voicemail | missed | no_answer | incomplete
+action_items: array of strings — any follow-up actions needed (e.g. ["Call back John about Friday slot", "Check availability for cut & colour"])
+caller_message: if the caller left a voicemail or message, include the full message text here, else null
+summary: 1-2 sentence plain English summary of the call
+containment: 1 if the AI fully handled the call without human escalation, 0 if a human was needed
+
+Transcript:
+{transcript[:3000]}
+
+Respond with valid JSON only, no commentary."""
+
+        payload = json.dumps({
+            "model": OPENAI_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"},
+            "max_tokens": 400,
+            "temperature": 0,
+        }).encode("utf-8")
+
+        request = _req.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        with _req.urlopen(request, timeout=20) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        content = result["choices"][0]["message"]["content"]
+        data = json.loads(content)
+
+        update_voice_call(
+            retell_call_id,
+            call_intent=data.get("call_intent"),
+            call_outcome=data.get("call_outcome"),
+            action_items=json.dumps(data.get("action_items", [])),
+            caller_message=data.get("caller_message"),
+            containment=int(data.get("containment", 1)),
+            call_summary=data.get("summary") or data.get("call_summary"),
+        )
+
+        # Update customer record with latest voice interaction data
+        voice_call = get_voice_call(retell_call_id)
+        if voice_call:
+            caller_phone = voice_call.get("from_number")
+            if caller_phone and business_id:
+                try:
+                    from core.db import transaction
+                    normalized = ''.join(c for c in caller_phone if c.isdigit())
+                    last_10 = normalized[-10:] if len(normalized) >= 10 else normalized
+                    with transaction() as con:
+                        con.execute(
+                            """UPDATE customers
+                               SET total_sessions = total_sessions + 1
+                               WHERE business_id = ? AND phone LIKE ?""",
+                            (business_id, f"%{last_10}%")
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not update customer record after call: {e}")
+
+        logger.info(f"Post-call analysis complete for {retell_call_id}: "
+                    f"intent={data.get('call_intent')} outcome={data.get('call_outcome')}")
+
+    except Exception as e:
+        logger.warning(f"Post-call analysis failed for {retell_call_id}: {e}")
+
+
+def trigger_post_call_analysis(retell_call_id: str, transcript: str, business_id: int) -> None:
+    """Fire post-call analysis in a background thread."""
+    import threading
+    t = threading.Thread(
+        target=analyse_call_transcript,
+        args=(retell_call_id, transcript, business_id),
+        daemon=True,
+    )
+    t.start()
+
+
+# ============================================================================
+# After-Hours Detection
+# ============================================================================
+
+def is_business_open(business_id: int) -> Tuple[bool, str]:
+    """Check if the business is currently open based on DB hours.
+
+    Returns:
+        (is_open, message) — message is human-friendly hours info
+    """
+    from core.db import get_conn
+
+    now = datetime.now()
+    weekday = now.weekday()  # 0=Monday … 6=Sunday
+    current_time = now.strftime("%H:%M")
+
+    with get_conn() as con:
+        # Check closures first
+        closure = con.execute(
+            "SELECT reason FROM closures WHERE business_id = ? AND date = date('now')",
+            (business_id,)
+        ).fetchone()
+        if closure:
+            reason = closure["reason"] or "closed today"
+            return False, f"We're {reason}."
+
+        # Check business hours
+        row = con.execute(
+            "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
+            (business_id, weekday)
+        ).fetchone()
+
+        if not row or row["closed"]:
+            # Find next open day
+            for offset in range(1, 8):
+                next_day = (weekday + offset) % 7
+                next_row = con.execute(
+                    "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
+                    (business_id, next_day)
+                ).fetchone()
+                if next_row and not next_row["closed"]:
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    return False, f"We're closed today. We're next open on {day_names[next_day]} from {next_row['open_time']}."
+            return False, "We're currently closed."
+
+        open_t = row["open_time"] or "09:00"
+        close_t = row["close_time"] or "17:00"
+
+        if current_time < open_t:
+            return False, f"We're not open yet today — we open at {open_t}."
+        if current_time >= close_t:
+            # Find next open slot
+            for offset in range(1, 8):
+                next_day = (weekday + offset) % 7
+                next_row = con.execute(
+                    "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
+                    (business_id, next_day)
+                ).fetchone()
+                if next_row and not next_row["closed"]:
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    label = "tomorrow" if offset == 1 else day_names[next_day]
+                    return False, f"We've closed for today. We're back open {label} at {next_row['open_time']}."
+            return False, "We're currently closed."
+
+        return True, f"We're open until {close_t} today."
+
+
+# ============================================================================
+# Warm Transfer Briefing
+# ============================================================================
+
+def generate_transfer_briefing(transcript: str, caller_name: Optional[str] = None) -> str:
+    """Generate a brief for the human agent receiving a warm transfer.
+
+    This text is read aloud to the agent before the caller is connected.
+
+    Returns:
+        Short briefing string (2-3 sentences max)
+    """
+    from core.settings import OPENAI_API_KEY, OPENAI_MODEL
+    if not OPENAI_API_KEY or not transcript:
+        name = caller_name or "a caller"
+        return f"Transferring {name}. Please assist them."
+
+    try:
+        import urllib.request as _req
+
+        prompt = f"""Based on this call transcript, write a 2-sentence briefing for the human agent
+who is about to take over. Be concise and factual. Include caller name if mentioned,
+what they need, and any relevant context.
+
+Transcript:
+{transcript[:2000]}
+
+Write only the briefing, nothing else."""
+
+        payload = json.dumps({
+            "model": OPENAI_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 100,
+            "temperature": 0,
+        }).encode("utf-8")
+
+        request = _req.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        with _req.urlopen(request, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        return result["choices"][0]["message"]["content"].strip()
+
+    except Exception as e:
+        logger.warning(f"Transfer briefing generation failed: {e}")
+        name = caller_name or "a caller"
+        return f"Transferring {name}. Please assist them."

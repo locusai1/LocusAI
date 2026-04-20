@@ -595,8 +595,10 @@ def _inject_branding():
 
 @app.route("/")
 def home():
-    """Redirect to dashboard."""
-    return redirect(url_for("dashboard"))
+    """Marketing homepage — redirect to dashboard if already logged in."""
+    if session.get("user"):
+        return redirect(url_for("dashboard"))
+    return render_template("home.html")
 
 
 @app.post("/brand/set")

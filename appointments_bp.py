@@ -146,6 +146,18 @@ def appointments_set_status(appt_id: int):
         except Exception as e:
             logger.warning(f"Failed to cancel reminders for appointment {appt_id}: {e}")
 
+    # Sync calendar changes in background
+    try:
+        import threading
+        if new_status == "cancelled":
+            from core.google_calendar import delete_appointment_from_gcal
+            threading.Thread(target=delete_appointment_from_gcal, args=(appt_id,), daemon=True).start()
+        elif new_status == "confirmed":
+            from core.google_calendar import sync_appointment_to_gcal
+            threading.Thread(target=sync_appointment_to_gcal, args=(appt_id,), daemon=True).start()
+    except Exception:
+        pass
+
     logger.info(f"Appointment {appt_id} status changed to {new_status} by user {_user().get('id')}")
     flash("Status updated.", "ok")
     return redirect(return_to)
@@ -420,6 +432,20 @@ def appointments_new():
                 # Don't fail the appointment creation
 
         logger.info(f"Appointment {appt_id} created by user {_user().get('id')} for business {bid}")
+
+        # Sync to Google Calendar in background (non-blocking)
+        if appt_id:
+            try:
+                import threading
+                from core.google_calendar import sync_appointment_to_gcal
+                threading.Thread(
+                    target=sync_appointment_to_gcal,
+                    args=(appt_id,),
+                    daemon=True
+                ).start()
+            except Exception:
+                pass  # GCal sync is optional
+
         flash("Appointment created successfully.", "ok")
         return redirect(url_for("appointments.appointments_index", business_id=bid))
 

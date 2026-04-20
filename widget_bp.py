@@ -20,6 +20,8 @@ from core.booking import (
     cancel_pending_booking,
     maybe_commit_booking,  # Keep for backward compatibility
 )
+from core.sentiment import analyze_sentiment
+from core.escalation import handle_escalation
 
 logger = logging.getLogger(__name__)
 
@@ -335,8 +337,17 @@ def widget_chat():
     # Log user message
     log_message(session_id, "user", user_text)
 
+    # Get conversation history for context
+    history = []
+    try:
+        msgs = get_session_messages(session_id, limit=20)
+        history = [{"sender": m["sender"], "text": m["text"]} for m in reversed(msgs)]
+    except Exception:
+        pass
+
     # Get AI response
     pending_booking = None
+    escalation_triggered = False
     try:
         state = {"session_id": session_id}
         reply = process_message(user_text, business, state)
@@ -350,6 +361,27 @@ def widget_chat():
         logger.error(f"Widget chat error: {e}")
         reply = "I'm having a little trouble right now. Could I take your name and number so we can call you back?"
 
+    # Run sentiment analysis and escalation check (non-blocking)
+    try:
+        sentiment = analyze_sentiment(user_text, history)
+        if sentiment.triggers_escalation:
+            # Check session isn't already escalated
+            with get_conn() as con:
+                sess_row = con.execute(
+                    "SELECT escalated FROM sessions WHERE id = ?", (session_id,)
+                ).fetchone()
+            if sess_row and not sess_row["escalated"]:
+                handle_escalation(
+                    sentiment_result=sentiment,
+                    business=business,
+                    session_id=session_id,
+                    conversation_history=history,
+                )
+                escalation_triggered = True
+                logger.info(f"Escalation triggered for session {session_id}: {sentiment.escalation_reason}")
+    except Exception as e:
+        logger.error(f"Sentiment/escalation error: {e}")
+
     # Log bot response
     log_message(session_id, "bot", reply)
 
@@ -359,6 +391,9 @@ def widget_chat():
     if pending_booking:
         response["pending_booking"] = pending_booking
         logger.info(f"Pending booking returned to widget for session {session_id}")
+
+    if escalation_triggered:
+        response["escalated"] = True
 
     return jsonify(response)
 

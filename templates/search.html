@@ -24,7 +24,7 @@
   </div>
 </div>
 
-{% if q and not businesses and not appts %}
+{% if q and not businesses and not appts and not customers and not kb_entries %}
 <!-- No Results -->
 <div class="card">
   <div class="empty-state">
@@ -37,6 +37,39 @@
 </div>
 
 {% else %}
+{% if customers %}
+<!-- Customer Results -->
+<div class="card mb-6">
+  <div class="card-header">
+    <h3 class="card-title">Customers</h3>
+    <span class="badge">{{ customers|length }}</span>
+  </div>
+  <div class="table-container" style="border: none; border-radius: 0;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Phone</th>
+          <th>Appointments</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in customers %}
+        <tr>
+          <td>
+            <a href="{{ url_for('customers.customer_detail', customer_id=c['id']) }}" class="font-medium hover:underline">{{ c['name'] or '—' }}</a>
+            <div class="text-xs text-tertiary">{{ c['email'] or '' }}</div>
+          </td>
+          <td class="text-secondary text-sm">{{ c['phone'] or '—' }}</td>
+          <td><span class="badge">{{ c['total_appointments'] or 0 }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% if businesses %}
 <!-- Businesses Results -->
 <div class="card mb-6">
@@ -62,6 +95,31 @@
       </div>
       {% endfor %}
     </div>
+  </div>
+</div>
+{% endif %}
+
+{% if kb_entries %}
+<!-- KB Results -->
+<div class="card mb-6">
+  <div class="card-header">
+    <h3 class="card-title">Knowledge Base</h3>
+    <span class="badge">{{ kb_entries|length }}</span>
+  </div>
+  <div class="divide-y" style="border-color: var(--border-light);">
+    {% for k in kb_entries %}
+    <div class="px-6 py-4">
+      <div class="font-medium mb-1">{{ k['question'] }}</div>
+      <div class="text-sm text-secondary">{{ k['answer'][:200] }}{% if k['answer']|length > 200 %}…{% endif %}</div>
+      {% if k['tags'] %}
+      <div class="mt-2 flex flex-wrap gap-1">
+        {% for tag in k['tags'].split(',') %}{% if tag.strip() %}
+        <span class="search-tag">{{ tag.strip() }}</span>
+        {% endif %}{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
@@ -154,5 +212,14 @@
 .status-pill.confirmed { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
 .status-pill.cancelled { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
 .status-pill.completed { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.search-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
 </style>
 {% endblock %}

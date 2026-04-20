@@ -1,0 +1,799 @@
+{% extends "base.html" %}
+{% block title %}Voice AI — LocusAI{% endblock %}
+{% block content %}
+
+{% macro fmt_dur(s) %}
+  {%- set s = s|int -%}
+  {%- if s >= 60 -%}{{ s//60 }}m {{ s%60 }}s{%- elif s > 0 -%}{{ s }}s{%- else -%}—{%- endif -%}
+{% endmacro %}
+{% macro mask(n) %}
+  {%- set n = (n or '')|string|replace('+','')|replace('-','')|replace(' ','') -%}
+  {%- if n|length >= 7 -%}{{ n[:4] }}·····{{ n[-3:] }}{%- else -%}Unknown{%- endif -%}
+{% endmacro %}
+
+<div class="db-backdrop" aria-hidden="true"></div>
+
+{# Header #}
+<div class="db-header">
+  <div>
+    <h1 class="db-greeting">Voice AI</h1>
+    <p class="db-subline">Call intelligence, performance metrics &amp; message inbox</p>
+  </div>
+  <div class="db-actions">
+    <button id="syncBtn" class="db-btn-ghost" onclick="syncCalls(this)">
+      <svg id="syncIcon" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Sync Calls
+    </button>
+    <button class="db-btn-ghost" onclick="syncPrompt(this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+      </svg>
+      Sync Prompt
+    </button>
+  </div>
+</div>
+
+{# KPI strip #}
+<div class="kpi-strip" style="grid-template-columns: repeat(6,1fr); margin-bottom:20px;">
+
+  <div class="kpi" style="--kpi-accent:#3b82f6;--kpi-glow:rgba(59,130,246,.18);">
+    <div class="kpi__top"><div class="kpi__icon" style="background:rgba(59,130,246,.12);color:#3b82f6;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+    </div></div>
+    <div class="kpi__val" data-count="{{ stats.total_calls }}">{{ stats.total_calls }}</div>
+    <div class="kpi__label">Total Calls</div>
+    <div class="kpi__ctx">{{ stats.calls_today }} today · {{ stats.calls_week }} this week</div>
+  </div>
+
+  <div class="kpi" style="--kpi-accent:#22c55e;--kpi-glow:rgba(34,197,94,.18);">
+    <div class="kpi__top"><div class="kpi__icon" style="background:rgba(34,197,94,.12);color:#22c55e;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div></div>
+    <div class="kpi__val" data-count="{{ stats.containment_rate }}">{{ stats.containment_rate }}%</div>
+    <div class="kpi__label">Containment Rate</div>
+    <div class="kpi__ctx">Calls fully handled by AI</div>
+  </div>
+
+  <div class="kpi" style="--kpi-accent:#a855f7;--kpi-glow:rgba(168,85,247,.18);">
+    <div class="kpi__top"><div class="kpi__icon" style="background:rgba(168,85,247,.12);color:#a855f7;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    </div></div>
+    <div class="kpi__val" data-count="{{ stats.booked_calls }}">{{ stats.booked_calls }}</div>
+    <div class="kpi__label">Bookings via Voice</div>
+    <div class="kpi__ctx">Appointments booked by AI</div>
+  </div>
+
+  <div class="kpi" style="--kpi-accent:#14b8a6;--kpi-glow:rgba(20,184,166,.18);">
+    <div class="kpi__top"><div class="kpi__icon" style="background:rgba(20,184,166,.12);color:#14b8a6;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div></div>
+    <div class="kpi__val">{{ fmt_dur(stats.avg_duration) }}</div>
+    <div class="kpi__label">Avg Duration</div>
+    <div class="kpi__ctx">Average call length</div>
+  </div>
+
+  <div class="kpi" style="--kpi-accent:#f59e0b;--kpi-glow:rgba(245,158,11,.18);">
+    <div class="kpi__top"><div class="kpi__icon" style="background:rgba(245,158,11,.12);color:#f59e0b;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+    </div></div>
+    <div class="kpi__val" data-count="{{ stats.missed_calls }}">{{ stats.missed_calls }}</div>
+    <div class="kpi__label">Missed Calls</div>
+    <div class="kpi__ctx">Hung up before AI responded</div>
+  </div>
+
+  <div class="kpi" style="--kpi-accent:#ef4444;--kpi-glow:rgba(239,68,68,.18);">
+    <div class="kpi__top">
+      <div class="kpi__icon" style="background:rgba(239,68,68,.12);color:#ef4444;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+      </div>
+      {% if stats.messages_waiting > 0 %}<span class="kpi__badge kpi__badge--up">{{ stats.messages_waiting }} new</span>{% endif %}
+    </div>
+    <div class="kpi__val" data-count="{{ stats.messages_waiting }}">{{ stats.messages_waiting }}</div>
+    <div class="kpi__label">Messages</div>
+    <div class="kpi__ctx">Voicemails awaiting reply</div>
+  </div>
+
+</div>
+
+{# Main grid #}
+<div class="vc-grid">
+
+  {# Left: chart + call log #}
+  <div class="vc-col-main">
+
+    {# 14-day activity chart #}
+    <div class="db-card db-card--chart">
+      <div class="db-card__head">
+        <div>
+          <h3 class="db-card__title">Call Volume</h3>
+          <p class="db-card__sub">Daily calls — last 14 days</p>
+        </div>
+        <span class="db-badge">14 days</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="voiceChart"
+          data-labels='{{ stats.daily_labels|tojson }}'
+          data-values='{{ stats.daily_series|tojson }}'></canvas>
+      </div>
+    </div>
+
+    {# Call log #}
+    <div class="db-card">
+      <div class="db-card__head">
+        <h3 class="db-card__title">Call Log</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="live-pip"><span class="live-pip__dot"></span>Live</span>
+          <input id="callSearch" type="search" placeholder="Search calls…" class="vc-search" oninput="filterCalls(this.value)">
+        </div>
+      </div>
+
+      {% if calls %}
+      <div class="vc-table-wrap">
+        <table class="vc-table" id="callTable">
+          <thead>
+            <tr>
+              <th>Caller</th>
+              <th>Time</th>
+              <th>Duration</th>
+              <th>Intent</th>
+              <th>Outcome</th>
+              <th>Sentiment</th>
+              <th>Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in calls %}
+            <tr class="vc-row" onclick="openCall('{{ c.retell_call_id }}')" data-search="{{ (c.from_number or '') }} {{ (c.call_intent or '') }} {{ (c.call_outcome or '') }} {{ (c.call_summary or '') }}">
+              <td>
+                <div class="vc-caller">
+                  <div class="call-orb">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                  </div>
+                  <span class="vc-num">{{ mask(c.from_number) }}</span>
+                </div>
+              </td>
+              <td class="vc-time">
+                {% if c.started_at %}{{ c.started_at[:16].replace('T',' ') }}{% else %}—{% endif %}
+              </td>
+              <td>{{ fmt_dur(c.duration_seconds) }}</td>
+              <td>
+                {% if c.call_intent %}
+                <span class="vc-pill vc-pill--intent vc-pill--{{ c.call_intent }}">{{ c.call_intent }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if c.call_outcome %}
+                <span class="vc-pill vc-pill--outcome vc-pill--{{ c.call_outcome }}">{{ c.call_outcome }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if c.sentiment %}
+                <span class="vc-pill vc-pill--sent vc-pill--{{ c.sentiment|lower }}">{{ c.sentiment|capitalize }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="vc-summary">{{ (c.call_summary or '')[:60] }}{% if c.call_summary and c.call_summary|length > 60 %}…{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="db-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+        <p>No calls yet</p>
+        <span>Click Sync Calls to pull from Retell, or make a test call to +442046203253</span>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# Right sidebar #}
+  <div class="vc-col-side">
+
+    {# Intent breakdown #}
+    <div class="db-card">
+      <div class="db-card__head">
+        <h3 class="db-card__title">Call Reasons</h3>
+        <span class="db-badge">All time</span>
+      </div>
+      <div style="padding:16px 20px;">
+        {% set intent_colors = {
+          'booking': '#a855f7', 'reschedule': '#3b82f6', 'cancel': '#ef4444',
+          'faq': '#22c55e', 'complaint': '#f59e0b', 'transfer_request': '#14b8a6',
+          'missed': '#737373', 'general': '#6366f1'
+        } %}
+        {% if stats.intent_breakdown %}
+          {% set max_i = stats.intent_breakdown.values()|max %}
+          {% for intent, cnt in stats.intent_breakdown.items() %}
+          <div class="sent-row" style="margin-bottom:10px;">
+            <span class="sent-key" style="width:90px;text-transform:capitalize;">{{ intent }}</span>
+            <div class="sent-track" style="flex:1;">
+              <div class="sent-fill" style="width:{{ ((cnt/max_i)*100)|int }}%;background:{{ intent_colors.get(intent,'#737373') }};"></div>
+            </div>
+            <span class="sent-pct" style="width:28px;">{{ cnt }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="db-empty db-empty--sm"><p>No data yet</p><span>Calls analysed after they end</span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Outcome breakdown #}
+    <div class="db-card">
+      <div class="db-card__head">
+        <h3 class="db-card__title">Call Outcomes</h3>
+      </div>
+      <div style="padding:16px 20px;">
+        {% set outcome_colors = {
+          'booked': '#22c55e', 'resolved': '#3b82f6', 'escalated': '#f59e0b',
+          'voicemail': '#a855f7', 'missed': '#737373', 'incomplete': '#ef4444', 'no_answer': '#6366f1'
+        } %}
+        {% if stats.outcome_breakdown %}
+          {% set max_o = stats.outcome_breakdown.values()|max %}
+          {% for outcome, cnt in stats.outcome_breakdown.items() %}
+          <div class="sent-row" style="margin-bottom:10px;">
+            <span class="sent-key" style="width:90px;text-transform:capitalize;">{{ outcome }}</span>
+            <div class="sent-track" style="flex:1;">
+              <div class="sent-fill" style="width:{{ ((cnt/max_o)*100)|int }}%;background:{{ outcome_colors.get(outcome,'#737373') }};"></div>
+            </div>
+            <span class="sent-pct" style="width:28px;">{{ cnt }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="db-empty db-empty--sm"><p>No data yet</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Voicemail inbox #}
+    <div class="db-card">
+      <div class="db-card__head">
+        <h3 class="db-card__title">Message Inbox</h3>
+        {% if stats.messages_waiting > 0 %}
+        <span class="kpi__badge kpi__badge--up">{{ stats.messages_waiting }}</span>
+        {% endif %}
+      </div>
+      {% if messages %}
+      <ul class="call-list">
+        {% for m in messages %}
+        <li class="call-row">
+          <div class="call-orb" style="background:rgba(239,68,68,.1);color:#ef4444;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <div class="call-body">
+            <div class="call-num">{{ mask(m.from_number) }}</div>
+            <div class="call-snippet">{{ (m.caller_message or '')[:80] }}{% if m.caller_message and m.caller_message|length > 80 %}…{% endif %}</div>
+          </div>
+          <div class="call-tags">
+            {% if m.started_at %}<span class="tag tag--dur">{{ m.started_at[:10] }}</span>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="db-empty db-empty--sm">
+        <p>No messages</p>
+        <span>Callers can ask the AI to take a message</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Agent config #}
+    <div class="db-card">
+      <div class="db-card__head">
+        <h3 class="db-card__title">Agent Config</h3>
+        <button class="db-btn-ghost db-btn-ghost--sm" onclick="openVoiceSettings()">Edit</button>
+      </div>
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">Phone</span>
+          <span class="vc-cfg-val">{{ voice_settings.get('retell_phone_number') or '+442046203253' }}</span>
+        </div>
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">Voice</span>
+          <span class="vc-cfg-val">{{ voice_settings.get('voice_id', '11labs-Dorothy')|replace('11labs-','') }}</span>
+        </div>
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">Engine</span>
+          <span class="vc-cfg-val">Retell Native LLM</span>
+        </div>
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">Transfer</span>
+          <span class="vc-cfg-val">{% if voice_settings.get('transfer_enabled') %}{{ voice_settings.get('transfer_number') or 'Not set' }}{% else %}Disabled{% endif %}</span>
+        </div>
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">After Hours</span>
+          <span class="vc-cfg-val">{% if voice_settings.get('after_hours_enabled') %}<span style="color:#22c55e">On</span>{% else %}Off{% endif %}</span>
+        </div>
+        <div class="vc-cfg-row">
+          <span class="vc-cfg-label">Recording</span>
+          <span class="vc-cfg-val">{% if voice_settings.get('recording_enabled') %}<span style="color:#22c55e">On</span>{% else %}Off{% endif %}</span>
+        </div>
+        <button class="db-btn-ghost" style="width:100%;justify-content:center;margin-top:4px;" onclick="syncPrompt(this)">
+          Push latest KB &amp; services to agent
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# Call detail drawer #}
+<div id="callDrawer" class="vc-drawer" onclick="if(event.target===this)closeDrawer()">
+  <div class="vc-drawer__panel">
+    <div class="vc-drawer__head">
+      <h3 class="vc-drawer__title" id="drawerTitle">Call Detail</h3>
+      <button class="vc-drawer__close" onclick="closeDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="drawerBody" class="vc-drawer__body">
+      <div class="db-empty"><p>Loading…</p></div>
+    </div>
+  </div>
+</div>
+
+<style>
+.vc-grid { display:grid; grid-template-columns: 1fr 320px; gap:16px; }
+@media(max-width:1100px){ .vc-grid { grid-template-columns:1fr; } }
+.vc-col-main,.vc-col-side { display:flex;flex-direction:column;gap:16px; }
+
+.vc-search {
+  padding:5px 10px; font-size:12px; border-radius:var(--radius-md);
+  border:1px solid var(--border-default); background:var(--bg-muted);
+  color:var(--text-primary); outline:none; width:180px;
+  transition:border-color var(--transition-fast);
+}
+.vc-search:focus { border-color:var(--text-primary); }
+
+.vc-table-wrap { overflow-x:auto; }
+.vc-table { width:100%; border-collapse:collapse; font-size:12px; }
+.vc-table th {
+  padding:9px 16px; text-align:left; font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);
+  border-bottom:1px solid var(--border-light); white-space:nowrap;
+}
+.vc-row {
+  cursor:pointer; border-bottom:1px solid var(--border-light);
+  transition:background var(--transition-fast);
+}
+.vc-row:last-child { border-bottom:none; }
+.vc-row:hover { background:var(--bg-hover); }
+.vc-row td { padding:10px 16px; color:var(--text-secondary); vertical-align:middle; }
+.vc-caller { display:flex;align-items:center;gap:8px; }
+.vc-num { font-weight:700;color:var(--text-primary);font-family:var(--font-mono);font-size:11px; }
+.vc-time { color:var(--text-muted);white-space:nowrap;font-size:11px; }
+.vc-summary { color:var(--text-muted);max-width:220px; }
+
+.vc-pill {
+  display:inline-block;font-size:10px;font-weight:600;
+  padding:2px 8px;border-radius:var(--radius-full);white-space:nowrap;
+}
+.vc-pill--booking    { background:rgba(168,85,247,.12);color:#9333ea; }
+.vc-pill--reschedule { background:rgba(59,130,246,.12);color:#2563eb; }
+.vc-pill--cancel     { background:rgba(239,68,68,.12);color:#dc2626; }
+.vc-pill--faq        { background:rgba(34,197,94,.12);color:#16a34a; }
+.vc-pill--complaint  { background:rgba(245,158,11,.12);color:#d97706; }
+.vc-pill--transfer_request { background:rgba(20,184,166,.12);color:#0d9488; }
+.vc-pill--missed,.vc-pill--general { background:var(--bg-muted);color:var(--text-muted); }
+.vc-pill--general    { background:rgba(99,102,241,.1);color:#4f46e5; }
+
+.vc-pill--booked     { background:rgba(34,197,94,.12);color:#16a34a; }
+.vc-pill--resolved   { background:rgba(59,130,246,.12);color:#2563eb; }
+.vc-pill--escalated  { background:rgba(245,158,11,.12);color:#d97706; }
+.vc-pill--voicemail  { background:rgba(168,85,247,.12);color:#9333ea; }
+.vc-pill--incomplete { background:rgba(239,68,68,.12);color:#dc2626; }
+.vc-pill--no_answer  { background:var(--bg-muted);color:var(--text-muted); }
+
+.vc-pill--positive   { background:rgba(34,197,94,.1);color:#16a34a; }
+.vc-pill--neutral    { background:rgba(163,163,163,.15);color:var(--text-tertiary); }
+.vc-pill--negative   { background:rgba(239,68,68,.1);color:#dc2626; }
+
+.vc-cfg-row { display:flex;justify-content:space-between;align-items:center;font-size:12px; }
+.vc-cfg-label { color:var(--text-tertiary); }
+.vc-cfg-val   { font-weight:600;color:var(--text-primary); }
+
+/* Drawer */
+.vc-drawer {
+  position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;
+  display:none;align-items:flex-start;justify-content:flex-end;
+}
+.vc-drawer.open { display:flex; }
+.vc-drawer__panel {
+  width:480px;max-width:95vw;height:100vh;overflow-y:auto;
+  background:var(--bg-card);border-left:1px solid var(--border-light);
+  box-shadow:var(--shadow-lg);
+  animation:slideIn .2s var(--ease-out-expo);
+}
+@keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+.vc-drawer__head {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:20px 24px;border-bottom:1px solid var(--border-light);
+  position:sticky;top:0;background:var(--bg-card);z-index:1;
+}
+.vc-drawer__title { font-size:15px;font-weight:600;color:var(--text-primary);margin:0; }
+.vc-drawer__close {
+  width:28px;height:28px;border-radius:var(--radius-md);
+  background:var(--bg-muted);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);
+  transition:background var(--transition-fast);
+}
+.vc-drawer__close:hover { background:var(--bg-hover);color:var(--text-primary); }
+.vc-drawer__close svg { width:14px;height:14px; }
+.vc-drawer__body { padding:24px; }
+
+.vc-detail-section { margin-bottom:24px; }
+.vc-detail-section h4 {
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--text-muted);margin:0 0 10px;
+}
+.vc-detail-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.vc-detail-cell { background:var(--bg-muted);border-radius:var(--radius-md);padding:10px 12px; }
+.vc-detail-cell .label { font-size:10px;color:var(--text-muted);margin-bottom:3px; }
+.vc-detail-cell .value { font-size:13px;font-weight:600;color:var(--text-primary); }
+
+.vc-transcript {
+  font-size:12px;line-height:1.7;color:var(--text-secondary);
+  background:var(--bg-muted);border-radius:var(--radius-md);
+  padding:14px 16px;max-height:320px;overflow-y:auto;
+  white-space:pre-wrap;font-family:var(--font-mono);
+}
+
+.vc-action-list { list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px; }
+.vc-action-item {
+  display:flex;align-items:flex-start;gap:8px;
+  background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);
+  border-radius:var(--radius-md);padding:8px 12px;font-size:12px;color:var(--text-secondary);
+}
+.vc-action-item::before { content:'→';color:#d97706;font-weight:700;flex-shrink:0;margin-top:1px; }
+
+.vc-message-box {
+  background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);
+  border-radius:var(--radius-md);padding:12px 14px;
+  font-size:13px;color:var(--text-secondary);line-height:1.6;
+}
+
+@keyframes fadeUp {
+  from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}
+}
+.kpi-strip { animation:fadeUp .4s var(--ease-out-expo) .05s both; }
+.vc-grid    { animation:fadeUp .4s var(--ease-out-expo) .12s both; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  /* ── Chart ── */
+  const cv = document.getElementById('voiceChart');
+  if (cv) {
+    const labels = JSON.parse(cv.dataset.labels || '[]');
+    const values = JSON.parse(cv.dataset.values || '[]');
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const fmtLabels = labels.map(function(d){
+      return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric'});
+    });
+    new Chart(cv, {
+      type: 'bar',
+      data: {
+        labels: fmtLabels,
+        datasets: [{
+          data: values,
+          backgroundColor: dark ? 'rgba(59,130,246,0.7)' : 'rgba(59,130,246,0.75)',
+          borderRadius: 6, borderSkipped: false, barThickness: 18,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: dark ? '#1a1a1c' : '#0f0f0f',
+          titleColor: '#fff', bodyColor: '#d4d4d4',
+          padding: 10, cornerRadius: 8,
+        }},
+        scales: {
+          x: { grid: { display: false }, border: { display: false },
+               ticks: { color: '#737373', font: { size: 10 }, maxRotation: 0 } },
+          y: { beginAtZero: true, grid: { color: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+               border: { display: false }, ticks: { color: '#737373', font: { size: 10 }, stepSize: 1 } }
+        }
+      }
+    });
+  }
+
+  /* ── Animated counters ── */
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    const target = parseInt(el.dataset.count, 10) || 0;
+    if (target === 0) return;
+    const dur = 900, start = performance.now();
+    function step(now) {
+      const p = Math.min((now - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(ease * target) + (el.textContent.includes('%') ? '%' : '');
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+});
+
+/* ── Call search ── */
+function filterCalls(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#callTable tbody tr').forEach(function(tr){
+    tr.style.display = tr.dataset.search.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+/* ── Call detail drawer ── */
+function openCall(callId) {
+  document.getElementById('callDrawer').classList.add('open');
+  const body = document.getElementById('drawerBody');
+  body.innerHTML = '<div class="db-empty"><p>Loading…</p></div>';
+
+  fetch('/api/voice/calls/' + callId)
+    .then(function(r){ return r.json(); })
+    .then(function(c){ renderDrawer(c); })
+    .catch(function(){ body.innerHTML = '<div class="db-empty"><p>Failed to load call</p></div>'; });
+}
+function closeDrawer() {
+  document.getElementById('callDrawer').classList.remove('open');
+}
+function renderDrawer(c) {
+  function fmt(s) {
+    s = parseInt(s)||0;
+    return s >= 60 ? Math.floor(s/60)+'m '+( s%60)+'s' : (s > 0 ? s+'s' : '—');
+  }
+  function mask(n) {
+    n = (n||'').replace(/\D/g,'');
+    return n.length >= 7 ? n.slice(0,4)+'·····'+n.slice(-3) : 'Unknown';
+  }
+
+  let actions = [];
+  try { actions = JSON.parse(c.action_items || '[]'); } catch(e){}
+
+  document.getElementById('drawerTitle').textContent = mask(c.from_number);
+
+  let html = `
+    <div class="vc-detail-section">
+      <h4>Call Details</h4>
+      <div class="vc-detail-grid">
+        <div class="vc-detail-cell"><div class="label">From</div><div class="value" style="font-family:var(--font-mono)">${mask(c.from_number)}</div></div>
+        <div class="vc-detail-cell"><div class="label">Duration</div><div class="value">${fmt(c.duration_seconds)}</div></div>
+        <div class="vc-detail-cell"><div class="label">Intent</div><div class="value">${c.call_intent || '—'}</div></div>
+        <div class="vc-detail-cell"><div class="label">Outcome</div><div class="value">${c.call_outcome || '—'}</div></div>
+        <div class="vc-detail-cell"><div class="label">Sentiment</div><div class="value">${c.sentiment || '—'}</div></div>
+        <div class="vc-detail-cell"><div class="label">Containment</div><div class="value" style="color:${c.containment ? '#16a34a' : '#dc2626'}">${c.containment ? 'AI handled' : 'Escalated'}</div></div>
+      </div>
+    </div>`;
+
+  if (c.call_summary) {
+    html += `<div class="vc-detail-section"><h4>Summary</h4><p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0">${c.call_summary}</p></div>`;
+  }
+
+  if (c.caller_message) {
+    html += `<div class="vc-detail-section"><h4>Message Left by Caller</h4><div class="vc-message-box">${c.caller_message}</div></div>`;
+  }
+
+  if (actions.length) {
+    html += `<div class="vc-detail-section"><h4>Action Items</h4><ul class="vc-action-list">`;
+    actions.forEach(function(a){ html += `<li class="vc-action-item">${a}</li>`; });
+    html += `</ul></div>`;
+  }
+
+  if (c.recording_url) {
+    html += `<div class="vc-detail-section"><h4>Recording</h4>
+      <audio controls style="width:100%;border-radius:var(--radius-md);">
+        <source src="${c.recording_url}">
+      </audio></div>`;
+  }
+
+  if (c.transcript) {
+    html += `<div class="vc-detail-section"><h4>Transcript</h4><div class="vc-transcript">${c.transcript.replace(/</g,'&lt;')}</div></div>`;
+  }
+
+  document.getElementById('drawerBody').innerHTML = html;
+}
+
+/* ── Sync calls ── */
+function syncCalls(btn) {
+  btn.disabled = true;
+  const icon = document.getElementById('syncIcon');
+  if (icon) icon.style.animation = 'spin .9s linear infinite';
+  fetch('/api/voice/sync-calls', { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} })
+    .then(function(){ window.location.reload(); })
+    .catch(function(){ btn.disabled = false; if(icon) icon.style.animation = ''; });
+}
+
+/* ── Sync prompt ── */
+function syncPrompt(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  fetch('/api/voice/sync-prompt', { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.textContent = d.success ? '✓ Synced' : '✗ Failed';
+      setTimeout(function(){ btn.disabled=false; btn.textContent='Push latest KB & services to agent'; }, 2500);
+    })
+    .catch(function(){ btn.disabled=false; btn.textContent='Push latest KB & services to agent'; });
+}
+
+/* ── Voice Settings Modal ── */
+function openVoiceSettings() {
+  document.getElementById('voiceSettingsModal').classList.add('open');
+}
+function closeVoiceSettings() {
+  document.getElementById('voiceSettingsModal').classList.remove('open');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('voiceSettingsForm');
+  if (!form) return;
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const data = {
+      voice_id: form.voice_id.value,
+      greeting_message: form.greeting_message.value,
+      transfer_enabled: form.transfer_enabled.checked,
+      transfer_number: form.transfer_number.value,
+      after_hours_enabled: form.after_hours_enabled.checked,
+      after_hours_message: form.after_hours_message.value,
+      recording_enabled: form.recording_enabled.checked,
+      booking_enabled: form.booking_enabled.checked,
+    };
+
+    fetch('/api/voice/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) {
+        btn.textContent = '✓ Saved';
+        setTimeout(function(){ window.location.reload(); }, 800);
+      } else {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+      }
+    })
+    .catch(function(){ btn.textContent = '✗ Error'; btn.disabled = false; });
+  });
+});
+</script>
+
+{# Voice Settings Modal #}
+<div id="voiceSettingsModal" class="vc-drawer" onclick="if(event.target===this)closeVoiceSettings()">
+  <div class="vc-drawer__panel">
+    <div class="vc-drawer__head">
+      <h3 class="vc-drawer__title">Voice Settings</h3>
+      <button class="vc-drawer__close" onclick="closeVoiceSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="vc-drawer__body">
+      <form id="voiceSettingsForm">
+
+        <div class="vs-section">
+          <div class="vs-section-title">Voice &amp; Personality</div>
+
+          <label class="vs-label">Voice Character
+            <select name="voice_id" class="vs-input">
+              <option value="11labs-Dorothy" {% if voice_settings.get('voice_id','11labs-Dorothy')=='11labs-Dorothy' %}selected{% endif %}>Dorothy — British Female (recommended)</option>
+              <option value="11labs-Amy" {% if voice_settings.get('voice_id')=='11labs-Amy' %}selected{% endif %}>Amy — British Female (warm)</option>
+              <option value="11labs-Anthony" {% if voice_settings.get('voice_id')=='11labs-Anthony' %}selected{% endif %}>Anthony — British Male</option>
+            </select>
+          </label>
+
+          <label class="vs-label">Greeting Message
+            <textarea name="greeting_message" class="vs-input vs-textarea" rows="2" placeholder="Hello! Thanks for calling. How can I help?">{{ voice_settings.get('greeting_message', '') }}</textarea>
+          </label>
+        </div>
+
+        <div class="vs-section">
+          <div class="vs-section-title">Human Transfer</div>
+
+          <label class="vs-toggle">
+            <input type="checkbox" name="transfer_enabled" {% if voice_settings.get('transfer_enabled', True) %}checked{% endif %}>
+            <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
+            Enable human transfer when caller requests it
+          </label>
+
+          <label class="vs-label">Transfer Phone Number
+            <input type="tel" name="transfer_number" class="vs-input" placeholder="+447911123456" value="{{ voice_settings.get('transfer_number', '') }}">
+          </label>
+        </div>
+
+        <div class="vs-section">
+          <div class="vs-section-title">After Hours</div>
+
+          <label class="vs-toggle">
+            <input type="checkbox" name="after_hours_enabled" {% if voice_settings.get('after_hours_enabled', True) %}checked{% endif %}>
+            <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
+            Enable after-hours handling (uses business hours settings)
+          </label>
+
+          <label class="vs-label">After Hours Message
+            <textarea name="after_hours_message" class="vs-input vs-textarea" rows="2" placeholder="We're currently closed. Leave a message and we'll call back.">{{ voice_settings.get('after_hours_message', '') }}</textarea>
+          </label>
+        </div>
+
+        <div class="vs-section">
+          <div class="vs-section-title">Features</div>
+
+          <label class="vs-toggle">
+            <input type="checkbox" name="recording_enabled" {% if voice_settings.get('recording_enabled', True) %}checked{% endif %}>
+            <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
+            Record calls
+          </label>
+
+          <label class="vs-toggle" style="margin-top:10px;">
+            <input type="checkbox" name="booking_enabled" {% if voice_settings.get('booking_enabled', True) %}checked{% endif %}>
+            <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
+            Allow AI to book appointments
+          </label>
+        </div>
+
+        <div style="padding-top:8px;border-top:1px solid var(--border-light);margin-top:8px;">
+          <button type="submit" class="db-btn-primary" style="width:100%;justify-content:center;">Save Settings</button>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">
+            After saving, click "Push latest KB &amp; services to agent" to apply changes to the voice AI.
+          </p>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+.db-btn-ghost--sm { font-size:11px;padding:4px 10px; }
+.vs-section { margin-bottom:24px; }
+.vs-section-title {
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--text-muted);margin-bottom:12px;
+}
+.vs-label {
+  display:flex;flex-direction:column;gap:5px;
+  font-size:12px;font-weight:500;color:var(--text-secondary);
+  margin-bottom:12px;
+}
+.vs-input {
+  padding:8px 12px;border-radius:var(--radius-md);
+  border:1px solid var(--border-default);background:var(--bg-muted);
+  color:var(--text-primary);font-size:13px;outline:none;
+  transition:border-color var(--transition-fast);
+}
+.vs-input:focus { border-color:var(--text-primary); }
+.vs-textarea { resize:vertical;min-height:60px;font-family:inherit; }
+.vs-toggle {
+  display:flex;align-items:center;gap:10px;cursor:pointer;
+  font-size:12px;color:var(--text-secondary);margin-bottom:10px;
+}
+.vs-toggle input[type=checkbox] { display:none; }
+.vs-toggle-track {
+  width:34px;height:18px;border-radius:9px;background:var(--bg-hover);
+  flex-shrink:0;position:relative;transition:background var(--transition-fast);
+}
+.vs-toggle input:checked + .vs-toggle-track { background:#22c55e; }
+.vs-toggle-thumb {
+  width:14px;height:14px;border-radius:50%;background:#fff;
+  position:absolute;top:2px;left:2px;transition:left var(--transition-fast);
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
+}
+.vs-toggle input:checked + .vs-toggle-track .vs-toggle-thumb { left:18px; }
+.db-btn-primary {
+  display:flex;align-items:center;gap:6px;padding:8px 16px;
+  border-radius:var(--radius-md);border:none;cursor:pointer;font-size:13px;
+  font-weight:600;background:var(--accent-primary);color:#fff;
+  transition:opacity var(--transition-fast);
+}
+.db-btn-primary:hover { opacity:.9; }
+.db-btn-primary:disabled { opacity:.5;cursor:not-allowed; }
+</style>
+{% endblock %}

@@ -99,6 +99,9 @@ def business_new():
                 flash(f"A business with slug '{slug}' already exists.", "err")
                 return render_template("onboard.html", form=request.form, business=None)
 
+        # Extra fields from wizard
+        welcome_msg = (request.form.get("welcome_message") or request.form.get("welcome_message_hidden") or "").strip()
+
         # Create the business
         try:
             new_id = create_business(
@@ -114,7 +117,25 @@ def business_new():
             )
 
             if new_id:
-                logger.info(f"Business {new_id} ({name}) created by user {session.get('user', {}).get('id')}")
+                # Set up widget settings with welcome message
+                if welcome_msg:
+                    try:
+                        from widget_bp import get_or_create_widget_settings, update_widget_settings
+                        get_or_create_widget_settings(new_id)
+                        update_widget_settings(new_id, welcome_message=welcome_msg)
+                    except Exception as e:
+                        logger.warning(f"Could not set welcome message: {e}")
+
+                # Assign business to creating user if they are an owner
+                user = session.get("user", {})
+                if user.get("role") == "owner":
+                    try:
+                        from core.db import assign_user_to_business
+                        assign_user_to_business(user["id"], new_id)
+                    except Exception as e:
+                        logger.warning(f"Could not assign user to business: {e}")
+
+                logger.info(f"Business {new_id} ({name}) created by user {user.get('id')}")
                 flash("Business created successfully.", "ok")
                 return redirect(url_for("edit_business", business_id=new_id))
             else:

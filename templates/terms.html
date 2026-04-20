@@ -1,0 +1,190 @@
+{% extends "public_base.html" %}
+{% block title %}Terms of Service — LocusAI{% endblock %}
+{% block meta_description %}LocusAI Terms of Service — the agreement between you and LocusAI.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-hero {
+    background: white;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    padding: 64px 32px 48px;
+    text-align: center;
+  }
+  .page-badge { display: inline-flex; align-items: center; padding: 5px 12px; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 100px; font-size: 12px; font-weight: 500; color: #525252; margin-bottom: 20px; }
+  .page-title { font-size: 36px; font-weight: 700; letter-spacing: -0.03em; color: #171717; margin-bottom: 12px; }
+  .page-subtitle { font-size: 16px; color: #737373; max-width: 520px; margin: 0 auto; }
+  .content-wrapper { max-width: 760px; margin: 0 auto; padding: 64px 32px 96px; }
+  .doc-section { margin-bottom: 48px; }
+  .doc-section h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: #171717; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+  .doc-section h3 { font-size: 15px; font-weight: 600; color: #171717; margin: 20px 0 8px; }
+  .doc-section p { font-size: 15px; color: #404040; margin-bottom: 14px; }
+  .doc-section ul, .doc-section ol { padding-left: 20px; margin-bottom: 14px; }
+  .doc-section li { font-size: 15px; color: #404040; margin-bottom: 6px; }
+  .doc-section a { color: #171717; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+  .info-card { background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; font-size: 14px; color: #525252; }
+  .info-card strong { color: #171717; }
+  .warning-card { background: rgba(239,68,68,.04); border: 1px solid rgba(239,68,68,.15); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; font-size: 14px; color: #7f1d1d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="page-badge">Legal</div>
+  <h1 class="page-title">Terms of Service</h1>
+  <p class="page-subtitle">The agreement between you and LocusAI governing use of our platform</p>
+</div>
+
+<div class="content-wrapper">
+
+  <div class="info-card">
+    <strong>Last updated: March 2026.</strong> This is a working draft document. A fully reviewed version prepared by a qualified solicitor will replace this document before LocusAI's public launch. By using LocusAI, you agree to be bound by these terms. Questions: <strong>legal@locusai.co.uk</strong>
+  </div>
+
+  <div class="doc-section">
+    <h2>1. Agreement and parties</h2>
+    <p>These Terms of Service ("Terms") form a legally binding agreement between you ("Customer", "you") and LocusAI ("LocusAI", "we", "us"). "You" means the individual or organisation accessing or using our platform.</p>
+    <p>By creating an account or using any part of the LocusAI platform, you confirm that you have read, understood, and agree to these Terms. If you are entering into these Terms on behalf of a company or other legal entity, you represent that you have authority to bind that entity.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>2. The service</h2>
+    <p>LocusAI provides an AI-powered receptionist platform that enables businesses to handle inbound phone calls, web chat, and SMS conversations, book appointments, and manage customer interactions through artificial intelligence.</p>
+    <p>The platform includes: AI voice receptionist, web chat widget, SMS handling, appointment management, knowledge base, analytics, and integrations with third-party calendar and CRM tools.</p>
+    <p>We reserve the right to modify, suspend, or discontinue any feature of the service at any time with reasonable notice.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>3. Account registration</h2>
+    <ul>
+      <li>You must provide accurate and complete registration information.</li>
+      <li>You are responsible for maintaining the confidentiality of your login credentials.</li>
+      <li>You are responsible for all activity that occurs under your account.</li>
+      <li>You must notify us immediately at <strong>support@locusai.co.uk</strong> if you suspect unauthorised access to your account.</li>
+      <li>You must be 18 years of age or older to create an account.</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>4. Subscription and payment</h2>
+    <h3>Pricing tiers</h3>
+    <p>LocusAI offers tiered subscription plans. Current pricing is shown on our <a href="{{ url_for('home') }}#pricing">pricing page</a>. We reserve the right to modify pricing with 30 days' notice to existing subscribers.</p>
+
+    <h3>Free trial</h3>
+    <p>New accounts receive a 14-day free trial with full Professional-tier access. No credit card is required during the trial. At the end of the trial, you must subscribe to continue using the service.</p>
+
+    <h3>Billing</h3>
+    <ul>
+      <li>Subscriptions are billed monthly or annually in advance.</li>
+      <li>Payments are processed by Stripe. We do not store your card details.</li>
+      <li>All prices are exclusive of VAT unless stated otherwise. UK VAT (20%) will be added where applicable.</li>
+      <li>Annual subscriptions receive a discount (typically equivalent to 2 months free).</li>
+    </ul>
+
+    <h3>Refunds</h3>
+    <p>We offer a pro-rata refund if you cancel within 7 days of a new billing period. After 7 days, the billing period is non-refundable. To request a refund, contact <strong>billing@locusai.co.uk</strong>.</p>
+
+    <h3>Non-payment</h3>
+    <p>If payment fails, we will attempt to charge your payment method three times over 7 days. If payment is not received, your account will be suspended. Data is retained for 90 days following suspension before being deleted.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>5. Acceptable use</h2>
+    <p>You agree not to use LocusAI to:</p>
+    <ul>
+      <li>Violate any applicable law or regulation</li>
+      <li>Process data of individuals under 16 without verifiable parental consent</li>
+      <li>Send unsolicited marketing messages (spam)</li>
+      <li>Impersonate any person or entity</li>
+      <li>Transmit malicious code or interfere with the platform's operation</li>
+      <li>Reverse engineer, decompile, or attempt to extract source code</li>
+      <li>Resell or sublicense access to the platform without written consent</li>
+      <li>Use the platform in any way that could damage LocusAI's reputation</li>
+    </ul>
+    <p>We reserve the right to suspend or terminate accounts that violate these terms without refund.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>6. AI-generated content</h2>
+    <p>LocusAI uses large language models (including OpenAI GPT-4o) to generate responses. You acknowledge that:</p>
+    <ul>
+      <li>AI responses may occasionally be inaccurate, incomplete, or inappropriate.</li>
+      <li>You are responsible for configuring your AI agent appropriately for your business and customers.</li>
+      <li>LocusAI is not liable for any decisions made by your customers based on AI-generated content.</li>
+      <li>You should not use LocusAI to provide regulated professional advice (medical, legal, financial) without appropriate human oversight.</li>
+      <li>AI conversations are not a substitute for qualified professional judgement.</li>
+    </ul>
+  </div>
+
+  <div class="doc-section">
+    <h2>7. Data and privacy</h2>
+    <p>Your use of LocusAI is also governed by our <a href="{{ url_for('privacy') }}">Privacy Policy</a>, which is incorporated into these Terms by reference.</p>
+    <p>You remain the data controller for personal data belonging to your customers. LocusAI acts as your data processor. A Data Processing Agreement (DPA) is available on request.</p>
+    <p>You are responsible for ensuring you have a lawful basis to process your customers' personal data using LocusAI, and for providing appropriate privacy notices to your customers.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>8. Intellectual property</h2>
+    <p>LocusAI retains all intellectual property rights in the platform, including software, design, documentation, and trademarks. Nothing in these Terms grants you any ownership rights in the platform.</p>
+    <p>You retain ownership of all content you upload or create within the platform (knowledge base entries, business information, etc.). You grant LocusAI a limited licence to process this content to provide the service.</p>
+    <p>Feedback or suggestions you provide to us may be used to improve the platform without compensation or attribution.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>9. Limitation of liability</h2>
+    <div class="warning-card">
+      <strong>Important:</strong> Please read this section carefully as it limits LocusAI's liability to you.
+    </div>
+    <p>To the maximum extent permitted by law:</p>
+    <ul>
+      <li>LocusAI's total liability to you in any 12-month period is limited to the total fees you paid to us in that period.</li>
+      <li>We are not liable for indirect, consequential, incidental, punitive, or special damages, including lost profits, lost revenue, or loss of data.</li>
+      <li>We are not liable for missed calls, missed bookings, or lost business opportunities arising from platform downtime or AI errors.</li>
+      <li>We do not warrant that the platform will be uninterrupted, error-free, or suitable for your specific purpose.</li>
+    </ul>
+    <p>Nothing in these Terms excludes liability for death or personal injury caused by negligence, fraud, or any other liability that cannot be excluded by law.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>10. Indemnification</h2>
+    <p>You agree to indemnify and hold harmless LocusAI and its officers, directors, and employees from any claims, damages, or expenses (including legal fees) arising from: (a) your use of the platform in violation of these Terms; (b) your violation of any applicable law; or (c) your infringement of any third party's rights.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>11. Service availability and SLA</h2>
+    <p>We target 99.5% monthly uptime for the platform. Scheduled maintenance will be communicated at least 24 hours in advance. We do not guarantee specific response times for the AI during periods of high demand.</p>
+    <p>Uptime does not include: (a) scheduled maintenance windows; (b) outages caused by third-party providers (Retell AI, Telnyx, OpenAI); (c) outages caused by your misuse of the platform.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>12. Term and termination</h2>
+    <p>These Terms remain in effect while you have an active account. Either party may terminate the agreement:</p>
+    <ul>
+      <li><strong>You:</strong> Cancel your subscription at any time via your account settings or by contacting support. Cancellation takes effect at the end of the current billing period.</li>
+      <li><strong>LocusAI:</strong> We may terminate your account immediately for material breach of these Terms, illegal activity, or non-payment after the dunning period.</li>
+    </ul>
+    <p>On termination, you may export your data for 90 days. After 90 days, your data will be permanently deleted.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>13. Governing law and disputes</h2>
+    <p>These Terms are governed by the laws of England and Wales. Any disputes arising from these Terms will be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+    <p>Before initiating legal proceedings, you agree to first contact us at <strong>legal@locusai.co.uk</strong> and attempt to resolve the dispute informally for a period of 30 days.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>14. Changes to these terms</h2>
+    <p>We may update these Terms from time to time. We will provide at least 30 days' notice of material changes via email. Continued use of LocusAI after the effective date of changes constitutes acceptance of the updated Terms. If you do not agree to the updated Terms, you may cancel your account before the effective date.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>15. Contact</h2>
+    <ul>
+      <li><strong>General:</strong> support@locusai.co.uk</li>
+      <li><strong>Billing:</strong> billing@locusai.co.uk</li>
+      <li><strong>Legal / Data:</strong> legal@locusai.co.uk</li>
+      <li><strong>Privacy:</strong> privacy@locusai.co.uk</li>
+    </ul>
+  </div>
+
+</div>
+{% endblock %}

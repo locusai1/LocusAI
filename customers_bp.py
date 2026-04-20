@@ -457,12 +457,32 @@ def customer_detail(customer_id: int):
     appointments = get_customer_appointments(customer_id, limit=20)
     sessions = get_customer_sessions(customer_id, limit=10)
 
+    # Fetch voice call history by matching phone number
+    voice_calls = []
+    if customer.get("phone"):
+        try:
+            from core.db import get_conn as _get_conn
+            phone_digits = ''.join(c for c in customer["phone"] if c.isdigit())
+            last_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+            with _get_conn() as con:
+                rows = con.execute("""
+                    SELECT retell_call_id, direction, started_at, duration_seconds,
+                           call_intent, call_outcome, call_summary, sentiment, recording_url
+                    FROM voice_calls
+                    WHERE business_id = ? AND from_number LIKE ?
+                    ORDER BY started_at DESC LIMIT 10
+                """, (customer["business_id"], f"%{last_10}%")).fetchall()
+                voice_calls = [dict(r) for r in rows]
+        except Exception:
+            pass
+
     return render_template(
         "customer_detail.html",
         customer=customer,
         stats=stats,
         appointments=appointments,
-        sessions=sessions
+        sessions=sessions,
+        voice_calls=voice_calls,
     )
 
 
