@@ -317,45 +317,6 @@ def verify_signature_hmac(
     return hmac.compare_digest(expected.lower(), signature.lower())
 
 
-def verify_twilio_signature(
-    url: str,
-    params: Dict[str, str],
-    signature: str,
-    auth_token: str
-) -> bool:
-    """Verify a Twilio webhook signature.
-
-    Args:
-        url: The full URL of the webhook endpoint
-        params: The POST parameters
-        signature: The X-Twilio-Signature header value
-        auth_token: Your Twilio Auth Token
-
-    Returns:
-        True if signature is valid
-    """
-    if not url or not signature or not auth_token:
-        return False
-
-    # Build the validation string
-    # Sort params alphabetically and append to URL
-    s = url
-    if params:
-        for key in sorted(params.keys()):
-            s += key + params[key]
-
-    # Compute signature
-    expected = hmac.new(
-        auth_token.encode('utf-8'),
-        s.encode('utf-8'),
-        hashlib.sha1
-    ).digest()
-
-    import base64
-    expected_b64 = base64.b64encode(expected).decode('utf-8')
-
-    return hmac.compare_digest(expected_b64, signature)
-
 
 def verify_stripe_signature(
     payload: bytes,

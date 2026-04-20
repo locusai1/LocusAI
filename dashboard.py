@@ -120,6 +120,172 @@ if VOICE_AVAILABLE:
     app.register_blueprint(voice_bp)
 
 # ============================================================================
+# Background Call Sync — keeps the dashboard current without manual clicks
+# ============================================================================
+
+def _background_call_sync():
+    """Periodically pull calls from Retell API into the local DB.
+
+    Runs in a daemon thread — exits automatically when Flask exits.
+    Syncs every 3 minutes to keep the dashboard live.
+    """
+    import time as _time
+    _time.sleep(10)  # Wait for app to fully start
+    while True:
+        try:
+            if VOICE_AVAILABLE:
+                from core.voice import sync_calls_from_retell
+                with app.app_context():
+                    from core.db import get_conn
+                    with get_conn() as con:
+                        row = con.execute(
+                            "SELECT id FROM businesses WHERE archived = 0 LIMIT 1"
+                        ).fetchone()
+                    if row:
+                        success, msg = sync_calls_from_retell(row["id"])
+                        if success:
+                            app.logger.debug(f"Auto-sync: {msg}")
+        except Exception as e:
+            app.logger.warning(f"Background call sync error: {e}")
+        _time.sleep(180)  # 3 minutes
+
+
+import threading as _threading
+_sync_thread = _threading.Thread(target=_background_call_sync, daemon=True)
+_sync_thread.start()
+
+
+# ============================================================================
+# Background Reminder Worker — dispatches due SMS/email reminders every minute
+# ============================================================================
+
+def _background_reminder_worker():
+    """Process due appointment reminders every 60 seconds.
+
+    Runs in a daemon thread — exits when Flask exits.
+    Sends SMS/email reminders for appointments within the scheduled windows.
+    """
+    import time as _time
+    _time.sleep(20)  # Wait for app to fully start
+    while True:
+        try:
+            with app.app_context():
+                from core.reminders import process_due_reminders
+                stats = process_due_reminders()
+                if stats["total"] > 0:
+                    app.logger.info(
+                        f"Reminder worker: {stats['sent']} sent, "
+                        f"{stats['failed']} failed out of {stats['total']}"
+                    )
+        except Exception as e:
+            app.logger.warning(f"Reminder worker error: {e}")
+        _time.sleep(60)  # Check every minute
+
+
+_reminder_thread = _threading.Thread(target=_background_reminder_worker, daemon=True)
+_reminder_thread.start()
+
+
+# ============================================================================
+# Background Appointment Automation — no-show follow-ups & review requests
+# ============================================================================
+
+def _background_appointment_automation():
+    """Run post-appointment automations every 10 minutes.
+
+    1. No-show follow-up: appointment time passed 30+ min ago, still 'confirmed' → send SMS
+    2. Review request: appointment marked 'completed' 1-24h ago → send review request SMS
+    """
+    import time as _time
+    _time.sleep(30)  # Wait for app to fully start
+    while True:
+        try:
+            with app.app_context():
+                _run_appointment_automations()
+        except Exception as e:
+            app.logger.warning(f"Appointment automation error: {e}")
+        _time.sleep(600)  # Every 10 minutes
+
+
+def _run_appointment_automations():
+    """Execute no-show and review request automations."""
+    from core.sms import send_sms, TELNYX_CONFIGURED
+    if not TELNYX_CONFIGURED:
+        return
+
+    with get_conn() as con:
+        # --- No-show follow-up ---
+        # Appointments that are past (>30 min ago) and still 'confirmed' with a phone
+        no_shows = con.execute("""
+            SELECT a.id, a.customer_name, a.phone, a.service, a.start_at,
+                   b.name as biz_name, b.id as business_id
+            FROM appointments a
+            JOIN businesses b ON a.business_id = b.id
+            WHERE a.status = 'confirmed'
+              AND a.phone IS NOT NULL AND a.phone != ''
+              AND datetime(a.start_at) < datetime('now', '-30 minutes')
+              AND (a.no_show_sms_sent IS NULL OR a.no_show_sms_sent = 0)
+              AND b.archived = 0
+            LIMIT 20
+        """).fetchall()
+
+        for appt in no_shows:
+            try:
+                msg = (
+                    f"Hi {appt['customer_name']}! We missed you for your "
+                    f"{appt['service']} today at {appt['biz_name']}. "
+                    f"Would you like to reschedule? Reply YES and we'll sort it out."
+                )
+                result = send_sms(to=appt["phone"], message=msg)
+                if result.get("status") != "error":
+                    con.execute(
+                        "UPDATE appointments SET no_show_sms_sent=1 WHERE id=?",
+                        (appt["id"],)
+                    )
+                    con.connection.commit()
+                    app.logger.info(f"No-show SMS sent for appointment {appt['id']}")
+            except Exception as e:
+                app.logger.warning(f"No-show SMS failed for appt {appt['id']}: {e}")
+
+        # --- Review request ---
+        # Appointments completed 1-24 hours ago, no review request sent yet
+        completed = con.execute("""
+            SELECT a.id, a.customer_name, a.phone, a.service, a.start_at,
+                   b.name as biz_name, b.id as business_id
+            FROM appointments a
+            JOIN businesses b ON a.business_id = b.id
+            WHERE a.status = 'completed'
+              AND a.phone IS NOT NULL AND a.phone != ''
+              AND datetime(a.start_at) BETWEEN datetime('now', '-24 hours') AND datetime('now', '-1 hour')
+              AND (a.review_request_sent IS NULL OR a.review_request_sent = 0)
+              AND b.archived = 0
+            LIMIT 20
+        """).fetchall()
+
+        for appt in completed:
+            try:
+                msg = (
+                    f"Hi {appt['customer_name']}! Hope you enjoyed your "
+                    f"{appt['service']} at {appt['biz_name']}. "
+                    f"We'd love your feedback — would you mind leaving us a quick review? "
+                    f"It really helps us out. Thank you!"
+                )
+                result = send_sms(to=appt["phone"], message=msg)
+                if result.get("status") != "error":
+                    con.execute(
+                        "UPDATE appointments SET review_request_sent=1 WHERE id=?",
+                        (appt["id"],)
+                    )
+                    con.connection.commit()
+                    app.logger.info(f"Review request SMS sent for appointment {appt['id']}")
+            except Exception as e:
+                app.logger.warning(f"Review request SMS failed for appt {appt['id']}: {e}")
+
+
+_automation_thread = _threading.Thread(target=_background_appointment_automation, daemon=True)
+_automation_thread.start()
+
+# ============================================================================
 # Logging Configuration
 # ============================================================================
 
@@ -490,6 +656,13 @@ def dashboard():
     recent_activity = []
     escalation_count = 0
     week_comparison = {"this_week": 0, "last_week": 0, "change_pct": 0}
+    voice_stats = {"total_week": 0, "avg_duration": 0, "booked_calls": 0}
+    top_services = []
+    new_customers_week = 0
+    total_customers = 0
+    recent_calls = []
+    sentiment_breakdown = {"positive": 0, "neutral": 0, "negative": 0}
+    voice_series_values = [0] * 7
 
     if businesses:
         ids = [b["id"] for b in businesses]
@@ -687,6 +860,103 @@ def dashboard():
             elif week_comparison["this_week"] > 0:
                 week_comparison["change_pct"] = 100
 
+            # Voice stats for the week
+            voice_stats = {"total_week": 0, "avg_duration": 0, "booked_calls": 0}
+            try:
+                row = con.execute(f"""
+                    SELECT COUNT(*) total, AVG(duration_seconds) avg_dur,
+                           SUM(CASE WHEN booking_confirmed=1 THEN 1 ELSE 0 END) booked
+                    FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date('now', '-7 days')
+                """, tuple(ids)).fetchone()
+                if row:
+                    voice_stats["total_week"] = row["total"] or 0
+                    voice_stats["avg_duration"] = round(row["avg_dur"] or 0)
+                    voice_stats["booked_calls"] = row["booked"] or 0
+            except Exception:
+                pass
+
+            # Top services by booking count (all time)
+            top_services = []
+            try:
+                rows = con.execute(f"""
+                    SELECT service, COUNT(*) cnt FROM appointments
+                    WHERE business_id IN ({placeholders})
+                      AND service IS NOT NULL AND service != ''
+                      AND status IN ('confirmed','completed','pending')
+                    GROUP BY service ORDER BY cnt DESC LIMIT 5
+                """, tuple(ids)).fetchall()
+                top_services = [dict(r) for r in rows] if rows else []
+            except Exception:
+                pass
+
+            # New customers this week
+            new_customers_week = 0
+            try:
+                row = con.execute(f"""
+                    SELECT COUNT(*) c FROM customers
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date('now', '-7 days')
+                """, tuple(ids)).fetchone()
+                new_customers_week = row["c"] if row else 0
+            except Exception:
+                pass
+
+            # Total customers
+            total_customers = 0
+            try:
+                row = con.execute(f"SELECT COUNT(*) c FROM customers WHERE business_id IN ({placeholders})", tuple(ids)).fetchone()
+                total_customers = row["c"] if row else 0
+            except Exception:
+                pass
+
+            # Recent calls (last 8)
+            recent_calls = []
+            try:
+                rows = con.execute(f"""
+                    SELECT retell_call_id, from_number, duration_seconds, call_status,
+                           transcript, created_at, sentiment, booking_confirmed
+                    FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                    ORDER BY created_at DESC LIMIT 8
+                """, tuple(ids)).fetchall()
+                recent_calls = [dict(r) for r in rows] if rows else []
+            except Exception:
+                pass
+
+            # Sentiment breakdown from calls
+            sentiment_breakdown = {"positive": 0, "neutral": 0, "negative": 0}
+            try:
+                rows = con.execute(f"""
+                    SELECT sentiment, COUNT(*) c FROM voice_calls
+                    WHERE business_id IN ({placeholders}) AND sentiment IS NOT NULL
+                    GROUP BY sentiment
+                """, tuple(ids)).fetchall()
+                for r in rows:
+                    s = (r["sentiment"] or "").lower()
+                    if s in sentiment_breakdown:
+                        sentiment_breakdown[s] = r["c"]
+            except Exception:
+                pass
+
+            # Voice calls per day for chart (last 7 days)
+            voice_series_values = []
+            try:
+                voice_data = {}
+                rows = con.execute(f"""
+                    SELECT date(created_at) d, COUNT(*) c FROM voice_calls
+                    WHERE business_id IN ({placeholders})
+                      AND date(created_at) >= date(?)
+                    GROUP BY d
+                """, (*ids, start)).fetchall()
+                voice_data = {r["d"]: r["c"] for r in rows} if rows else {}
+                for i in range(7):
+                    d = (datetime.now() - timedelta(days=6-i)).strftime("%Y-%m-%d")
+                    voice_series_values.append(int(voice_data.get(d, 0)))
+            except Exception:
+                voice_series_values = [0] * 7
+
     from datetime import datetime as dt
     return render_template(
         "dashboard.html",
@@ -697,12 +967,18 @@ def dashboard():
         series_labels=series_labels,
         series_values=series_values,
         now=dt.now(),
-        # New data for redesigned dashboard
         ai_stats=ai_stats,
         upcoming_appointments=upcoming_appointments,
         recent_activity=recent_activity,
         escalation_count=escalation_count,
-        week_comparison=week_comparison
+        week_comparison=week_comparison,
+        voice_stats=voice_stats,
+        top_services=top_services,
+        new_customers_week=new_customers_week,
+        total_customers=total_customers,
+        recent_calls=recent_calls,
+        sentiment_breakdown=sentiment_breakdown,
+        voice_series_values=voice_series_values,
     )
 
 
@@ -848,6 +1124,127 @@ def delete_logo(business_id: int):
     return redirect(url_for("edit_business", business_id=business_id))
 
 
+@app.route("/voice")
+def voice_dashboard():
+    """Voice AI analytics and call management page."""
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+
+    stats = {
+        "total_calls": 0, "calls_today": 0, "calls_week": 0,
+        "containment_rate": 0, "avg_duration": 0, "booked_calls": 0,
+        "missed_calls": 0, "messages_waiting": 0,
+        "intent_breakdown": {}, "outcome_breakdown": {}, "sentiment_breakdown": {},
+        "daily_series": [], "daily_labels": [],
+    }
+    calls = []
+    messages = []
+
+    if business_id:
+        with get_conn() as con:
+            # Totals
+            row = con.execute("""
+                SELECT
+                  COUNT(*) as total,
+                  SUM(CASE WHEN date(started_at) = date('now') THEN 1 ELSE 0 END) as today,
+                  SUM(CASE WHEN date(started_at) >= date('now','-7 days') THEN 1 ELSE 0 END) as week,
+                  AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END) as avg_dur,
+                  SUM(CASE WHEN booking_confirmed=1 THEN 1 ELSE 0 END) as booked,
+                  SUM(CASE WHEN call_outcome='missed' OR call_intent='missed' THEN 1 ELSE 0 END) as missed,
+                  SUM(CASE WHEN caller_message IS NOT NULL AND caller_message != '' THEN 1 ELSE 0 END) as msgs
+                FROM voice_calls WHERE business_id = ?
+            """, (business_id,)).fetchone()
+            if row:
+                stats["total_calls"] = row["total"] or 0
+                stats["calls_today"] = row["today"] or 0
+                stats["calls_week"] = row["week"] or 0
+                stats["avg_duration"] = round(row["avg_dur"] or 0)
+                stats["booked_calls"] = row["booked"] or 0
+                stats["missed_calls"] = row["missed"] or 0
+                stats["messages_waiting"] = row["msgs"] or 0
+
+            # Containment rate
+            cont = con.execute("""
+                SELECT
+                  COUNT(*) as total,
+                  SUM(CASE WHEN containment=1 THEN 1 ELSE 0 END) as handled
+                FROM voice_calls WHERE business_id = ? AND call_outcome IS NOT NULL
+            """, (business_id,)).fetchone()
+            if cont and cont["total"] > 0:
+                stats["containment_rate"] = round((cont["handled"] / cont["total"]) * 100)
+
+            # Intent breakdown
+            rows = con.execute("""
+                SELECT call_intent, COUNT(*) as cnt FROM voice_calls
+                WHERE business_id = ? AND call_intent IS NOT NULL
+                GROUP BY call_intent ORDER BY cnt DESC
+            """, (business_id,)).fetchall()
+            stats["intent_breakdown"] = {r["call_intent"]: r["cnt"] for r in rows}
+
+            # Outcome breakdown
+            rows = con.execute("""
+                SELECT call_outcome, COUNT(*) as cnt FROM voice_calls
+                WHERE business_id = ? AND call_outcome IS NOT NULL
+                GROUP BY call_outcome ORDER BY cnt DESC
+            """, (business_id,)).fetchall()
+            stats["outcome_breakdown"] = {r["call_outcome"]: r["cnt"] for r in rows}
+
+            # Sentiment breakdown
+            rows = con.execute("""
+                SELECT sentiment, COUNT(*) as cnt FROM voice_calls
+                WHERE business_id = ? AND sentiment IS NOT NULL
+                GROUP BY sentiment
+            """, (business_id,)).fetchall()
+            stats["sentiment_breakdown"] = {r["sentiment"].lower(): r["cnt"] for r in rows}
+
+            # 14-day daily series
+            rows = con.execute("""
+                SELECT date(started_at) as d, COUNT(*) as cnt
+                FROM voice_calls WHERE business_id = ?
+                  AND date(started_at) >= date('now', '-13 days')
+                GROUP BY d ORDER BY d
+            """, (business_id,)).fetchall()
+            day_map = {r["d"]: r["cnt"] for r in rows}
+            from datetime import timedelta
+            today = datetime.now().date()
+            for i in range(13, -1, -1):
+                d = (today - timedelta(days=i)).isoformat()
+                stats["daily_labels"].append(d)
+                stats["daily_series"].append(day_map.get(d, 0))
+
+            # Recent calls (last 50)
+            rows = con.execute("""
+                SELECT * FROM voice_calls WHERE business_id = ?
+                ORDER BY started_at DESC LIMIT 50
+            """, (business_id,)).fetchall()
+            calls = [dict(r) for r in rows]
+
+            # Voicemail messages
+            rows = con.execute("""
+                SELECT * FROM voice_calls
+                WHERE business_id = ? AND caller_message IS NOT NULL AND caller_message != ''
+                ORDER BY started_at DESC LIMIT 20
+            """, (business_id,)).fetchall()
+            messages = [dict(r) for r in rows]
+
+    # Voice settings for config panel
+    voice_settings = {}
+    if business_id:
+        try:
+            from core.voice import get_voice_settings
+            voice_settings = get_voice_settings(business_id)
+        except Exception:
+            pass
+
+    return render_template(
+        "voice.html",
+        stats=stats,
+        calls=calls,
+        messages=messages,
+        voice_settings=voice_settings,
+        now=datetime.now(),
+    )
+
+
 @app.route("/health")
 def health():
     """Basic health check endpoint for load balancers."""
@@ -915,6 +1312,22 @@ def health_ready():
         mimetype="application/json",
         status=status_code
     )
+
+
+# ============================================================================
+# Legal Pages (Public — no login required)
+# ============================================================================
+
+@app.route("/privacy")
+def privacy():
+    """Privacy Policy — public page, no auth required."""
+    return render_template("privacy.html")
+
+
+@app.route("/terms")
+def terms():
+    """Terms of Service — public page, no auth required."""
+    return render_template("terms.html")
 
 
 # ============================================================================

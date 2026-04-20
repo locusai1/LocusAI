@@ -308,50 +308,6 @@ class TestVerifySignatureHmac:
         assert verify_signature_hmac(payload, signature, secret, algorithm="sha1") is True
 
 
-class TestVerifyTwilioSignature:
-    """Tests for verify_twilio_signature function."""
-
-    def test_verify_twilio_valid(self):
-        """Should verify valid Twilio signature."""
-        from core.security import verify_twilio_signature
-
-        url = "https://example.com/webhook"
-        params = {"Body": "Hello", "From": "+15551234567"}
-        auth_token = "test-auth-token"
-
-        # Build Twilio signature manually
-        s = url
-        for key in sorted(params.keys()):
-            s += key + params[key]
-
-        expected = hmac.new(
-            auth_token.encode(),
-            s.encode(),
-            hashlib.sha1
-        ).digest()
-        signature = base64.b64encode(expected).decode()
-
-        assert verify_twilio_signature(url, params, signature, auth_token) is True
-
-    def test_verify_twilio_invalid(self):
-        """Should reject invalid Twilio signature."""
-        from core.security import verify_twilio_signature
-
-        url = "https://example.com/webhook"
-        params = {"Body": "Hello"}
-        auth_token = "test-auth-token"
-        wrong_signature = "invalid-signature"
-
-        assert verify_twilio_signature(url, params, wrong_signature, auth_token) is False
-
-    def test_verify_twilio_empty_inputs(self):
-        """Should return False for empty inputs."""
-        from core.security import verify_twilio_signature
-
-        assert verify_twilio_signature("", {}, "sig", "token") is False
-        assert verify_twilio_signature("url", {}, "", "token") is False
-        assert verify_twilio_signature("url", {}, "sig", "") is False
-
 
 class TestVerifyStripeSignature:
     """Tests for verify_stripe_signature function."""
