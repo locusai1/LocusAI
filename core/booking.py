@@ -549,6 +549,237 @@ def get_pending_booking(token: str) -> Optional[Dict[str, Any]]:
 
 
 # ============================================================================
+# Reschedule / Cancel of EXISTING appointments (confirmation flow)
+# ============================================================================
+
+CANCEL_TAG = re.compile(r"<CANCEL>\s*(\{.*?\})\s*</CANCEL>", re.DOTALL)
+RESCHEDULE_TAG = re.compile(r"<RESCHEDULE>\s*(\{.*?\})\s*</RESCHEDULE>", re.DOTALL)
+
+# token -> {action, appointment_id, business_id, session_id, service, old_slot,
+#           new_slot, customer_name, created_at, expires_at}
+_PENDING_CHANGES: Dict[str, Dict[str, Any]] = {}
+
+
+def find_upcoming_appointments(
+    business_id: int,
+    *,
+    phone: Optional[str] = None,
+    session_id: Optional[int] = None,
+    appointment_id: Optional[int] = None,
+    limit: int = 10,
+) -> list:
+    """Return a business's upcoming (pending/confirmed, future) appointments,
+    optionally filtered by phone, session, or a specific id. Most-recent first."""
+    clauses = ["business_id = ?", "status IN ('pending','confirmed')",
+               "datetime(start_at) > datetime('now')"]
+    params: list = [business_id]
+    if appointment_id is not None:
+        clauses.append("id = ?")
+        params.append(appointment_id)
+    if phone:
+        clauses.append("(phone = ? OR phone LIKE ?)")
+        params.extend([phone, f"%{str(phone)[-7:]}"])
+    if session_id is not None and not phone and appointment_id is None:
+        clauses.append("session_id = ?")
+        params.append(session_id)
+    q = (f"SELECT id, customer_name, phone, service, start_at, status, customer_id "
+         f"FROM appointments WHERE {' AND '.join(clauses)} "
+         f"ORDER BY datetime(start_at) ASC LIMIT ?")
+    params.append(limit)
+    with get_conn() as con:
+        return [dict(r) for r in con.execute(q, tuple(params)).fetchall()]
+
+
+def _resolve_target_appointment(business_id, payload, session_id):
+    """Find the single appointment a change refers to, using id > phone+filters >
+    session. Returns (appt_dict | None, error_message | None)."""
+    appt_id = payload.get("appointment_id")
+    phone = (payload.get("phone") or "").strip() or None
+    service = (payload.get("service") or "").strip() or None
+    when = payload.get("datetime") or payload.get("old_datetime") or ""
+    when_dt = _parse_when(when)
+
+    if appt_id is not None:
+        try:
+            appt_id = int(appt_id)
+        except (TypeError, ValueError):
+            appt_id = None
+
+    candidates = find_upcoming_appointments(
+        business_id, phone=phone, session_id=session_id, appointment_id=appt_id
+    )
+    if not candidates:
+        return None, ("I couldn't find an upcoming appointment to change. "
+                      "Could you confirm the phone number it was booked under?")
+
+    # Narrow by service / date when provided.
+    if len(candidates) > 1 and service:
+        s = service.lower()
+        narrowed = [c for c in candidates if s in (c["service"] or "").lower()]
+        if narrowed:
+            candidates = narrowed
+    if len(candidates) > 1 and when_dt:
+        day = when_dt.strftime("%Y-%m-%d")
+        narrowed = [c for c in candidates if (c["start_at"] or "").startswith(day)]
+        if narrowed:
+            candidates = narrowed
+
+    if len(candidates) > 1:
+        listing = "; ".join(f"{c['service']} on {c['start_at']}" for c in candidates[:4])
+        return None, ("You have more than one upcoming appointment "
+                      f"({listing}). Which one did you mean?")
+    return candidates[0], None
+
+
+def extract_pending_change(
+    text: str,
+    business: Dict,
+    session_id: Optional[int],
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Detect a <CANCEL> or <RESCHEDULE> tag in the AI reply and stage the change
+    (without applying it). Returns (cleaned_text, pending_change | None)."""
+    _cleanup_expired_changes()
+    bid = int(business["id"])
+
+    cancel_m = CANCEL_TAG.search(text or "")
+    resched_m = RESCHEDULE_TAG.search(text or "")
+    if not cancel_m and not resched_m:
+        return text, None
+
+    action = "cancel" if cancel_m else "reschedule"
+    tag = CANCEL_TAG if cancel_m else RESCHEDULE_TAG
+    raw = (cancel_m or resched_m).group(1)
+    clean_text = tag.sub("", text).strip()
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return clean_text, None
+
+    appt, err = _resolve_target_appointment(bid, payload, session_id)
+    if err:
+        return (clean_text + ("\n\n" if clean_text else "") + err).strip(), None
+
+    new_slot = None
+    if action == "reschedule":
+        new_dt = _parse_when(payload.get("new_datetime") or payload.get("new_when") or "")
+        if not new_dt:
+            return (clean_text + "\n\nWhat date and time would you like to move it to?").strip(), None
+        new_slot = new_dt.strftime("%Y-%m-%d %H:%M")
+        # Verify the new slot is free (excluding the appointment being moved).
+        from core.db import check_slot_available
+        duration = 30
+        sid = _find_local_service_id(bid, appt.get("service") or "")
+        if sid:
+            with get_conn() as con:
+                r = con.execute("SELECT duration_min FROM services WHERE id=?", (sid,)).fetchone()
+                if r and r["duration_min"]:
+                    duration = r["duration_min"]
+        if not check_slot_available(bid, new_slot, duration, exclude_appointment_id=appt["id"]):
+            alt = get_available_slots_for_day(bid, new_dt.strftime("%Y-%m-%d"),
+                                              appt.get("service"), limit=1)
+            sug = f" The closest free time I can see is {alt[0]}." if alt else ""
+            return (clean_text + f"\n\nThat time isn't available.{sug} "
+                    "Would another time work?").strip(), None
+
+    token = _generate_booking_token(bid, session_id or 0)
+    now = time.time()
+    _PENDING_CHANGES[token] = {
+        "token": token,
+        "action": action,
+        "appointment_id": appt["id"],
+        "business_id": bid,
+        "session_id": session_id,
+        "service": appt.get("service"),
+        "customer_name": appt.get("customer_name"),
+        "phone": appt.get("phone"),
+        "old_slot": appt.get("start_at"),
+        "new_slot": new_slot,
+        "created_at": now,
+        "expires_at": now + PENDING_BOOKING_TTL,
+    }
+    logger.info(f"Created pending {action} {token[:8]}... for appt {appt['id']}")
+
+    return clean_text, {
+        "token": token,
+        "action": action,
+        "service": appt.get("service"),
+        "current_datetime": appt.get("start_at"),
+        "new_datetime": new_slot,
+        "customer_name": appt.get("customer_name"),
+        "expires_in": PENDING_BOOKING_TTL,
+    }
+
+
+def _cleanup_expired_changes() -> None:
+    now = time.time()
+    for tok in [t for t, d in _PENDING_CHANGES.items()
+                if now - d.get("created_at", 0) > PENDING_BOOKING_TTL]:
+        del _PENDING_CHANGES[tok]
+
+
+def get_pending_change(token: str) -> Optional[Dict[str, Any]]:
+    _cleanup_expired_changes()
+    return _PENDING_CHANGES.get(token)
+
+
+def cancel_pending_change(token: str) -> Tuple[bool, str]:
+    """Discard a staged change before it's applied."""
+    if token in _PENDING_CHANGES:
+        _PENDING_CHANGES.pop(token)
+        return True, "No problem — I've left your appointment as it is."
+    return False, "No pending change found."
+
+
+def confirm_pending_change(token: str) -> Tuple[bool, str]:
+    """Apply a staged cancel/reschedule to the appointment + reminders + provider."""
+    _cleanup_expired_changes()
+    if token not in _PENDING_CHANGES:
+        return False, "That request has expired. Please tell me again what you'd like to change."
+    change = _PENDING_CHANGES.pop(token)
+    if time.time() > change.get("expires_at", 0):
+        return False, "That request has expired. Please tell me again what you'd like to change."
+
+    from core.db import update_appointment_status
+    appt_id = change["appointment_id"]
+    action = change["action"]
+
+    if action == "cancel":
+        ok = update_appointment_status(appt_id, "cancelled")
+        if not ok:
+            return False, "Sorry, I couldn't cancel that. Please call us and we'll sort it out."
+        if REMINDERS_AVAILABLE:
+            try:
+                from core.reminders import cancel_reminders_for_appointment
+                cancel_reminders_for_appointment(appt_id)
+            except Exception as e:
+                logger.warning(f"Failed to cancel reminders for {appt_id}: {e}")
+        svc = change.get("service") or "your appointment"
+        return True, f"Done — your {svc} on {change.get('old_slot')} has been cancelled."
+
+    # reschedule
+    new_slot = change["new_slot"]
+    try:
+        with get_conn() as con:
+            con.execute(
+                "UPDATE appointments SET start_at=? WHERE id=? AND status IN ('pending','confirmed')",
+                (new_slot, appt_id),
+            )
+            con.commit()
+    except Exception as e:
+        logger.error(f"Failed to reschedule appointment {appt_id}: {e}")
+        return False, "Sorry, I couldn't move that appointment. Please call us and we'll help."
+    if REMINDERS_AVAILABLE:
+        try:
+            from core.reminders import reschedule_reminders_for_appointment
+            reschedule_reminders_for_appointment(appt_id, new_slot, customer_phone=change.get("phone"))
+        except Exception as e:
+            logger.warning(f"Failed to reschedule reminders for {appt_id}: {e}")
+    svc = change.get("service") or "your appointment"
+    return True, f"All set — your {svc} has been moved to {new_slot}."
+
+
+# ============================================================================
 # Legacy Auto-Commit Flow (for backward compatibility)
 # ============================================================================
 

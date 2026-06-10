@@ -19,6 +19,9 @@ from core.booking import (
     confirm_pending_booking,
     cancel_pending_booking,
     maybe_commit_booking,  # Keep for backward compatibility
+    extract_pending_change,
+    confirm_pending_change,
+    cancel_pending_change,
 )
 from core.sentiment import analyze_sentiment
 from core.escalation import handle_escalation
@@ -347,6 +350,7 @@ def widget_chat():
 
     # Get AI response
     pending_booking = None
+    pending_change = None
     escalation_triggered = False
     try:
         state = {"session_id": session_id}
@@ -356,6 +360,10 @@ def widget_chat():
         # Extract booking data WITHOUT auto-committing
         # User must explicitly confirm before booking is saved
         reply, pending_booking = extract_pending_booking(reply, business, session_id)
+
+        # Detect reschedule/cancel of an existing appointment (also confirm-gated)
+        if not pending_booking:
+            reply, pending_change = extract_pending_change(reply, business, session_id)
 
     except Exception as e:
         logger.error(f"Widget chat error: {e}")
@@ -391,6 +399,11 @@ def widget_chat():
     if pending_booking:
         response["pending_booking"] = pending_booking
         logger.info(f"Pending booking returned to widget for session {session_id}")
+
+    # Include a pending reschedule/cancel for the widget to confirm
+    if pending_change:
+        response["pending_change"] = pending_change
+        logger.info(f"Pending {pending_change.get('action')} returned to widget for session {session_id}")
 
     if escalation_triggered:
         response["escalated"] = True
@@ -507,6 +520,49 @@ def cancel_booking():
         "success": success,
         "message": message
     })
+
+
+@bp.route("/change/confirm", methods=["POST", "OPTIONS"])
+@cors_headers
+@require_tenant
+def confirm_change():
+    """Confirm a staged reschedule/cancel of an existing appointment."""
+    data = request.get_json(silent=True) or {}
+    session_id = request.headers.get("X-Session-ID") or data.get("session_id")
+    token = (data.get("token") or "").strip()
+    if not token:
+        return jsonify({"success": False, "message": "Missing change token"}), 400
+
+    success, message = confirm_pending_change(token)
+    if success and session_id:
+        try:
+            log_message(int(session_id), "bot", f"✅ {message}")
+        except (ValueError, TypeError):
+            pass
+    if not success:
+        return jsonify({"success": False, "message": message}), 400
+    logger.info("Appointment change confirmed via widget")
+    return jsonify({"success": True, "message": message})
+
+
+@bp.route("/change/cancel", methods=["POST", "OPTIONS"])
+@cors_headers
+@require_tenant
+def cancel_change():
+    """Dismiss a staged reschedule/cancel (leave the appointment unchanged)."""
+    data = request.get_json(silent=True) or {}
+    session_id = request.headers.get("X-Session-ID") or data.get("session_id")
+    token = (data.get("token") or "").strip()
+    if not token:
+        return jsonify({"success": False, "message": "Missing change token"}), 400
+
+    success, message = cancel_pending_change(token)
+    if success and session_id:
+        try:
+            log_message(int(session_id), "bot", message)
+        except (ValueError, TypeError):
+            pass
+    return jsonify({"success": success, "message": message})
 
 
 @bp.route("/history", methods=["GET", "OPTIONS"])

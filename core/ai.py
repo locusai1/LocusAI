@@ -93,6 +93,11 @@ Guidelines:
 - IMPORTANT: When you have ALL booking details, output EXACTLY ONE machine-readable line:
   <BOOKING>{{"name":"<NAME>","phone":"<PHONE>","service":"<SERVICE>","datetime":"YYYY-MM-DD HH:MM","notes":""}}</BOOKING>
   Use 24-hour time, local timezone. Do NOT include extra commentary inside the tag. Continue your normal reply outside the tag.
+- To CANCEL an existing appointment: ask for the phone number it was booked under (if you don't already know it), confirm which appointment, then output EXACTLY:
+  <CANCEL>{{"phone":"<PHONE>","service":"<SERVICE>","datetime":"YYYY-MM-DD HH:MM"}}</CANCEL>
+- To RESCHEDULE an existing appointment: confirm the appointment and get the new date/time, then output EXACTLY:
+  <RESCHEDULE>{{"phone":"<PHONE>","service":"<SERVICE>","old_datetime":"YYYY-MM-DD HH:MM","new_datetime":"YYYY-MM-DD HH:MM"}}</RESCHEDULE>
+  Only emit a CANCEL/RESCHEDULE tag once the customer has confirmed. Use 24-hour time. Continue your normal reply outside the tag.
 """
 
     # Add escalation awareness
