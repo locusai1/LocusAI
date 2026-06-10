@@ -289,7 +289,8 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://yourdomain.com/integrations/google/callback
 
-# Stripe billing (to be built — billing_bp.py doesn't exist yet)
+# Stripe billing (code built — billing_bp.py + core/billing.py; add keys to go live, see BILLING_SETUP.md)
+# Also: STRIPE_PRICE_STARTER / STRIPE_PRICE_PROFESSIONAL / STRIPE_PRICE_BUSINESS (price_... IDs)
 STRIPE_SECRET_KEY=sk_...
 STRIPE_PUBLISHABLE_KEY=pk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
@@ -301,7 +302,7 @@ SMTP_USER=...
 SMTP_PASS=...
 FROM_EMAIL=hello@locusai.co.uk
 
-# Error monitoring (to be integrated)
+# Error monitoring (code wired in dashboard.py — set SENTRY_DSN to activate)
 SENTRY_DSN=https://...@sentry.io/...
 ```
 
@@ -555,7 +556,7 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 | test_booking.py | 1 | Booking commit basic test |
 
 ```bash
-.venv/bin/python -m pytest tests/ -v                     # All 580
+.venv/bin/python -m pytest tests/ -v                     # All 601
 .venv/bin/python -m pytest tests/test_sentiment.py -v    # Specific file
 .venv/bin/python -m pytest tests/ -k "test_widget" -v    # Filter by name
 ```
@@ -573,7 +574,14 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - **Cookie consent banner**: present in `public_base.html` (also referenced in `privacy.html`)
 - Pricing displayed in **£ (GBP)** across `home.html`, `onboard.html`, `services.html`
 - Rebranding complete: AxisAI → LocusAI (all references updated)
-- Test suite: 563 tests passing (verified Jun 2026)
+- Test suite: **601 tests passing** (verified Jun 2026)
+- **Stripe billing** (code complete; needs keys): `core/billing.py` + `billing_bp.py` + `subscriptions` table. Plans £49/£149/£299, Checkout, Customer Portal, signature-verified webhook at `/api/billing/webhook`. Degrades gracefully w/o keys. See `BILLING_SETUP.md`. Trial-banner Upgrade → `/billing`.
+- **Trial expiry enforcement**: `_enforce_trial` before_request redirects expired trial users (no active sub) to `/billing`; admins + paid users exempt
+- **SMS STOP/START opt-out** (TCPA): `sms_opt_outs` table; `send_sms` suppresses opted-out numbers; webhook records/clears opt-out
+- **Sentry** error monitoring: env-gated (`SENTRY_DSN`), no-op when unset
+- **DB path configurable**: `LOCUSAI_DB_PATH` env (point at a persistent volume in prod)
+- **Dashboard UX**: name-based greeting, sidebar user identity, notifications bell w/ escalation count, clickable KPI cards, mobile table scroll, form loading states
+- **Homepage**: hero live-call demo + depth, FAQ section (verified responsive)
 - Voice AI: Telnyx SIP + Retell native LLM live (+442046203253)
 - Caller recognition: `/api/voice/call-setup` dynamic variable injection
 - Post-call AI analysis: intent, outcome, sentiment, containment from transcript
@@ -605,11 +613,11 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - Voice latency: response time too slow for natural conversation (target: <1s)
 - Voice naturalness: Dorothy voice still sounds robotic in some scenarios
 - Background workers: daemon threads crash silently, no auto-restart
-- No billing: Stripe completely absent — zero code exists. "Upgrade" link in trial banner goes to `href="#"`
-- Trial expiry: `trial_ends_at` stored but NOT enforced anywhere yet
+- Billing code complete but NOT live: needs real Stripe keys + Price IDs (see `BILLING_SETUP.md`). Until then `/billing` shows "not configured".
 - Legal docs are working drafts: Privacy Policy and Terms need real solicitor review before public launch
 - Tailwind CDN: loaded at runtime in base.html — must be removed for production
-- Deploy hardening still open: no Sentry, no remote DB backups (Railway uses ephemeral disk — SQLite data is at risk on redeploy), no Dockerfile pinning
+- ⚠️ Railway ephemeral disk: SQLite data lost on redeploy unless `LOCUSAI_DB_PATH` points at a mounted volume (code now supports it — just needs the volume + env var set)
+- Deploy hardening: Sentry code wired (needs `SENTRY_DSN`); remote DB backups still local-only
 - Google Calendar: code done but GOOGLE_CLIENT_ID/SECRET not configured
 - No Spanish/bilingual support
 - Error pages (404/500): extend auth-required base — broken for logged-out users
@@ -674,10 +682,10 @@ If NO to all three → Year 2+ feature.
 - [ ] **Solicitor review** of Privacy Policy + Terms before public launch
 
 #### Revenue Infrastructure
-- [ ] **Stripe billing** — zero Stripe code exists. Need: `billing_bp.py`, `subscriptions` table, Stripe Checkout flow, webhook handler (`invoice.paid`, `customer.subscription.deleted`), Customer Portal redirect
-- [ ] **Subscription tiers**: Starter $49/mo · Professional $149/mo · Business $299/mo · Enterprise custom
-- [ ] **Feature gating** by plan tier (conversation limits, user limits, integrations)
-- [ ] **Trial expiry enforcement** — `trial_ends_at` stored in DB, no enforcement code yet
+- [x] **Stripe billing** — DONE (code): `billing_bp.py`, `core/billing.py`, `subscriptions` table, Checkout, webhook (`/api/billing/webhook`), Customer Portal. Needs keys to go live (`BILLING_SETUP.md`).
+- [x] **Subscription tiers**: Starter £49 · Professional £149 · Business £299 (in `core/billing.py → PLANS`)
+- [~] **Feature gating** by plan tier — limits defined in `PLANS`; per-feature enforcement not yet wired beyond trial gate
+- [x] **Trial expiry enforcement** — DONE: `_enforce_trial` before_request redirects expired-trial users (no active sub) to `/billing`
 
 #### Customer Acquisition
 - [x] **Password reset** — DONE: full flow working
@@ -692,7 +700,7 @@ If NO to all three → Year 2+ feature.
 - [ ] **Nginx** — N/A on Railway (their edge handles TLS/static/gzip). Revisit only if self-hosting.
 - [ ] **Dockerfile** — optional; Railway auto-builds from `requirements.txt` + `Procfile` (nixpacks). Add only if build needs pinning.
 - [ ] **Persistent DB on Railway** — ⚠️ SQLite is on ephemeral disk; data lost on redeploy. Attach a Railway volume or move to Railway Postgres BEFORE real users.
-- [ ] **Sentry** error monitoring — 5 lines in dashboard.py, free tier = 5K errors/month
+- [x] **Sentry** error monitoring — DONE (code): env-gated in dashboard.py; set `SENTRY_DSN` to activate (free tier = 5K errors/month)
 - [ ] **Remote database backups** — current backup.sh is local only. Replace with hourly SQLite → S3/Backblaze.
 - [ ] **Remove Tailwind CDN** from base.html → compile with `npx tailwindcss`
 
@@ -709,7 +717,7 @@ If NO to all three → Year 2+ feature.
 - [ ] Tables: add horizontal scroll on mobile (silent overflow currently)
 - [ ] Dashboard greeting: use `user.name` not `email.split('@')[0]`
 - [ ] Flash messages: persist until dismissed (not 5s auto-dismiss)
-- [ ] Error pages (404/500): must extend standalone base (broken for logged-out users)
+- [x] Error pages (404/500): DONE — extend standalone `public_base.html`, render for logged-out users (tested)
 
 #### Features
 - [ ] **Appointment reschedule/cancel via AI** — top-3 use case, completely absent
@@ -720,7 +728,7 @@ If NO to all three → Year 2+ feature.
 - [ ] **Email sequences** — welcome, trial ending Day 10/13, payment failed dunning
 
 #### Compliance
-- [ ] SMS "STOP" keyword handling in `sms_bp.py` (required by TCPA for US)
+- [x] SMS "STOP" keyword handling in `sms_bp.py` — DONE: opt-out recorded, sends suppressed, START re-subscribes
 - [ ] International data transfers: document SCCs with OpenAI, Retell, Telnyx (UK/EU → US)
 
 ---
@@ -808,15 +816,18 @@ Annual pricing: 2 months free (~16.7% discount).
 
 ## Next Up (Priority Order)
 
-> Done since last audit: public marketing homepage (`/` → `home.html`), cookie consent banner, Railway+Gunicorn deploy w/ custom domain `locusai.co.uk` + HTTPS. Removed from this list.
+> Done since last audit: public homepage, cookie consent, Railway+Gunicorn+HTTPS deploy. Done THIS session (code, tests passing): Stripe billing, trial-expiry enforcement, SMS STOP/START opt-out, Sentry (env-gated), env-configurable DB path, dashboard UX polish, error-page fix, homepage elevation.
 
-1. **Stripe billing** — zero code exists. `billing_bp.py` + `subscriptions` table + Checkout flow + webhook (`invoice.paid`, `customer.subscription.deleted`) + Customer Portal. Fix "Upgrade" link in trial banner.
-2. **Trial expiry enforcement** — check `trial_ends_at` on dashboard load; restrict access or prompt upgrade when expired
-3. **Persistent database on Railway** — SQLite currently sits on Railway's ephemeral disk; data is lost on redeploy. Attach a Railway volume (mount the `.db` on it) or migrate to Railway Postgres. HIGH risk, do before real users.
-4. **Deploy hardening** — Sentry error monitoring + remote DB backups (to S3/Backblaze) + remove Tailwind CDN (compile with `npx tailwindcss`)
-5. **Solicitor review** of Privacy Policy + Terms — working drafts exist, need real legal review before launch
-6. **Appointment reschedule/cancel via AI** — top-3 use case, missing
-7. **Google Calendar end-to-end** — code done, just needs GOOGLE_CLIENT_ID/SECRET + test run
-8. **Dashboard UX fixes** — notifications bell, clickable KPIs, mobile tables, error pages
-9. **Appointment calendar view** — week/month grid
-10. **Spanish language support**
+**Owner action items (need your external accounts — code is ready):**
+- A. **Add Stripe keys** to go live on billing — follow `BILLING_SETUP.md` (~15 min in Stripe dashboard)
+- B. **Attach a Railway volume** + set `LOCUSAI_DB_PATH=/data/receptionist.db` so data survives redeploys (HIGH priority before real users)
+- C. **Set `SENTRY_DSN`** in Railway to turn on error monitoring (free)
+
+**Next build priorities:**
+1. **Appointment reschedule/cancel via AI** — top-3 use case, missing
+2. **Google Calendar end-to-end** — code done, needs GOOGLE_CLIENT_ID/SECRET + test run
+3. **Remove Tailwind CDN** → compile with `npx tailwindcss` for prod
+4. **Remote DB backups** (S3/Backblaze) — current backup.sh is local only
+5. **Appointment calendar view** — week/month grid
+6. **Spanish language support**
+7. **Solicitor review** of Privacy Policy + Terms before public launch
