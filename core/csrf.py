@@ -9,6 +9,7 @@ _EXEMPT_PATHS = {
     "/api/sms/",         # SMS webhooks use signature verification
     "/api/whatsapp/",    # WhatsApp webhooks use signature verification
     "/api/voice/",       # Voice webhooks use signature verification
+    "/api/billing/",     # Stripe webhooks use signature verification
 }
 
 def _get_token():

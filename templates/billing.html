@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Billing & Plans — LocusAI{% endblock %}
+{% block content %}
+
+<!-- Page Header -->
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Billing &amp; Plans</h1>
+    <p class="page-subtitle">Choose the plan that fits your business. Cancel anytime — no per-minute pricing, no surprises.</p>
+  </div>
+</div>
+
+{% if not billing_configured %}
+<div class="card mb-6" style="border-left: 4px solid #f59e0b;">
+  <div class="card-body" style="display:flex; gap:12px; align-items:flex-start;">
+    <span style="font-size:20px;">⚙️</span>
+    <div>
+      <strong>Billing isn't live yet.</strong>
+      <p class="text-muted" style="margin:4px 0 0; font-size:13px;">
+        Stripe hasn't been connected on this environment, so checkout is disabled.
+        You can still browse plans below — your free trial continues in the meantime.
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if is_active and current_plan %}
+<!-- Current subscription banner -->
+<div class="card mb-6" style="border-left: 4px solid #16a34a;">
+  <div class="card-body" style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+    <div>
+      <div style="font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#16a34a; font-weight:600;">Current plan</div>
+      <div style="font-size:20px; font-weight:700; margin-top:2px;">{{ current_plan.name }} · £{{ current_plan.price_gbp }}/mo</div>
+      {% if subscription and subscription.status %}
+      <div class="text-muted" style="font-size:13px; margin-top:2px;">
+        Status: {{ subscription.status }}{% if subscription.cancel_at_period_end %} · cancels at period end{% endif %}
+        {% if subscription.current_period_end %} · renews {{ subscription.current_period_end[:10] }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('billing.portal') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-secondary">Manage subscription →</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Pricing grid -->
+<div class="pricing-grid">
+  {% for p in plans %}
+  <div class="card pricing-card {% if p.get('popular') %}pricing-card--popular{% endif %}">
+    {% if p.get('popular') %}<div class="pricing-badge">Most popular</div>{% endif %}
+    <div class="card-body" style="display:flex; flex-direction:column; height:100%;">
+      <h3 style="font-size:18px; font-weight:700; margin:0;">{{ p.name }}</h3>
+      <p class="text-muted" style="font-size:13px; min-height:34px; margin:6px 0 0;">{{ p.tagline }}</p>
+      <div style="margin:16px 0;">
+        <span style="font-size:36px; font-weight:800;">£{{ p.price_gbp }}</span>
+        <span class="text-muted" style="font-size:14px;">/month</span>
+      </div>
+      <ul style="list-style:none; padding:0; margin:0 0 20px; display:flex; flex-direction:column; gap:8px; flex:1;">
+        {% for f in p.features %}
+        <li style="display:flex; gap:8px; align-items:flex-start; font-size:14px;">
+          <span style="color:#16a34a; flex-shrink:0;">✓</span><span>{{ f }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if current_plan_key == p.key %}
+        <button class="btn btn-secondary" disabled style="width:100%; opacity:.7;">Current plan</button>
+      {% else %}
+        <form method="post" action="{{ url_for('billing.checkout', plan_key=p.key) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn {% if p.get('popular') %}btn-primary{% else %}btn-secondary{% endif %}" style="width:100%;"
+                  {% if not billing_configured %}title="Billing not configured yet"{% endif %}>
+            {% if is_active %}Switch to {{ p.name }}{% else %}Choose {{ p.name }}{% endif %}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="text-muted" style="text-align:center; font-size:13px; margin-top:24px;">
+  Secure payments by Stripe · Cancel anytime · Prices in GBP, exclusive of VAT.
+</p>
+
+<style>
+  .pricing-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+    gap:20px; align-items:stretch;
+  }
+  .pricing-card { position:relative; display:flex; }
+  .pricing-card--popular {
+    border:2px solid var(--accent, #2f6fec);
+    box-shadow:0 10px 30px -10px rgba(47,111,236,.35);
+  }
+  .pricing-badge {
+    position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+    background:var(--accent, #2f6fec); color:#fff; font-size:11px; font-weight:600;
+    padding:3px 12px; border-radius:999px; letter-spacing:.03em; white-space:nowrap;
+  }
+</style>
+{% endblock %}

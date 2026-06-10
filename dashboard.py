@@ -17,6 +17,7 @@ from core.db import (
     init_db, list_businesses, get_business_by_id, update_business,
     get_conn, ensure_tenant_key
 )
+from core import billing
 from core.validators import slugify, validate_redirect_url, safe_int
 from core.tenantfs import write_meta_from_db
 from core.csrf import register_csrf
@@ -83,6 +84,7 @@ from widget_bp import bp as widget_bp
 from customers_bp import bp as customers_bp
 from escalations_bp import escalations_bp
 from analytics_bp import analytics_bp
+from billing_bp import bp as billing_bp
 
 # SMS Blueprint (optional, requires Twilio or alternative provider)
 try:
@@ -110,6 +112,7 @@ app.register_blueprint(widget_bp)
 app.register_blueprint(customers_bp)
 app.register_blueprint(escalations_bp)
 app.register_blueprint(analytics_bp)
+app.register_blueprint(billing_bp)
 
 # Register SMS blueprint if available
 if SMS_AVAILABLE:
@@ -408,6 +411,50 @@ def _extract_business_id() -> int:
     return bid or 0
 
 
+# Paths a logged-in user can still reach after their trial expires (so they can
+# pay, log out, read legal pages, and the app's APIs/webhooks keep working).
+_TRIAL_EXPIRED_ALLOWED = (
+    "/billing", "/logout", "/login", "/signup", "/verify-email",
+    "/forgot-password", "/reset-password", "/privacy", "/terms",
+    "/health", "/static/", "/api/", "/brand/set",
+)
+
+
+def _trial_expired(user) -> bool:
+    """True only for a trial user whose trial has lapsed and who has no active
+    paid subscription. Admins and users without a trial date are never expired."""
+    if not user or user.get("role") == "admin":
+        return False
+    ends_at = user.get("trial_ends_at")
+    if not ends_at:
+        return False  # admin-created / non-trial accounts
+    try:
+        end = datetime.fromisoformat(str(ends_at).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return False
+    if datetime.now() <= end.replace(tzinfo=None):
+        return False  # trial still active
+    # Trial date has passed — only "expired" if they haven't paid.
+    try:
+        return not billing.has_active_subscription(user["id"])
+    except Exception:
+        app.logger.exception("Trial check failed; allowing access")
+        return False
+
+
+@app.before_request
+def _enforce_trial():
+    """Gate dashboard access once a free trial expires (prompts upgrade)."""
+    path = request.path
+    if any(path.startswith(p) for p in _TRIAL_EXPIRED_ALLOWED):
+        return
+    user = session.get("user")
+    if user and _trial_expired(user):
+        flash("Your free trial has ended. Choose a plan to keep your "
+              "AI receptionist running.", "err")
+        return redirect(url_for("billing.billing_home"))
+
+
 @app.after_request
 def _set_headers(resp: Response) -> Response:
     """Set security headers on all responses."""
@@ -538,12 +585,13 @@ def handle_exception(e):
 def _inject_branding():
     """Inject branding variables into all templates."""
     # Handle business switching from query parameter
+    allowed_ids = getattr(g, "allowed_business_ids", None) or []
     bid_from_query = request.args.get("business_id")
     if bid_from_query:
         bq = safe_int(bid_from_query)
         if bq:
             user = session.get("user")
-            if (user and user.get("role") == "admin") or (bq in (g.allowed_business_ids or [])):
+            if (user and user.get("role") == "admin") or (bq in allowed_ids):
                 session["active_business_id"] = bq
 
     bid = session.get("active_business_id")
@@ -555,7 +603,7 @@ def _inject_branding():
         if user.get("role") == "admin":
             nav_businesses = list_businesses(limit=500)
         else:
-            ids = g.allowed_business_ids or []
+            ids = allowed_ids
             if ids:
                 with get_conn() as con:
                     placeholders = ",".join("?" * len(ids))

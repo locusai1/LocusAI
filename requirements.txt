@@ -37,3 +37,9 @@ cryptography>=41.0.0
 
 # Production WSGI server
 gunicorn>=21.2.0
+
+# Stripe billing (subscriptions, checkout, customer portal, webhooks)
+stripe>=7.0.0
+
+# Error monitoring (activates only when SENTRY_DSN is set)
+sentry-sdk[flask]>=1.40.0

@@ -10,7 +10,21 @@ from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "receptionist.db")
+# DB location is env-configurable so the SQLite file can live on a persistent
+# volume (e.g. a Railway volume mounted at /data) and survive redeploys.
+# Set LOCUSAI_DB_PATH=/data/receptionist.db in production. Falls back to the
+# repo-local file for development.
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "receptionist.db")
+DB_PATH = os.environ.get("LOCUSAI_DB_PATH") or _DEFAULT_DB_PATH
+
+# Ensure the parent directory exists (volume mount points may start empty).
+_db_dir = os.path.dirname(DB_PATH)
+if _db_dir and not os.path.isdir(_db_dir):
+    try:
+        os.makedirs(_db_dir, exist_ok=True)
+    except OSError:
+        logger.warning("Could not create DB directory %s; using default", _db_dir)
+        DB_PATH = _DEFAULT_DB_PATH
 
 # ============================================================================
 # Connection Management
@@ -476,6 +490,24 @@ def init_db() -> None:
         );""")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_prt_token ON password_reset_tokens(token);")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_prt_user ON password_reset_tokens(user_id);")
+
+        # ---- subscriptions (Stripe billing) ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT UNIQUE,
+            plan TEXT NOT NULL DEFAULT 'starter',
+            status TEXT NOT NULL DEFAULT 'incomplete',
+            current_period_end TEXT,
+            cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_sub_user ON subscriptions(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_sub_customer ON subscriptions(stripe_customer_id);")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_sub_stripe_id ON subscriptions(stripe_subscription_id);")
 
         con.commit()
         logger.info("Database schema initialized successfully")

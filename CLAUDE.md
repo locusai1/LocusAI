@@ -269,6 +269,7 @@ OPENAI_API_KEY=sk-...           # AI conversations (GPT-4o-mini)
 FLASK_SECRET_KEY=...            # Session encryption (use secrets.token_hex(32))
 APP_ENV=development             # Set to 'production' in prod
 APP_BASE_URL=http://localhost:5050  # Used to build absolute URLs in emails (verification, reset)
+LOCUSAI_DB_PATH=/data/receptionist.db  # OPTIONAL: SQLite location. Set to a persistent volume in prod (Railway volume) so data survives redeploys. Defaults to repo-local receptionist.db.
 
 # Voice (Retell + Telnyx)
 RETELL_API_KEY=key_...          # Retell AI API key

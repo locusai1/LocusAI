@@ -22,6 +22,12 @@ else:
     print("Set FLASK_SECRET_KEY environment variable for persistent sessions.", file=sys.stderr)
 APP_BASE_URL     = os.getenv("APP_BASE_URL", "http://127.0.0.1:5050")
 
+# ===== Database =====
+# Path to the SQLite file. In production set this to a persistent volume so data
+# survives redeploys (e.g. Railway volume: LOCUSAI_DB_PATH=/data/receptionist.db).
+# core/db.py reads this env var directly; exposed here for documentation.
+LOCUSAI_DB_PATH = os.getenv("LOCUSAI_DB_PATH")  # None → repo-local default
+
 # ===== OpenAI =====
 # Required for AI to run. Keep it out of source control.
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
@@ -40,6 +46,19 @@ RETELL_LLM_ID = os.getenv("RETELL_LLM_ID", "llm_b41019c52636d5321f084e5bdbbb")
 VOICE_TRANSFER_TIMEOUT = int(os.getenv("VOICE_TRANSFER_TIMEOUT", "300"))  # seconds
 VOICE_MAX_DURATION = int(os.getenv("VOICE_MAX_DURATION", "600"))  # seconds (10 min)
 VOICE_RECORDING_ENABLED = os.getenv("VOICE_RECORDING_ENABLED", "true").lower() == "true"
+
+# ===== Stripe Billing =====
+# All optional — billing degrades gracefully (shows "not configured") when the
+# secret key is absent. Plug these in from your Stripe dashboard to go live.
+#   1. STRIPE_SECRET_KEY / STRIPE_PUBLISHABLE_KEY — API keys
+#   2. STRIPE_WEBHOOK_SECRET — from the webhook endpoint you create (whsec_...)
+#   3. STRIPE_PRICE_* — the recurring Price IDs for each plan (price_...)
+STRIPE_SECRET_KEY       = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY  = os.getenv("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET   = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_STARTER       = os.getenv("STRIPE_PRICE_STARTER")
+STRIPE_PRICE_PROFESSIONAL  = os.getenv("STRIPE_PRICE_PROFESSIONAL")
+STRIPE_PRICE_BUSINESS      = os.getenv("STRIPE_PRICE_BUSINESS")
 
 # ===== Email (optional; used for appointment confirmations) =====
 SMTP_HOST = os.getenv("SMTP_HOST")            # e.g. "smtp.gmail.com"
