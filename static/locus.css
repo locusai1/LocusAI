@@ -3797,3 +3797,9 @@ html[data-theme="dark"] .modal-backdrop {
   font-size: 13px;
   margin-bottom: var(--space-4);
 }
+
+/* ── Mobile: ensure wide tables scroll horizontally instead of overflowing ── */
+@media (max-width: 768px) {
+  .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+}

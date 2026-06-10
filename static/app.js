@@ -40,6 +40,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Form submit loading states (feedback + double-submit prevention).
+  // Add data-no-loading to a <form> to opt out.
+  document.querySelectorAll('form').forEach(f => {
+    if (f.hasAttribute('data-no-loading')) return;
+    f.addEventListener('submit', () => {
+      const btn = f.querySelector('button[type="submit"], button:not([type]), input[type="submit"]');
+      if (!btn || btn.dataset.loading === '1') return;
+      btn.dataset.loading = '1';
+      // Disable on the next tick so the button's name/value still posts.
+      setTimeout(() => {
+        btn.classList.add('btn-loading');
+        btn.setAttribute('aria-busy', 'true');
+        btn.disabled = true;
+      }, 0);
+    });
+  });
+  // Restore buttons when navigating back via bfcache (avoids stuck spinners).
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll('[data-loading="1"]').forEach(btn => {
+      btn.disabled = false;
+      btn.classList.remove('btn-loading');
+      btn.removeAttribute('aria-busy');
+      btn.dataset.loading = '';
+    });
+  });
+
   // Helpers for charts
   function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function hexToRgba(hex, alpha){

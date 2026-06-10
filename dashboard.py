@@ -646,6 +646,28 @@ def _inject_branding():
                 color = row["accent_color"] or color
                 logo_path = row["logo_path"] or None
 
+    # Pending-escalation count for the header notifications bell (cheap COUNT).
+    pending_escalations = 0
+    if user:
+        try:
+            with get_conn() as con:
+                if user.get("role") == "admin":
+                    r = con.execute(
+                        "SELECT COUNT(*) c FROM escalations WHERE status='pending'"
+                    ).fetchone()
+                elif allowed_ids:
+                    ph = ",".join("?" * len(allowed_ids))
+                    r = con.execute(
+                        f"SELECT COUNT(*) c FROM escalations "
+                        f"WHERE status='pending' AND business_id IN ({ph})",
+                        tuple(allowed_ids),
+                    ).fetchone()
+                else:
+                    r = None
+                pending_escalations = r["c"] if r else 0
+        except Exception:
+            pending_escalations = 0
+
     return {
         "accent_color": color,
         "business_logo_path": logo_path,
@@ -653,6 +675,7 @@ def _inject_branding():
         "active_business_id": bid or 0,
         "is_prod": IS_PROD,
         "current_year": datetime.now().year,
+        "pending_escalations": pending_escalations,
     }
 
 

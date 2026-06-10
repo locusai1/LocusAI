@@ -104,6 +104,17 @@
 
       <!-- Footer -->
       <div class="sidebar-footer">
+        {% if session.user %}
+        <div class="flex items-center gap-2" style="margin-bottom:10px; min-width:0;">
+          <div style="width:30px; height:30px; border-radius:50%; background:var(--accent,#2f6fec); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">
+            {{ (session.user.name or session.user.email or '?')[0]|upper }}
+          </div>
+          <div style="min-width:0; line-height:1.25;">
+            <div style="font-size:13px; font-weight:600; color:#e5e5e5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ session.user.name or session.user.email.split('@')[0]|title }}</div>
+            <div style="font-size:11px; color:#a3a3a3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ session.user.email }}</div>
+          </div>
+        </div>
+        {% endif %}
         <div class="flex items-center justify-between">
           <a href="{{ url_for('auth.logout') }}">Logout</a>
           <button id="theme-toggle" class="btn btn-ghost btn-sm">
@@ -147,6 +158,15 @@
           <!-- Quick actions -->
           <a href="{{ url_for('search.search_index') }}" class="btn btn-ghost btn-icon" title="Search">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </a>
+
+          <!-- Notifications (pending escalations) -->
+          <a href="{{ url_for('escalations.escalations_index') }}" class="btn btn-ghost btn-icon"
+             style="position: relative;" title="{{ pending_escalations or 0 }} escalation(s) need attention">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            {% if pending_escalations and pending_escalations > 0 %}
+            <span style="position:absolute; top:2px; right:2px; min-width:16px; height:16px; padding:0 4px; background:#ef4444; color:#fff; border-radius:999px; font-size:10px; font-weight:700; line-height:16px; text-align:center;">{{ pending_escalations if pending_escalations < 100 else '99+' }}</span>
+            {% endif %}
           </a>
         </div>
       </header>
