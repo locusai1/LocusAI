@@ -486,7 +486,7 @@ curl -X GET "https://api.telnyx.com/v2/fqdn_connections/2882485623761929727" -H 
 - `_background_call_sync` — syncs Retell call logs to `voice_calls` table
 - `_background_reminder_worker` — dispatches appointment reminders (24h, 1h, 15m before)
 - `_background_appointment_automation` — no-show detection + review request SMS
-- WARNING: These are daemon threads. They crash silently, die on Flask restart, and don't auto-recover.
+- These run under `core/workers.py` supervision: each catches all exceptions, retries with backoff, and records a heartbeat (see `/health/ready`). They still die on Flask restart (re-spawned at startup).
 
 ### Widget API (Public — requires X-Tenant-Key header)
 ```
@@ -556,7 +556,7 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 | test_booking.py | 1 | Booking commit basic test |
 
 ```bash
-.venv/bin/python -m pytest tests/ -v                     # All 601
+.venv/bin/python -m pytest tests/ -v                     # All 632
 .venv/bin/python -m pytest tests/test_sentiment.py -v    # Specific file
 .venv/bin/python -m pytest tests/ -k "test_widget" -v    # Filter by name
 ```
@@ -574,7 +574,11 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - **Cookie consent banner**: present in `public_base.html` (also referenced in `privacy.html`)
 - Pricing displayed in **£ (GBP)** across `home.html`, `onboard.html`, `services.html`
 - Rebranding complete: AxisAI → LocusAI (all references updated)
-- Test suite: **601 tests passing** (verified Jun 2026)
+- Test suite: **632 tests passing** (verified Jun 2026)
+- **AI reschedule/cancel** of existing appointments (web chat): `<CANCEL>`/`<RESCHEDULE>` token flow in `core/booking.py`, widget confirm card, `/api/widget/change/*` endpoints
+- **Feature gating by plan** (`core/limits.py`): conversation quota, channel + user gates; trial/no-sub = ungated; widget `/session` returns 402 when a paid tier is over cap
+- **Supervised background workers** (`core/workers.py`): auto-restart + exponential backoff + heartbeats on `/health/ready` (no more silent death)
+- **Appointment calendar view**: `/appointments/calendar` month + week grid, colour-coded by status
 - **Stripe billing** (code complete; needs keys): `core/billing.py` + `billing_bp.py` + `subscriptions` table. Plans £49/£149/£299, Checkout, Customer Portal, signature-verified webhook at `/api/billing/webhook`. Degrades gracefully w/o keys. See `BILLING_SETUP.md`. Trial-banner Upgrade → `/billing`.
 - **Trial expiry enforcement**: `_enforce_trial` before_request redirects expired trial users (no active sub) to `/billing`; admins + paid users exempt
 - **SMS STOP/START opt-out** (TCPA): `sms_opt_outs` table; `send_sms` suppresses opted-out numbers; webhook records/clears opt-out
@@ -612,7 +616,7 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 ### Known Issues / Needs Work ⚠️
 - Voice latency: response time too slow for natural conversation (target: <1s)
 - Voice naturalness: Dorothy voice still sounds robotic in some scenarios
-- Background workers: daemon threads crash silently, no auto-restart
+- Background workers: now supervised (`core/workers.py`) — auto-restart + backoff + heartbeats on `/health/ready`
 - Billing code complete but NOT live: needs real Stripe keys + Price IDs (see `BILLING_SETUP.md`). Until then `/billing` shows "not configured".
 - Legal docs are working drafts: Privacy Policy and Terms need real solicitor review before public launch
 - Tailwind CDN: loaded at runtime in base.html — must be removed for production
@@ -720,9 +724,9 @@ If NO to all three → Year 2+ feature.
 - [x] Error pages (404/500): DONE — extend standalone `public_base.html`, render for logged-out users (tested)
 
 #### Features
-- [ ] **Appointment reschedule/cancel via AI** — top-3 use case, completely absent
+- [x] **Appointment reschedule/cancel via AI** — DONE for web chat (`<CANCEL>`/`<RESCHEDULE>` flow); voice/SMS still to extend
 - [ ] **Google Calendar end-to-end** — code done, just needs GOOGLE_CLIENT_ID/SECRET + test
-- [ ] **Appointment calendar view** — week/month calendar (every SMB buyer expects this)
+- [x] **Appointment calendar view** — DONE: `/appointments/calendar` month + week grid
 - [ ] **In-app onboarding checklist** — new businesses see "0" KPIs; replace with setup checklist
 - [ ] **Uptime monitoring** — UptimeRobot free tier watching `/health` every 5 minutes
 - [ ] **Email sequences** — welcome, trial ending Day 10/13, payment failed dunning
@@ -823,11 +827,12 @@ Annual pricing: 2 months free (~16.7% discount).
 - B. **Attach a Railway volume** + set `LOCUSAI_DB_PATH=/data/receptionist.db` so data survives redeploys (HIGH priority before real users)
 - C. **Set `SENTRY_DSN`** in Railway to turn on error monitoring (free)
 
+> Also done this session: AI reschedule/cancel (web chat), feature gating by plan, supervised workers, appointment calendar view, billing security review.
+
 **Next build priorities:**
-1. **Appointment reschedule/cancel via AI** — top-3 use case, missing
-2. **Google Calendar end-to-end** — code done, needs GOOGLE_CLIENT_ID/SECRET + test run
+1. **Google Calendar end-to-end** — code done, needs GOOGLE_CLIENT_ID/SECRET + test run
+2. **Reschedule/cancel for voice + SMS** — web chat done; extend to the other channels
 3. **Remove Tailwind CDN** → compile with `npx tailwindcss` for prod
 4. **Remote DB backups** (S3/Backblaze) — current backup.sh is local only
-5. **Appointment calendar view** — week/month grid
-6. **Spanish language support**
-7. **Solicitor review** of Privacy Policy + Terms before public launch
+5. **Spanish language support**
+6. **Solicitor review** of Privacy Policy + Terms before public launch
