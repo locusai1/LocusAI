@@ -287,6 +287,16 @@ def _digest_tick():
             app.logger.info(f"Weekly digest: sent {sent}")
 
 
+# Bootstrap an admin from env (ADMIN_EMAIL/ADMIN_PASSWORD) if one is missing.
+# Lets you create the production admin via Railway Variables + a redeploy, with
+# no CLI access needed; idempotent (only creates when absent).
+if not os.getenv("PYTEST_CURRENT_TEST"):
+    try:
+        from core.bootstrap import ensure_admin
+        ensure_admin()
+    except Exception:
+        app.logger.exception("ensure_admin at startup failed")
+
 if not os.getenv("PYTEST_CURRENT_TEST"):
     start_worker("call_sync", _call_sync_tick, interval=180, initial_delay=10)
     start_worker("reminders", _reminder_tick, interval=60, initial_delay=20)

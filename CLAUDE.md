@@ -518,6 +518,7 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 
 - **Python is pinned to 3.11** via `.python-version` + `runtime.txt`. Do NOT remove these — nixpacks otherwise uses its default (newer) Python, where a pinned wheel fails to build and the Railway build breaks (site stays up on the last good deploy, but new deploys fail). Symptom: build-failure emails while local `pip install` + `gunicorn dashboard:app` both pass.
 - Start command: `Procfile` → `gunicorn dashboard:app --workers 2 --timeout 120`.
+- **Admin bootstrap**: set `ADMIN_EMAIL` + `ADMIN_PASSWORD` (≥8 chars) in Railway Variables and redeploy — `core/bootstrap.py:ensure_admin()` creates that admin on startup if it's missing (idempotent; never overwrites an existing account). The intended way to (re)create the production admin without CLI access. Until a persistent volume is attached, this also re-creates the admin after each ephemeral-disk wipe.
 
 ## Known Gotchas / Bugs Fixed
 
