@@ -108,6 +108,109 @@ def appointments_index():
     )
 
 
+@bp.route("/appointments/calendar")
+def appointments_calendar():
+    """Month/week calendar grid of appointments for the active business."""
+    if _need_login():
+        return redirect(url_for("auth.login"))
+
+    import calendar as _cal
+    from datetime import date, timedelta
+    from flask import g
+
+    business_id = safe_int(request.args.get("business_id")) or getattr(g, "active_business_id", 0)
+    view = (request.args.get("view") or "month").lower()
+    if view not in ("month", "week"):
+        view = "month"
+
+    businesses = list_businesses(limit=500)
+    business = next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    if business and not _owner_can_access(business_id):
+        flash("Access denied.", "err")
+        return redirect(url_for("appointments.appointments_index"))
+
+    today = date.today()
+
+    # Build the visible grid of weeks (each a list of 7 date objects).
+    target_month = None  # which month to highlight as "in month" (None for week view)
+    if view == "week":
+        try:
+            anchor = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
+        except ValueError:
+            anchor = today
+        start = anchor - timedelta(days=anchor.weekday())  # Monday
+        weeks = [[start + timedelta(days=i) for i in range(7)]]
+        title = f"Week of {start.strftime('%-d %b %Y')}"
+        prev_param = {"view": "week", "date": (start - timedelta(days=7)).isoformat()}
+        next_param = {"view": "week", "date": (start + timedelta(days=7)).isoformat()}
+    else:
+        try:
+            year = int(request.args.get("year") or today.year)
+            month = int(request.args.get("month") or today.month)
+            _ = date(year, month, 1)
+        except (ValueError, TypeError):
+            year, month = today.year, today.month
+        target_month = month
+        weeks = _cal.Calendar(firstweekday=0).monthdatescalendar(year, month)
+        title = date(year, month, 1).strftime("%B %Y")
+        pm = (date(year, month, 1) - timedelta(days=1))
+        nm = (date(year, month, 28) + timedelta(days=10)).replace(day=1)
+        prev_param = {"view": "month", "year": pm.year, "month": pm.month}
+        next_param = {"view": "month", "year": nm.year, "month": nm.month}
+
+    grid_start = weeks[0][0].isoformat()
+    grid_end = (weeks[-1][-1] + timedelta(days=1)).isoformat()
+
+    # Fetch appointments in range, grouped by date.
+    by_date: dict = {}
+    if business:
+        with get_conn() as con:
+            rows = con.execute("""
+                SELECT id, customer_name, service, start_at, status
+                FROM appointments
+                WHERE business_id=? AND start_at IS NOT NULL
+                  AND start_at >= ? AND start_at < ?
+                ORDER BY start_at ASC
+            """, (business_id, grid_start, grid_end)).fetchall()
+        for r in rows:
+            day = (r["start_at"] or "")[:10]
+            t = (r["start_at"] or "")[11:16]
+            by_date.setdefault(day, []).append({
+                "id": r["id"], "time": t, "service": r["service"],
+                "customer_name": r["customer_name"], "status": r["status"],
+            })
+
+    # Shape weeks into cells the template can render.
+    grid = []
+    for wk in weeks:
+        cells = []
+        for d in wk:
+            cells.append({
+                "iso": d.isoformat(),
+                "day": d.day,
+                "in_month": target_month is None or d.month == target_month,
+                "is_today": d == today,
+                "appts": by_date.get(d.isoformat(), []),
+            })
+        grid.append(cells)
+
+    def _cal_url(**extra):
+        params = {"business_id": business_id, **extra}
+        return url_for("appointments.appointments_calendar", **params)
+
+    return render_template(
+        "appointments_calendar.html",
+        businesses=businesses, business=business, business_id=business_id,
+        view=view, title=title, grid=grid,
+        prev_url=_cal_url(**prev_param),
+        next_url=_cal_url(**next_param),
+        today_url=_cal_url(view=view),
+        month_url=_cal_url(view="month"),
+        week_url=_cal_url(view="week"),
+        weekday_labels=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    )
+
+
 @bp.route("/appointments/<int:appt_id>/status", methods=["POST"])
 def appointments_set_status(appt_id: int):
     """Update appointment status."""
