@@ -145,88 +145,47 @@ if VOICE_AVAILABLE:
 # Background Call Sync — keeps the dashboard current without manual clicks
 # ============================================================================
 
-def _background_call_sync():
-    """Periodically pull calls from Retell API into the local DB.
-
-    Runs in a daemon thread — exits automatically when Flask exits.
-    Syncs every 3 minutes to keep the dashboard live.
-    """
-    import time as _time
-    _time.sleep(10)  # Wait for app to fully start
-    while True:
-        try:
-            if VOICE_AVAILABLE:
-                from core.voice import sync_calls_from_retell
-                with app.app_context():
-                    from core.db import get_conn
-                    with get_conn() as con:
-                        row = con.execute(
-                            "SELECT id FROM businesses WHERE archived = 0 LIMIT 1"
-                        ).fetchone()
-                    if row:
-                        success, msg = sync_calls_from_retell(row["id"])
-                        if success:
-                            app.logger.debug(f"Auto-sync: {msg}")
-        except Exception as e:
-            app.logger.warning(f"Background call sync error: {e}")
-        _time.sleep(180)  # 3 minutes
-
-
-import threading as _threading
-_sync_thread = _threading.Thread(target=_background_call_sync, daemon=True)
-_sync_thread.start()
+def _call_sync_tick():
+    """One iteration: pull recent calls from Retell into the local DB."""
+    if not VOICE_AVAILABLE:
+        return
+    from core.voice import sync_calls_from_retell
+    with app.app_context():
+        from core.db import get_conn
+        with get_conn() as con:
+            row = con.execute(
+                "SELECT id FROM businesses WHERE archived = 0 LIMIT 1"
+            ).fetchone()
+        if row:
+            success, msg = sync_calls_from_retell(row["id"])
+            if success:
+                app.logger.debug(f"Auto-sync: {msg}")
 
 
 # ============================================================================
 # Background Reminder Worker — dispatches due SMS/email reminders every minute
 # ============================================================================
 
-def _background_reminder_worker():
-    """Process due appointment reminders every 60 seconds.
-
-    Runs in a daemon thread — exits when Flask exits.
-    Sends SMS/email reminders for appointments within the scheduled windows.
-    """
-    import time as _time
-    _time.sleep(20)  # Wait for app to fully start
-    while True:
-        try:
-            with app.app_context():
-                from core.reminders import process_due_reminders
-                stats = process_due_reminders()
-                if stats["total"] > 0:
-                    app.logger.info(
-                        f"Reminder worker: {stats['sent']} sent, "
-                        f"{stats['failed']} failed out of {stats['total']}"
-                    )
-        except Exception as e:
-            app.logger.warning(f"Reminder worker error: {e}")
-        _time.sleep(60)  # Check every minute
-
-
-_reminder_thread = _threading.Thread(target=_background_reminder_worker, daemon=True)
-_reminder_thread.start()
+def _reminder_tick():
+    """One iteration: dispatch any due SMS/email reminders."""
+    with app.app_context():
+        from core.reminders import process_due_reminders
+        stats = process_due_reminders()
+        if stats["total"] > 0:
+            app.logger.info(
+                f"Reminder worker: {stats['sent']} sent, "
+                f"{stats['failed']} failed out of {stats['total']}"
+            )
 
 
 # ============================================================================
 # Background Appointment Automation — no-show follow-ups & review requests
 # ============================================================================
 
-def _background_appointment_automation():
-    """Run post-appointment automations every 10 minutes.
-
-    1. No-show follow-up: appointment time passed 30+ min ago, still 'confirmed' → send SMS
-    2. Review request: appointment marked 'completed' 1-24h ago → send review request SMS
-    """
-    import time as _time
-    _time.sleep(30)  # Wait for app to fully start
-    while True:
-        try:
-            with app.app_context():
-                _run_appointment_automations()
-        except Exception as e:
-            app.logger.warning(f"Appointment automation error: {e}")
-        _time.sleep(600)  # Every 10 minutes
+def _appointment_automation_tick():
+    """One iteration: no-show follow-ups + review requests."""
+    with app.app_context():
+        _run_appointment_automations()
 
 
 def _run_appointment_automations():
@@ -304,8 +263,15 @@ def _run_appointment_automations():
                 app.logger.warning(f"Review request SMS failed for appt {appt['id']}: {e}")
 
 
-_automation_thread = _threading.Thread(target=_background_appointment_automation, daemon=True)
-_automation_thread.start()
+# Start all three workers under supervision (auto-restart + heartbeat + backoff).
+# Skipped under pytest so the suite doesn't spawn live background threads.
+from core.workers import start_worker, heartbeat_snapshot
+
+if not os.getenv("PYTEST_CURRENT_TEST"):
+    start_worker("call_sync", _call_sync_tick, interval=180, initial_delay=10)
+    start_worker("reminders", _reminder_tick, interval=60, initial_delay=20)
+    start_worker("appointment_automation", _appointment_automation_tick,
+                 interval=600, initial_delay=30)
 
 # ============================================================================
 # Logging Configuration
@@ -1391,6 +1357,12 @@ def health_ready():
             checks["disk_space"] = "ok"
     except Exception:
         checks["disk_space"] = "unknown"
+
+    # Background worker heartbeats (informational — not part of all_healthy)
+    try:
+        checks["workers"] = heartbeat_snapshot()
+    except Exception:
+        checks["workers"] = "unavailable"
 
     status_code = 200 if all_healthy else 503
     status = "ready" if all_healthy else "degraded"
