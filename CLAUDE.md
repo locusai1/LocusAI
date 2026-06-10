@@ -514,6 +514,11 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 
 ---
 
+## Deployment (Railway)
+
+- **Python is pinned to 3.11** via `.python-version` + `runtime.txt`. Do NOT remove these — nixpacks otherwise uses its default (newer) Python, where a pinned wheel fails to build and the Railway build breaks (site stays up on the last good deploy, but new deploys fail). Symptom: build-failure emails while local `pip install` + `gunicorn dashboard:app` both pass.
+- Start command: `Procfile` → `gunicorn dashboard:app --workers 2 --timeout 120`.
+
 ## Known Gotchas / Bugs Fixed
 
 - **`daily_trend.values` in Jinja2**: Jinja2 resolves `dict.attr` via `getattr` first, then `getitem`. So `daily_trend.values` returns the dict's built-in `.values()` method, NOT the key `"values"`. The key in `analytics_bp.py` was renamed to `"amounts"` to avoid this. Never name dict keys the same as Python built-in method names when passing to Jinja2.
