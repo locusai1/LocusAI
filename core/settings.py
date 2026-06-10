@@ -47,6 +47,11 @@ VOICE_TRANSFER_TIMEOUT = int(os.getenv("VOICE_TRANSFER_TIMEOUT", "300"))  # seco
 VOICE_MAX_DURATION = int(os.getenv("VOICE_MAX_DURATION", "600"))  # seconds (10 min)
 VOICE_RECORDING_ENABLED = os.getenv("VOICE_RECORDING_ENABLED", "true").lower() == "true"
 
+# ===== Error Monitoring (Sentry) =====
+# Optional. When SENTRY_DSN is set, errors are reported to Sentry; otherwise it's
+# a no-op. Get a DSN free at sentry.io (5K errors/month).
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+
 # ===== Stripe Billing =====
 # All optional — billing degrades gracefully (shows "not configured") when the
 # secret key is absent. Plug these in from your Stripe dashboard to go live.

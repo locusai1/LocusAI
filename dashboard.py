@@ -12,7 +12,26 @@ from flask import (
     session, flash, g, abort, Response
 )
 
-from core.settings import FLASK_SECRET_KEY
+from core.settings import FLASK_SECRET_KEY, SENTRY_DSN
+
+# Error monitoring — activates only when SENTRY_DSN is set; no-op otherwise.
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[FlaskIntegration()],
+            environment=os.getenv("APP_ENV", "dev"),
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            send_default_pii=False,  # don't ship customer PII to Sentry
+        )
+        logging.getLogger(__name__).info("Sentry error monitoring enabled")
+    except ImportError:
+        logging.getLogger(__name__).warning(
+            "SENTRY_DSN set but sentry-sdk not installed; skipping"
+        )
 from core.db import (
     init_db, list_businesses, get_business_by_id, update_business,
     get_conn, ensure_tenant_key
