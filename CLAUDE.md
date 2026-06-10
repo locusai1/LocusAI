@@ -561,11 +561,18 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 
 ---
 
-## Current State (Apr 2026)
+## Current State (Jun 2026)
 
 ### What's Working ✅
+- **LIVE IN PRODUCTION**: deployed on Railway, served by Gunicorn (`Procfile`: `gunicorn dashboard:app --workers 2`)
+  - Railway URL: `https://luminous-gratitude-production-812f.up.railway.app`
+  - Custom domain: `https://locusai.co.uk` (live, HTTPS, serving the marketing homepage)
+  - `/`, `/login`, `/health` all return 200 in prod
+- **Public marketing homepage**: `/` serves `home.html` (public; redirects logged-in users to dashboard). Public layout in `public_base.html`.
+- **Cookie consent banner**: present in `public_base.html` (also referenced in `privacy.html`)
+- Pricing displayed in **£ (GBP)** across `home.html`, `onboard.html`, `services.html`
 - Rebranding complete: AxisAI → LocusAI (all references updated)
-- Test suite: 563 tests passing
+- Test suite: 563 tests passing (verified Jun 2026)
 - Voice AI: Telnyx SIP + Retell native LLM live (+442046203253)
 - Caller recognition: `/api/voice/call-setup` dynamic variable injection
 - Post-call AI analysis: intent, outcome, sentiment, containment from transcript
@@ -598,10 +605,10 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - Voice naturalness: Dorothy voice still sounds robotic in some scenarios
 - Background workers: daemon threads crash silently, no auto-restart
 - No billing: Stripe completely absent — zero code exists. "Upgrade" link in trial banner goes to `href="#"`
-- No public website: zero public presence. `/privacy` and `/terms` exist but no homepage.
-- No cookie consent banner: UK GDPR violation (can use CookieYes free tier in 30 min)
+- Trial expiry: `trial_ends_at` stored but NOT enforced anywhere yet
 - Legal docs are working drafts: Privacy Policy and Terms need real solicitor review before public launch
 - Tailwind CDN: loaded at runtime in base.html — must be removed for production
+- Deploy hardening still open: no Sentry, no remote DB backups (Railway uses ephemeral disk — SQLite data is at risk on redeploy), no Dockerfile pinning
 - Google Calendar: code done but GOOGLE_CLIENT_ID/SECRET not configured
 - No Spanish/bilingual support
 - Error pages (404/500): extend auth-required base — broken for logged-out users
@@ -660,7 +667,7 @@ If NO to all three → Year 2+ feature.
 - [x] **Call recording consent** — DONE: mandatory in `core/voice.py` dynamic prompt
 - [x] **Privacy Policy** at `/privacy` — DONE: working draft, needs solicitor review before launch
 - [x] **Terms of Service** at `/terms` — DONE: working draft, needs solicitor review before launch
-- [ ] **Cookie consent banner** — use CookieYes free tier, 30 minutes (DIY)
+- [x] **Cookie consent banner** — DONE: present in `public_base.html`
 - [ ] **Data Processing Agreement** template for B2B customers
 - [ ] **HIPAA note**: Remove or gate the "Medical / Dental" onboarding template until BAAs exist with OpenAI, Retell, Telnyx.
 - [ ] **Solicitor review** of Privacy Policy + Terms before public launch
@@ -675,14 +682,15 @@ If NO to all three → Year 2+ feature.
 - [x] **Password reset** — DONE: full flow working
 - [x] **Self-service signup** — DONE: `/signup` with email verification + 14-day trial
 - [x] **Email verification** — DONE: token-based flow
-- [ ] **Public marketing homepage** — zero public presence; `/` requires login
+- [x] **Public marketing homepage** — DONE: `/` serves `home.html` publicly (`public_base.html` layout)
 
 #### Production Infrastructure
-- [ ] **Gunicorn** as WSGI (replace Flask dev server)
-- [ ] **Nginx** reverse proxy (TLS termination, static files, gzip, WebSocket proxying)
-- [ ] **SSL/TLS** via Certbot (Let's Encrypt)
-- [ ] **Dockerfile + docker-compose**
-- [ ] **Process manager** (systemd or supervisord for auto-restart)
+- [x] **Gunicorn** as WSGI — DONE: `Procfile` runs `gunicorn dashboard:app --workers 2 --timeout 120`
+- [x] **Hosting + SSL/TLS** — DONE: deployed on Railway w/ custom domain `locusai.co.uk` over HTTPS (Railway-managed TLS; no Nginx/Certbot needed)
+- [x] **Process manager** — DONE: Railway restarts the service (no systemd/supervisord needed on Railway)
+- [ ] **Nginx** — N/A on Railway (their edge handles TLS/static/gzip). Revisit only if self-hosting.
+- [ ] **Dockerfile** — optional; Railway auto-builds from `requirements.txt` + `Procfile` (nixpacks). Add only if build needs pinning.
+- [ ] **Persistent DB on Railway** — ⚠️ SQLite is on ephemeral disk; data lost on redeploy. Attach a Railway volume or move to Railway Postgres BEFORE real users.
 - [ ] **Sentry** error monitoring — 5 lines in dashboard.py, free tier = 5K errors/month
 - [ ] **Remote database backups** — current backup.sh is local only. Replace with hourly SQLite → S3/Backblaze.
 - [ ] **Remove Tailwind CDN** from base.html → compile with `npx tailwindcss`
@@ -799,14 +807,15 @@ Annual pricing: 2 months free (~16.7% discount).
 
 ## Next Up (Priority Order)
 
+> Done since last audit: public marketing homepage (`/` → `home.html`), cookie consent banner, Railway+Gunicorn deploy w/ custom domain `locusai.co.uk` + HTTPS. Removed from this list.
+
 1. **Stripe billing** — zero code exists. `billing_bp.py` + `subscriptions` table + Checkout flow + webhook (`invoice.paid`, `customer.subscription.deleted`) + Customer Portal. Fix "Upgrade" link in trial banner.
 2. **Trial expiry enforcement** — check `trial_ends_at` on dashboard load; restrict access or prompt upgrade when expired
-3. **Public marketing homepage** — zero exists; `/` currently requires login; entire public website is greenfield
-4. **Cookie consent banner** — CookieYes free tier, 30 minutes (DIY, not a code task)
+3. **Persistent database on Railway** — SQLite currently sits on Railway's ephemeral disk; data is lost on redeploy. Attach a Railway volume (mount the `.db` on it) or migrate to Railway Postgres. HIGH risk, do before real users.
+4. **Deploy hardening** — Sentry error monitoring + remote DB backups (to S3/Backblaze) + remove Tailwind CDN (compile with `npx tailwindcss`)
 5. **Solicitor review** of Privacy Policy + Terms — working drafts exist, need real legal review before launch
-6. **Production stack** — Gunicorn + Nginx + SSL + Dockerfile + Sentry + remote DB backups
-7. **Appointment reschedule/cancel via AI** — top-3 use case, missing
-8. **Google Calendar end-to-end** — code done, just needs GOOGLE_CLIENT_ID/SECRET + test run
-9. **Dashboard UX fixes** — notifications bell, clickable KPIs, mobile tables, error pages
-10. **Appointment calendar view** — week/month grid
-11. **Spanish language support**
+6. **Appointment reschedule/cancel via AI** — top-3 use case, missing
+7. **Google Calendar end-to-end** — code done, just needs GOOGLE_CLIENT_ID/SECRET + test run
+8. **Dashboard UX fixes** — notifications bell, clickable KPIs, mobile tables, error pages
+9. **Appointment calendar view** — week/month grid
+10. **Spanish language support**

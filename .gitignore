@@ -6,6 +6,8 @@
 # Database files
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -53,3 +55,6 @@ htmlcov/
 # Uploads and tenant files
 businesses/
 static/uploads/
+
+# Claude Code local settings — may contain secrets in permission-rule history
+.claude/settings.local.json
