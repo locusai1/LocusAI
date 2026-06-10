@@ -97,6 +97,52 @@ def kb_new():
     businesses = list_businesses(limit=500)
     return render_template("kb_edit.html", mode="new", businesses=businesses, entry=None, business_id=business_id)
 
+@bp.route("/kb/suggestions")
+def kb_suggestions():
+    """AI-suggested KB entries derived from recent customer questions (JSON)."""
+    if not _logged_in():
+        return redirect(url_for("auth.login"))
+    business_id = _int(request.args.get("business_id", "0"))
+    if not business_id or not _can_access(business_id):
+        return {"configured": False, "suggestions": [], "error": "access"}, 403
+
+    from core.kb_suggestions import suggest_kb_entries, is_configured
+    if not is_configured():
+        return {"configured": False, "suggestions": []}
+    with get_conn() as con:
+        row = con.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
+    name = row["name"] if row else "the business"
+    try:
+        suggestions = suggest_kb_entries(business_id, name)
+    except Exception:
+        suggestions = []
+    return {"configured": True, "suggestions": suggestions}
+
+
+@bp.post("/kb/suggestions/add")
+def kb_suggestions_add():
+    """Create a KB entry from an accepted suggestion."""
+    if not _logged_in():
+        return redirect(url_for("auth.login"))
+    business_id = _int(request.form.get("business_id", "0"))
+    if not _can_access(business_id):
+        flash("Access denied.", "err")
+        return redirect(url_for("kb.kb_index"))
+    question = (request.form.get("question") or "").strip()
+    answer = (request.form.get("answer") or "").strip()
+    if not business_id or not question or not answer:
+        flash("Question and answer are required.", "err")
+        return redirect(url_for("kb.kb_index", business_id=business_id))
+    with get_conn() as con:
+        con.execute("""
+          INSERT INTO kb_entries(business_id,question,answer,tags,active,updated_at)
+          VALUES(?,?,?,?,1,datetime('now','localtime'));
+        """, (business_id, question, answer, "ai-suggested"))
+        con.commit()
+    flash("Added to your knowledge base.", "ok")
+    return redirect(url_for("kb.kb_index", business_id=business_id))
+
+
 @bp.route("/kb/<int:entry_id>/edit", methods=["GET","POST"])
 def kb_edit(entry_id:int):
     if not _logged_in():
