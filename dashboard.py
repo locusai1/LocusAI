@@ -104,6 +104,7 @@ from customers_bp import bp as customers_bp
 from escalations_bp import escalations_bp
 from analytics_bp import analytics_bp
 from billing_bp import bp as billing_bp
+from public_booking_bp import bp as public_booking_bp
 
 # SMS Blueprint (optional, requires Twilio or alternative provider)
 try:
@@ -132,6 +133,7 @@ app.register_blueprint(customers_bp)
 app.register_blueprint(escalations_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(billing_bp)
+app.register_blueprint(public_booking_bp)
 
 # Register SMS blueprint if available
 if SMS_AVAILABLE:
@@ -401,7 +403,7 @@ def _extract_business_id() -> int:
 _TRIAL_EXPIRED_ALLOWED = (
     "/billing", "/logout", "/login", "/signup", "/verify-email",
     "/forgot-password", "/reset-password", "/privacy", "/terms",
-    "/health", "/static/", "/api/", "/brand/set",
+    "/health", "/static/", "/api/", "/brand/set", "/book/",
 )
 
 

@@ -1,0 +1,176 @@
+{% extends "public_base.html" %}
+{% block title %}Book with {{ business.name }} — LocusAI{% endblock %}
+{% block meta_description %}Book an appointment with {{ business.name }} online — pick a service and time that suits you.{% endblock %}
+
+{% block content %}
+<section class="pbk">
+  <div class="pbk-card">
+    <div class="pbk-head">
+      <h1 class="pbk-title">Book with {{ business.name }}</h1>
+      <p class="pbk-sub">Pick a service and a time that works for you.</p>
+    </div>
+
+    {% if booked %}
+    <div class="pbk-success">
+      <div class="pbk-success-icon">
+        <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <h2>You're booked in!</h2>
+      <p>We've sent the details and a reminder. See you soon.</p>
+      <a href="{{ url_for('public_booking.book_page', slug=business.slug) }}" class="pbk-btn pbk-btn-ghost">Book another</a>
+    </div>
+    {% else %}
+
+    {% if error %}<div class="pbk-error">{{ error }}</div>{% endif %}
+
+    {% if not services %}
+    <p class="pbk-empty">This business hasn't published any services to book yet. Please contact them directly.</p>
+    {% else %}
+    <form method="post" action="{{ url_for('public_booking.book_submit', slug=business.slug) }}" id="pbk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="slot" id="pbk-slot" value="">
+
+      <label class="pbk-label">Service</label>
+      <div class="pbk-services">
+        {% for s in services %}
+        <label class="pbk-service">
+          <input type="radio" name="service_id" value="{{ s.id }}" required>
+          <span class="pbk-service-body">
+            <span class="pbk-service-name">{{ s.name }}</span>
+            <span class="pbk-service-meta">{{ s.duration_min or 30 }} min{% if s.price %} · {% if (s.price|string)[0] in '£$€' %}{{ s.price }}{% else %}£{{ s.price }}{% endif %}{% endif %}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <label class="pbk-label" for="pbk-date">Date</label>
+      <input type="date" id="pbk-date" class="pbk-input" min="{{ min_date }}" max="{{ max_date }}" value="{{ min_date }}">
+
+      <label class="pbk-label">Available times</label>
+      <div id="pbk-slots" class="pbk-slots"><span class="pbk-hint">Choose a service and date to see available times.</span></div>
+
+      <div class="pbk-grid2">
+        <div>
+          <label class="pbk-label" for="pbk-name">Your name</label>
+          <input type="text" id="pbk-name" name="name" class="pbk-input" required maxlength="200">
+        </div>
+        <div>
+          <label class="pbk-label" for="pbk-phone">Phone</label>
+          <input type="tel" id="pbk-phone" name="phone" class="pbk-input" required>
+        </div>
+      </div>
+      <label class="pbk-label" for="pbk-email">Email <span class="pbk-opt">(optional)</span></label>
+      <input type="email" id="pbk-email" name="email" class="pbk-input">
+
+      <button type="submit" class="pbk-btn pbk-btn-primary" id="pbk-submit" disabled>Confirm booking</button>
+      <p class="pbk-fine">Powered by LocusAI · You'll get a confirmation and a reminder.</p>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+<script>
+(function () {
+  var form = document.getElementById('pbk-form');
+  if (!form) return;
+  var slotsUrl = "{{ url_for('public_booking.book_slots', slug=business.slug) }}";
+  var dateEl = document.getElementById('pbk-date');
+  var slotsEl = document.getElementById('pbk-slots');
+  var slotInput = document.getElementById('pbk-slot');
+  var submitBtn = document.getElementById('pbk-submit');
+
+  function selectedService() {
+    var r = form.querySelector('input[name="service_id"]:checked');
+    return r ? r.value : null;
+  }
+  function refreshSubmit() {
+    submitBtn.disabled = !(selectedService() && slotInput.value);
+  }
+  function loadSlots() {
+    var sid = selectedService();
+    slotInput.value = '';
+    refreshSubmit();
+    if (!sid || !dateEl.value) {
+      slotsEl.innerHTML = '<span class="pbk-hint">Choose a service and date to see available times.</span>';
+      return;
+    }
+    slotsEl.innerHTML = '<span class="pbk-hint">Loading…</span>';
+    fetch(slotsUrl + '?service_id=' + encodeURIComponent(sid) + '&date=' + encodeURIComponent(dateEl.value))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var slots = (data && data.slots) || [];
+        if (!slots.length) {
+          slotsEl.innerHTML = '<span class="pbk-hint">No times available that day — try another date.</span>';
+          return;
+        }
+        slotsEl.innerHTML = '';
+        slots.forEach(function (s) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'pbk-slot';
+          b.textContent = s.label;
+          b.onclick = function () {
+            slotInput.value = s.value;
+            Array.prototype.forEach.call(slotsEl.children, function (c) { c.classList.remove('is-sel'); });
+            b.classList.add('is-sel');
+            refreshSubmit();
+          };
+          slotsEl.appendChild(b);
+        });
+      })
+      .catch(function () {
+        slotsEl.innerHTML = '<span class="pbk-hint">Couldn\'t load times — please try again.</span>';
+      });
+  }
+  form.querySelectorAll('input[name="service_id"]').forEach(function (r) {
+    r.addEventListener('change', loadSlots);
+  });
+  dateEl.addEventListener('change', loadSlots);
+})();
+</script>
+
+<style>
+  .pbk { display:flex; justify-content:center; padding:48px 20px 80px; background:#fafafa; min-height:70vh; }
+  .pbk-card { width:100%; max-width:560px; background:#fff; border:1px solid #e8e8eb; border-radius:18px;
+              box-shadow:0 10px 40px -16px rgba(16,24,40,.18); padding:34px; }
+  .pbk-head { margin-bottom:22px; }
+  .pbk-title { font-size:26px; font-weight:800; letter-spacing:-.02em; margin:0; color:#171717; }
+  .pbk-sub { color:#737373; margin:6px 0 0; font-size:15px; }
+  .pbk-label { display:block; font-size:13px; font-weight:600; color:#171717; margin:18px 0 8px; }
+  .pbk-opt { color:#a3a3a3; font-weight:400; }
+  .pbk-input { width:100%; padding:11px 13px; border:1px solid #e0e0e3; border-radius:10px; font-size:15px;
+               font-family:inherit; background:#fff; }
+  .pbk-input:focus { outline:none; border-color:#171717; box-shadow:0 0 0 3px rgba(0,0,0,.06); }
+  .pbk-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .pbk-services { display:flex; flex-direction:column; gap:8px; }
+  .pbk-service { display:flex; align-items:center; gap:11px; padding:12px 14px; border:1px solid #e6e6e9;
+                 border-radius:11px; cursor:pointer; transition:border-color .15s, background .15s; }
+  .pbk-service:hover { border-color:#cfcfd4; }
+  .pbk-service input { accent-color:#171717; width:17px; height:17px; }
+  .pbk-service:has(input:checked) { border-color:#171717; background:#fafafa; }
+  .pbk-service-body { display:flex; flex-direction:column; }
+  .pbk-service-name { font-size:14.5px; font-weight:600; color:#171717; }
+  .pbk-service-meta { font-size:12.5px; color:#8a8a8a; }
+  .pbk-slots { display:flex; flex-wrap:wrap; gap:8px; min-height:30px; }
+  .pbk-slot { padding:8px 14px; border:1px solid #e0e0e3; border-radius:9px; background:#fff; font-size:14px;
+              font-weight:600; color:#171717; cursor:pointer; transition:all .12s; }
+  .pbk-slot:hover { border-color:#171717; }
+  .pbk-slot.is-sel { background:#171717; color:#fff; border-color:#171717; }
+  .pbk-hint { font-size:13px; color:#a3a3a3; }
+  .pbk-btn { display:block; width:100%; text-align:center; padding:13px; border-radius:11px; font-size:15px;
+             font-weight:700; border:none; cursor:pointer; text-decoration:none; margin-top:24px; }
+  .pbk-btn-primary { background:#171717; color:#fff; }
+  .pbk-btn-primary:disabled { background:#d4d4d8; cursor:not-allowed; }
+  .pbk-btn-ghost { background:#f4f4f5; color:#171717; }
+  .pbk-fine { text-align:center; font-size:12px; color:#a3a3a3; margin-top:12px; }
+  .pbk-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:11px 14px; border-radius:10px; font-size:14px; margin-bottom:8px; }
+  .pbk-empty { color:#737373; font-size:15px; }
+  .pbk-success { text-align:center; padding:24px 0; }
+  .pbk-success-icon { width:60px; height:60px; border-radius:50%; background:#dcfce7; color:#16a34a;
+                      display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+  .pbk-success h2 { font-size:22px; font-weight:700; margin:0 0 6px; }
+  .pbk-success p { color:#737373; margin:0 0 20px; }
+  @media (max-width:520px) { .pbk-grid2 { grid-template-columns:1fr; } .pbk-card { padding:24px; } }
+</style>
+{% endblock %}
