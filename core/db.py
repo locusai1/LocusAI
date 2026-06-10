@@ -552,6 +552,15 @@ def init_db() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_status ON webhook_deliveries(status, next_attempt_at);")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_endpoint ON webhook_deliveries(endpoint_id);")
 
+        # ---- weekly digest send log (dedupe one send per business per week) ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS digest_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            period_start TEXT NOT NULL,
+            sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(business_id, period_start)
+        );""")
+
         con.commit()
         logger.info("Database schema initialized successfully")
 

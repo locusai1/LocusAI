@@ -278,12 +278,22 @@ def _webhook_dispatch_tick():
         dispatch_pending()
 
 
+def _digest_tick():
+    """One iteration: send weekly performance digests (deduped per week)."""
+    from core.digest import send_weekly_digests
+    with app.app_context():
+        sent = send_weekly_digests()
+        if sent:
+            app.logger.info(f"Weekly digest: sent {sent}")
+
+
 if not os.getenv("PYTEST_CURRENT_TEST"):
     start_worker("call_sync", _call_sync_tick, interval=180, initial_delay=10)
     start_worker("reminders", _reminder_tick, interval=60, initial_delay=20)
     start_worker("appointment_automation", _appointment_automation_tick,
                  interval=600, initial_delay=30)
     start_worker("webhook_dispatch", _webhook_dispatch_tick, interval=15, initial_delay=15)
+    start_worker("weekly_digest", _digest_tick, interval=21600, initial_delay=120)  # ~6h
 
 # ============================================================================
 # Logging Configuration
