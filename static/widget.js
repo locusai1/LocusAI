@@ -50,6 +50,7 @@
     messages: [],
     config: null,
     pendingBooking: null,  // Current pending booking awaiting confirmation
+    pendingChange: null,   // Current pending reschedule/cancel awaiting confirmation
   };
 
   // Storage key for session persistence
@@ -555,8 +556,9 @@
   async function sendMessage(text) {
     if (!text.trim()) return;
 
-    // Clear any existing pending booking when user sends a new message
+    // Clear any existing pending booking/change when user sends a new message
     state.pendingBooking = null;
+    state.pendingChange = null;
 
     // Add user message to UI immediately
     state.messages.push({ role: 'user', text: text.trim() });
@@ -588,6 +590,15 @@
         state.messages.push({
           role: 'booking_confirmation',
           booking: data.pending_booking
+        });
+      }
+
+      // Check for a pending reschedule/cancel that needs confirmation
+      if (data.pending_change) {
+        state.pendingChange = data.pending_change;
+        state.messages.push({
+          role: 'change_confirmation',
+          change: data.pending_change
         });
       }
 
@@ -702,6 +713,66 @@
         role: 'assistant',
         text: "I couldn't cancel the booking request. Please try again."
       });
+      renderMessages();
+    }
+  }
+
+  async function confirmChange() {
+    if (!state.pendingChange) return;
+    const token = state.pendingChange.token;
+    const confirmBtn = document.getElementById('locusai-change-confirm');
+    const cancelBtn = document.getElementById('locusai-change-cancel');
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+    try {
+      const data = await apiRequest('/change/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ token: token, session_id: state.sessionId }),
+      });
+      const card = document.getElementById('locusai-change-card');
+      if (data.success) {
+        if (card) {
+          card.classList.add('locusai-booking-confirmed');
+          card.innerHTML = `
+            <div class="locusai-booking-card-header">
+              ${checkIcon}
+              <span>Done!</span>
+            </div>
+            <div class="locusai-booking-details">
+              <p style="margin: 0; color: var(--locusai-text); font-size: 13px;">
+                ${escapeHtml(data.message)}
+              </p>
+            </div>`;
+        }
+        state.messages.push({ role: 'assistant', text: `✅ ${data.message}` });
+        state.pendingChange = null;
+      } else {
+        state.messages.push({ role: 'assistant', text: data.message || 'That didn\'t work. Please try again.' });
+        state.pendingChange = null;
+        renderMessages();
+      }
+    } catch (error) {
+      state.messages.push({ role: 'assistant', text: "I couldn't apply that change. Please try again." });
+      renderMessages();
+    }
+  }
+
+  async function dismissChange() {
+    if (!state.pendingChange) return;
+    const token = state.pendingChange.token;
+    try {
+      const data = await apiRequest('/change/cancel', {
+        method: 'POST',
+        body: JSON.stringify({ token: token, session_id: state.sessionId }),
+      });
+      const card = document.getElementById('locusai-change-card');
+      if (card) card.remove();
+      state.messages = state.messages.filter(m => m.role !== 'change_confirmation');
+      state.messages.push({ role: 'assistant', text: data.message || "No problem — I've left it as it is." });
+      state.pendingChange = null;
+      renderMessages();
+    } catch (error) {
+      state.messages.push({ role: 'assistant', text: "I couldn't do that just now. Please try again." });
       renderMessages();
     }
   }
@@ -834,6 +905,11 @@
         return renderBookingCard(msg.booking);
       }
 
+      // Handle reschedule/cancel confirmation card
+      if (msg.role === 'change_confirmation' && msg.change) {
+        return renderChangeCard(msg.change);
+      }
+
       // Handle regular messages
       const roleClass = msg.role === 'assistant' ? 'assistant' : msg.role;
       return `<div class="locusai-message ${roleClass}">${escapeHtml(msg.text || '')}</div>`;
@@ -849,6 +925,12 @@
     if (cancelBtn) {
       cancelBtn.onclick = cancelBooking;
     }
+
+    // Bind change (reschedule/cancel) button events
+    const changeConfirmBtn = document.getElementById('locusai-change-confirm');
+    const changeCancelBtn = document.getElementById('locusai-change-cancel');
+    if (changeConfirmBtn) changeConfirmBtn.onclick = confirmChange;
+    if (changeCancelBtn) changeCancelBtn.onclick = dismissChange;
 
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
@@ -914,6 +996,63 @@
         </div>
         <div class="locusai-booking-timer">
           This booking will expire in 5 minutes
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChangeCard(change) {
+    const formatDateTime = (dt) => {
+      if (!dt) return 'Not specified';
+      try {
+        const date = new Date(dt.replace(' ', 'T'));
+        return date.toLocaleString(undefined, {
+          weekday: 'short', month: 'short', day: 'numeric',
+          hour: 'numeric', minute: '2-digit'
+        });
+      } catch (e) { return dt; }
+    };
+
+    const isCancel = change.action === 'cancel';
+    const title = isCancel ? 'Confirm Cancellation' : 'Confirm Reschedule';
+    const confirmLabel = isCancel ? 'Cancel Appointment' : 'Confirm New Time';
+
+    const rows = [];
+    if (change.service) rows.push({ label: 'Service', value: change.service });
+    if (change.current_datetime) {
+      rows.push({
+        label: isCancel ? 'Date & Time' : 'Currently',
+        value: formatDateTime(change.current_datetime)
+      });
+    }
+    if (!isCancel && change.new_datetime) {
+      rows.push({ label: 'New time', value: formatDateTime(change.new_datetime) });
+    }
+    const rowsHtml = rows.map(d => `
+      <div class="locusai-booking-row">
+        <span class="locusai-booking-label">${escapeHtml(d.label)}</span>
+        <span class="locusai-booking-value">${escapeHtml(d.value)}</span>
+      </div>`).join('');
+
+    return `
+      <div id="locusai-change-card" class="locusai-booking-card">
+        <div class="locusai-booking-card-header">
+          ${calendarIcon}
+          <span>${escapeHtml(title)}</span>
+        </div>
+        <div class="locusai-booking-details">
+          ${rowsHtml}
+        </div>
+        <div class="locusai-booking-actions">
+          <button id="locusai-change-cancel" class="locusai-booking-btn locusai-booking-btn-cancel">
+            Keep as is
+          </button>
+          <button id="locusai-change-confirm" class="locusai-booking-btn locusai-booking-btn-confirm">
+            ${escapeHtml(confirmLabel)}
+          </button>
+        </div>
+        <div class="locusai-booking-timer">
+          This request will expire in 5 minutes
         </div>
       </div>
     `;
