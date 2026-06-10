@@ -7,11 +7,25 @@
 <style>
   /* ── Hero ── */
   .hero {
-    background: white;
-    padding: 96px 48px 80px;
+    position: relative;
+    background:
+      radial-gradient(1200px 480px at 50% -12%, rgba(47,111,236,.10), transparent 70%),
+      white;
+    padding: 96px 48px 88px;
     text-align: center;
     border-bottom: 1px solid rgba(0,0,0,.06);
+    overflow: hidden;
   }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,.045) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 25%, transparent 72%);
+    mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 25%, transparent 72%);
+    pointer-events: none;
+  }
+  .hero > * { position: relative; z-index: 1; }
 
   .hero-badge {
     display: inline-flex;
@@ -483,6 +497,63 @@
     color: #525252;
   }
 
+  /* ── Hero live-call demo ── */
+  .hero-demo {
+    max-width: 460px;
+    margin: 56px auto 0;
+    text-align: left;
+    background: #fff;
+    border: 1px solid #e9e9ec;
+    border-radius: 16px;
+    box-shadow: 0 28px 64px -28px rgba(16,24,40,.30), 0 2px 6px rgba(16,24,40,.04);
+    overflow: hidden;
+  }
+  .hero-demo-top {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 18px; border-bottom: 1px solid #f0f0f2; background: #fafafa;
+  }
+  .hero-demo-live { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #16a34a; }
+  .hero-demo-pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; position: relative; }
+  .hero-demo-pulse::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px solid rgba(34,197,94,.45); animation: heroPulse 1.8s infinite ease-out;
+  }
+  @keyframes heroPulse { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(1.7); opacity: 0; } }
+  .hero-demo-num { margin-left: auto; font-size: 12px; color: #a3a3a3; font-variant-numeric: tabular-nums; }
+  .hero-demo-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .hero-msg { display: flex; gap: 10px; align-items: flex-end; }
+  .hero-msg.ai { flex-direction: row-reverse; }
+  .hero-avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+  }
+  .hero-avatar.caller { background: #f0f0f2; color: #525252; }
+  .hero-avatar.ai { background: #171717; color: #fff; }
+  .hero-bubble { padding: 10px 13px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; max-width: 78%; }
+  .hero-bubble.caller { background: #f4f4f5; color: #171717; border-bottom-left-radius: 4px; }
+  .hero-bubble.ai { background: #171717; color: #fff; border-bottom-right-radius: 4px; }
+  .hero-demo-foot {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 18px; border-top: 1px solid #eef6f0; background: #f5fbf7;
+  }
+  .hero-chip-ok { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #15803d; }
+
+  /* ── FAQ ── */
+  .faq-section { background: #fff; padding: 96px 48px; border-bottom: 1px solid #ebebeb; }
+  .faq-inner { max-width: 720px; margin: 0 auto; }
+  .faq-header { text-align: center; margin-bottom: 48px; }
+  .faq-item { border: 1px solid #e9e9ec; border-radius: 12px; margin-bottom: 12px; background: #fff; transition: border-color 150ms; }
+  .faq-item[open] { border-color: #d4d4d4; box-shadow: 0 4px 18px rgba(0,0,0,.05); }
+  .faq-q {
+    cursor: pointer; list-style: none; padding: 18px 22px;
+    font-size: 15px; font-weight: 600; color: #171717;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .faq-q::-webkit-details-marker { display: none; }
+  .faq-q::after { content: "+"; font-size: 22px; line-height: 1; color: #a3a3a3; font-weight: 400; flex-shrink: 0; }
+  .faq-item[open] .faq-q::after { content: "\2013"; }
+  .faq-a { padding: 0 22px 20px; font-size: 14.5px; color: #525252; line-height: 1.7; }
+
   /* ── Responsive ── */
   @media (max-width: 900px) {
     .hero-headline { font-size: 40px; }
@@ -500,7 +571,7 @@
     .hero-headline { font-size: 32px; }
     .hero-sub { font-size: 16px; }
     .trust-bar { padding: 16px 20px; gap: 20px; flex-direction: column; align-items: flex-start; }
-    .features-section, .hiw-section, .pricing-section, .final-cta { padding: 64px 20px; }
+    .features-section, .hiw-section, .pricing-section, .final-cta, .faq-section { padding: 64px 20px; }
     .features-grid { grid-template-columns: 1fr; }
   }
 </style>
@@ -526,6 +597,34 @@
     <a href="#how-it-works" class="hero-secondary">See how it works</a>
   </div>
   <p class="hero-trust">14-day free trial · No credit card required · Cancel anytime</p>
+
+  <!-- Live-call demo mockup -->
+  <div class="hero-demo" aria-hidden="true">
+    <div class="hero-demo-top">
+      <span class="hero-demo-live"><span class="hero-demo-pulse"></span> Live call</span>
+      <span class="hero-demo-num">+44 20 4620 3253 · 0:14</span>
+    </div>
+    <div class="hero-demo-body">
+      <div class="hero-msg caller">
+        <div class="hero-avatar caller">JD</div>
+        <div class="hero-bubble caller">Hi, do you have anything free this Friday afternoon?</div>
+      </div>
+      <div class="hero-msg ai">
+        <div class="hero-avatar ai">AI</div>
+        <div class="hero-bubble ai">Of course! I've got 2:30 or 4:00pm on Friday — which suits you best?</div>
+      </div>
+      <div class="hero-msg caller">
+        <div class="hero-avatar caller">JD</div>
+        <div class="hero-bubble caller">2:30 is perfect, thanks.</div>
+      </div>
+    </div>
+    <div class="hero-demo-foot">
+      <span class="hero-chip-ok">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+        Appointment booked — confirmation sent by SMS
+      </span>
+    </div>
+  </div>
 </section>
 
 <!-- Trust bar -->
@@ -782,6 +881,47 @@
 
   </div>
   <p class="pricing-note">All plans include a 14-day free trial. No credit card required. Annual billing saves 2 months. Prices exclude VAT.</p>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="faq-inner">
+    <div class="faq-header">
+      <p class="section-label">FAQ</p>
+      <h2 class="section-title">Questions, answered</h2>
+      <p class="section-sub" style="margin:0 auto;">Everything you need to know before you start your free trial.</p>
+    </div>
+
+    <details class="faq-item">
+      <summary class="faq-q">Does it actually sound human?</summary>
+      <div class="faq-a">Yes. LocusAI uses a natural British voice and real-time conversation, so callers get a warm, professional experience — not a clunky phone menu. It greets repeat callers by name and handles back-and-forth questions just like a person would.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary class="faq-q">Is setup really only 10 minutes?</summary>
+      <div class="faq-a">For most businesses, yes. Our onboarding wizard walks you through your services, hours, and how you'd like calls handled. There's nothing to install — if you can fill in a form, you can set up LocusAI. You can refine everything later from your dashboard.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary class="faq-q">What happens if the AI can't answer something?</summary>
+      <div class="faq-a">It escalates to you. LocusAI recognises when a caller is frustrated or asks something outside its knowledge, and seamlessly hands off — by taking a message, sending you an alert, or transferring the call to your team. You stay in control of the important moments.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary class="faq-q">Will it work with my calendar and tools?</summary>
+      <div class="faq-a">LocusAI integrates with the tools you already use — including Google Calendar and Calendly — so bookings land where you expect them. We believe in working with your stack, not forcing you to switch everything.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary class="faq-q">How does pricing work? Any per-minute charges?</summary>
+      <div class="faq-a">Never. You pay one flat monthly rate — no per-minute call charges, no surprise overages. Every plan starts with a 14-day free trial and no credit card, and you can cancel anytime.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary class="faq-q">Are calls recorded and GDPR-compliant?</summary>
+      <div class="faq-a">Calls begin with a clear recording notice, as required under UK law, and your data is handled in line with UK GDPR. You can review full transcripts and recordings from your dashboard at any time.</div>
+    </details>
+  </div>
 </section>
 
 <!-- Final CTA -->
