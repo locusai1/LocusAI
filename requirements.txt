@@ -43,3 +43,7 @@ stripe>=7.0.0
 
 # Error monitoring (activates only when SENTRY_DSN is set)
 sentry-sdk[flask]>=1.40.0
+
+# Optional: only needed to upload DB backups to S3/Backblaze (core/backup.py).
+# Local snapshots work without it. Uncomment to enable cloud upload:
+# boto3>=1.28.0

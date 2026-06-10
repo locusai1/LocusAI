@@ -47,6 +47,16 @@ VOICE_TRANSFER_TIMEOUT = int(os.getenv("VOICE_TRANSFER_TIMEOUT", "300"))  # seco
 VOICE_MAX_DURATION = int(os.getenv("VOICE_MAX_DURATION", "600"))  # seconds (10 min)
 VOICE_RECORDING_ENABLED = os.getenv("VOICE_RECORDING_ENABLED", "true").lower() == "true"
 
+# ===== Backups =====
+# Local snapshots always work. To also push off-box, set BACKUP_S3_BUCKET (and
+# AWS creds in the environment; boto3 must be installed). Works with any
+# S3-compatible store via BACKUP_S3_ENDPOINT (e.g. Backblaze B2).
+BACKUP_DIR         = os.getenv("BACKUP_DIR", "backups")
+BACKUP_KEEP        = int(os.getenv("BACKUP_KEEP", "14"))
+BACKUP_S3_BUCKET   = os.getenv("BACKUP_S3_BUCKET")
+BACKUP_S3_PREFIX   = os.getenv("BACKUP_S3_PREFIX", "locusai-db")
+BACKUP_S3_ENDPOINT = os.getenv("BACKUP_S3_ENDPOINT")  # optional (S3-compatible)
+
 # ===== Error Monitoring (Sentry) =====
 # Optional. When SENTRY_DSN is set, errors are reported to Sentry; otherwise it's
 # a no-op. Get a DSN free at sentry.io (5K errors/month).
