@@ -21,6 +21,86 @@ TELNYX_API_BASE = "https://api.telnyx.com/v2"
 
 
 # ============================================================================
+# Opt-out registry (TCPA STOP keyword compliance)
+# ============================================================================
+
+# Keywords that opt a number out / back in (case-insensitive).
+# NOTE: deliberately excludes "CANCEL" (this app uses it for appointment
+# cancellation) and "YES" (a normal conversational reply) to avoid hijacking them.
+STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "END", "QUIT", "OPTOUT"}
+START_KEYWORDS = {"START", "UNSTOP", "SUBSCRIBE", "OPTIN"}
+
+
+def classify_sms_command(message: str) -> Optional[str]:
+    """Return 'stop', 'start', 'help', or None for an inbound SMS body."""
+    if not message:
+        return None
+    word = message.strip().upper()
+    if word in STOP_KEYWORDS:
+        return "stop"
+    if word in START_KEYWORDS:
+        return "start"
+    if word == "HELP" or word == "INFO":
+        return "help"
+    return None
+
+
+def record_opt_out(phone: str, source: str = "sms") -> bool:
+    """Record that a phone number has opted out of SMS. Idempotent."""
+    norm = _normalize_phone(phone) or (phone or "").strip()
+    if not norm:
+        return False
+    try:
+        from core.db import get_conn
+        with get_conn() as con:
+            con.execute(
+                "INSERT INTO sms_opt_outs (phone, source) VALUES (?, ?) "
+                "ON CONFLICT(phone) DO UPDATE SET opted_out_at=CURRENT_TIMESTAMP, source=excluded.source",
+                (norm, source),
+            )
+            con.commit()
+        logger.info(f"SMS opt-out recorded for {_mask_phone(norm)}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record SMS opt-out: {e}")
+        return False
+
+
+def clear_opt_out(phone: str) -> bool:
+    """Remove a phone number's opt-out (re-subscribe via START). Idempotent."""
+    norm = _normalize_phone(phone) or (phone or "").strip()
+    if not norm:
+        return False
+    try:
+        from core.db import get_conn
+        with get_conn() as con:
+            con.execute("DELETE FROM sms_opt_outs WHERE phone = ?", (norm,))
+            con.commit()
+        logger.info(f"SMS opt-out cleared for {_mask_phone(norm)}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to clear SMS opt-out: {e}")
+        return False
+
+
+def is_opted_out(phone: str) -> bool:
+    """True if the number has opted out of SMS."""
+    norm = _normalize_phone(phone) or (phone or "").strip()
+    if not norm:
+        return False
+    try:
+        from core.db import get_conn
+        with get_conn() as con:
+            row = con.execute(
+                "SELECT 1 FROM sms_opt_outs WHERE phone = ? LIMIT 1", (norm,)
+            ).fetchone()
+            return row is not None
+    except Exception as e:
+        logger.error(f"Failed to check SMS opt-out: {e}")
+        return False
+
+
+# ============================================================================
 # SMS Sending
 # ============================================================================
 
@@ -28,6 +108,7 @@ def send_sms(
     to: str,
     message: str,
     from_number: Optional[str] = None,
+    allow_opted_out: bool = False,
 ) -> Dict[str, Any]:
     """Send an SMS message via Telnyx.
 
@@ -35,6 +116,8 @@ def send_sms(
         to: Recipient phone number (E.164 format preferred, e.g., +15551234567)
         message: Message content
         from_number: Override sender number (defaults to TELNYX_PHONE_NUMBER)
+        allow_opted_out: Bypass the opt-out check. Only set True for the
+            transactional STOP/START confirmation itself (permitted by TCPA).
 
     Returns:
         Dict with 'id', 'status', 'error' keys
@@ -45,6 +128,11 @@ def send_sms(
     to = _normalize_phone(to)
     if not to:
         return {"id": None, "status": "error", "error": "Invalid phone number"}
+
+    # TCPA: never message a number that has opted out (except the confirmation).
+    if not allow_opted_out and is_opted_out(to):
+        logger.info(f"SMS suppressed — {_mask_phone(to)} has opted out")
+        return {"id": None, "status": "suppressed", "error": "Recipient opted out"}
 
     if not TELNYX_CONFIGURED:
         return {"id": None, "status": "error", "error": "Telnyx is not configured. Set TELNYX_API_KEY."}

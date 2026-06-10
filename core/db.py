@@ -509,6 +509,16 @@ def init_db() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS ix_sub_customer ON subscriptions(stripe_customer_id);")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_sub_stripe_id ON subscriptions(stripe_subscription_id);")
 
+        # ---- sms_opt_outs (TCPA STOP keyword compliance) ----
+        # Global per-phone opt-out (all tenants share one sending number).
+        cur.execute("""CREATE TABLE IF NOT EXISTS sms_opt_outs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL UNIQUE,
+            source TEXT,
+            opted_out_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_optout_phone ON sms_opt_outs(phone);")
+
         con.commit()
         logger.info("Database schema initialized successfully")
 

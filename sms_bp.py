@@ -99,7 +99,40 @@ def sms_webhook():
     session_id = _get_or_create_session(business_id, from_number)
     log_message(session_id, "user", message_body)
 
-    # Check for special commands
+    from core.sms import (
+        classify_sms_command, record_opt_out, clear_opt_out,
+        send_sms, TELNYX_PHONE_NUMBER,
+    )
+
+    # ---- TCPA opt-out / opt-in (must run before any AI reply) ----
+    cmd = classify_sms_command(message_body)
+    if cmd == "stop":
+        record_opt_out(from_number, source="sms")
+        reply = ("You've been unsubscribed and won't receive further messages. "
+                 "Reply START to opt back in.")
+        log_message(session_id, "bot", reply)
+        try:  # confirmation is permitted even after opt-out
+            send_sms(to=from_number, message=reply,
+                     from_number=to_number or TELNYX_PHONE_NUMBER,
+                     allow_opted_out=True)
+        except Exception as e:
+            logger.error(f"Failed to send STOP confirmation: {e}")
+        return jsonify({"status": "opted_out"}), 200
+
+    if cmd == "start":
+        clear_opt_out(from_number)
+        reply = ("You're re-subscribed and will receive messages again. "
+                 "Reply STOP to opt out at any time.")
+        log_message(session_id, "bot", reply)
+        try:
+            send_sms(to=from_number, message=reply,
+                     from_number=to_number or TELNYX_PHONE_NUMBER,
+                     allow_opted_out=True)
+        except Exception as e:
+            logger.error(f"Failed to send START confirmation: {e}")
+        return jsonify({"status": "opted_in"}), 200
+
+    # Check for special commands (HELP, CANCEL)
     response_text = _handle_special_commands(message_body, session_id, business_id)
     if not response_text:
         try:
@@ -135,18 +168,15 @@ def sms_webhook():
 
 
 def _handle_special_commands(message: str, session_id: int, business_id: int):
-    """Handle special SMS commands like STOP, CANCEL, HELP."""
+    """Handle special SMS commands HELP and CANCEL.
+
+    Opt-out keywords (STOP/START) are handled earlier in the webhook so they can
+    record the opt-out and bypass send suppression for the confirmation."""
     message_upper = message.upper().strip()
 
-    if message_upper in ("STOP", "UNSUBSCRIBE", "QUIT"):
-        return "You've been unsubscribed. Reply START to opt back in."
-
-    if message_upper in ("START", "SUBSCRIBE"):
-        return "Welcome back! You're now subscribed to messages from us."
-
-    if message_upper == "HELP":
+    if message_upper in ("HELP", "INFO"):
         return (
-            "Commands: STOP to unsubscribe, CANCEL to cancel appointment. "
+            "Commands: STOP to unsubscribe, CANCEL to cancel an appointment. "
             "Or just type your question and I'll help you."
         )
 
