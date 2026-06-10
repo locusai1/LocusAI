@@ -272,6 +272,18 @@ def create_widget_session():
     """Create a new chat session for the widget."""
     business = g.business
 
+    # Plan gating: block new conversations once a paid tier hits its monthly cap.
+    # (Ungated for trial / no-subscription businesses.)
+    try:
+        from core.limits import can_start_conversation, upgrade_message
+        if not can_start_conversation(business["id"]):
+            return jsonify({
+                "error": "conversation_limit_reached",
+                "message": upgrade_message(business["id"]),
+            }), 402  # Payment Required
+    except Exception as e:
+        logger.warning(f"Conversation quota check failed (allowing): {e}")
+
     session_id = create_session(business["id"])
 
     # Get welcome message
