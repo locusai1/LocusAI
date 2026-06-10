@@ -71,7 +71,9 @@ PLANS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Statuses Stripe reports that mean the customer has working, paid access.
+# Statuses that grant access. "past_due" is intentionally included as a grace
+# period while Stripe's dunning retries the payment — access is only revoked
+# when the subscription becomes "canceled"/"unpaid".
 ACTIVE_STATUSES = ("active", "trialing", "past_due")
 
 
@@ -326,12 +328,15 @@ def apply_event(event: Dict[str, Any]) -> bool:
         if not user_id:
             return False
         plan_key = (obj.get("metadata") or {}).get("plan", "starter")
+        # Only mark active if payment actually went through; otherwise record the
+        # link and let customer.subscription.* / invoice.paid confirm status.
+        paid = obj.get("payment_status") in ("paid", "no_payment_required")
         upsert_subscription(
             user_id,
             stripe_customer_id=obj.get("customer"),
             stripe_subscription_id=obj.get("subscription"),
             plan_key=plan_key,
-            status="active",
+            status="active" if paid else "incomplete",
         )
         return True
 

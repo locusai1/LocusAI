@@ -65,3 +65,25 @@ Stripe Dashboard → **Settings → Billing → Customer portal** → activate. 
 Use `sk_test_...` keys + Stripe's test card `4242 4242 4242 4242`. Use the Stripe
 CLI (`stripe listen --forward-to localhost:5050/api/billing/webhook`) to replay
 webhooks locally.
+
+---
+
+## Security review (self-audited Jun 2026)
+- **Webhook authenticity**: verified with `stripe.Webhook.construct_event` against
+  `STRIPE_WEBHOOK_SECRET`, using the **raw** request body. Bad/absent signature → 400.
+- **CSRF**: `/api/billing/webhook` is CSRF-exempt (signature-verified instead);
+  `/billing/checkout` and `/billing/portal` are CSRF-protected POSTs.
+- **No IDOR**: checkout uses the logged-in user's id (`client_reference_id` +
+  metadata); the Customer Portal opens only the caller's own `stripe_customer_id`.
+- **Price integrity**: the amount is never trusted from the client — only the
+  plan key is sent; the actual Stripe Price ID is resolved server-side from env.
+- **Idempotency**: all webhook handlers are idempotent (upsert keyed by
+  `stripe_subscription_id`; status sets), so duplicate/retried events are safe —
+  no event-dedup table needed.
+- **Premature activation guarded**: `checkout.session.completed` only marks a sub
+  `active` when `payment_status` is `paid`/`no_payment_required`; otherwise it
+  stays `incomplete` until `invoice.paid` / `customer.subscription.*` confirm.
+- **No card data** is ever stored or logged; only Stripe IDs + status. PII is not
+  sent to logs.
+- **Grace period**: `past_due` keeps access during Stripe dunning retries; access
+  is revoked on `canceled`.

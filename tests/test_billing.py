@@ -112,7 +112,7 @@ class TestWebhookEvents:
             uid = sample_user["id"]
             ev = self._event("checkout.session.completed", {
                 "customer": "cus_x", "subscription": "sub_x",
-                "client_reference_id": str(uid),
+                "client_reference_id": str(uid), "payment_status": "paid",
                 "metadata": {"user_id": str(uid), "plan": "professional"},
             })
             assert billing.apply_event(ev) is True
@@ -120,6 +120,19 @@ class TestWebhookEvents:
             assert sub["stripe_subscription_id"] == "sub_x"
             assert sub["plan"] == "professional"
             assert sub["status"] == "active"
+
+    def test_checkout_completed_unpaid_is_incomplete(self, test_db, sample_user):
+        from core import billing
+        with patch("core.db.DB_PATH", test_db):
+            uid = sample_user["id"]
+            ev = self._event("checkout.session.completed", {
+                "customer": "cus_u", "subscription": "sub_u",
+                "payment_status": "unpaid",
+                "metadata": {"user_id": str(uid), "plan": "starter"},
+            })
+            assert billing.apply_event(ev) is True
+            assert billing.get_subscription(uid)["status"] == "incomplete"
+            assert billing.has_active_subscription(uid) is False
 
     def test_subscription_deleted_marks_canceled(self, test_db, sample_user):
         from core import billing
