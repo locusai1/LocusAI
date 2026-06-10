@@ -166,5 +166,15 @@ def book_submit(slug):
     except Exception as e:
         logger.warning(f"Public booking: reminder scheduling failed: {e}")
 
+    try:
+        from core.webhooks import emit_event
+        emit_event(biz["id"], "booking.created", {
+            "appointment_id": appt_id, "service": svc["name"], "start_at": slot,
+            "customer_name": name, "phone": phone or phone_raw, "email": email or None,
+            "source": "public",
+        })
+    except Exception:
+        pass
+
     logger.info(f"Public booking {appt_id} for business {biz['id']} via /book/{slug}")
     return redirect(url_for("public_booking.book_page", slug=slug, booked="1"))

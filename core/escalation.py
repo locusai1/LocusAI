@@ -60,7 +60,17 @@ def create_escalation(
                 """, (reason, session_id))
 
             logger.info(f"Created escalation {escalation_id} for business {business_id}: {reason}")
-            return escalation_id
+
+        # Emit outbound webhook (outside the transaction; never breaks escalation).
+        try:
+            from core.webhooks import emit_event
+            emit_event(business_id, "escalation.created", {
+                "escalation_id": escalation_id, "reason": reason,
+                "priority": priority, "session_id": session_id,
+            })
+        except Exception:
+            pass
+        return escalation_id
 
     except Exception as e:
         logger.error(f"Failed to create escalation: {e}")

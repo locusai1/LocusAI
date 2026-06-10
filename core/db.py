@@ -519,6 +519,39 @@ def init_db() -> None:
         );""")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_optout_phone ON sms_opt_outs(phone);")
 
+        # ---- outbound webhooks (event bus) ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS webhook_endpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            url TEXT NOT NULL,
+            secret TEXT NOT NULL,
+            events TEXT NOT NULL DEFAULT 'all',
+            active INTEGER NOT NULL DEFAULT 1,
+            description TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_whe_business ON webhook_endpoints(business_id);")
+
+        cur.execute("""CREATE TABLE IF NOT EXISTS webhook_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint_id INTEGER NOT NULL,
+            business_id INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            response_code INTEGER,
+            last_error TEXT,
+            next_attempt_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            delivered_at TEXT,
+            FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
+        );""")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_status ON webhook_deliveries(status, next_attempt_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_endpoint ON webhook_deliveries(endpoint_id);")
+
         con.commit()
         logger.info("Database schema initialized successfully")
 

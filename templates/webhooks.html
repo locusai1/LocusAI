@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Webhooks — LocusAI{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Webhooks</h1>
+    <p class="page-subtitle">Send real-time events to Zapier, Make, n8n or your own systems</p>
+  </div>
+</div>
+
+{% if new_secret %}
+<div class="card mb-6" style="border-left:4px solid #16a34a;">
+  <div class="card-body">
+    <strong>Your signing secret (shown once)</strong>
+    <p class="text-muted" style="font-size:13px; margin:4px 0 8px;">
+      Verify deliveries with the <code>X-LocusAI-Signature</code> header (HMAC-SHA256 of the raw body).
+    </p>
+    <code style="display:block; padding:10px 12px; background:#f5f5f5; border-radius:8px; font-size:13px; word-break:break-all;">{{ new_secret }}</code>
+  </div>
+</div>
+{% endif %}
+
+<div class="card mb-6">
+  <div class="card-body">
+    <h3 style="font-size:15px; font-weight:700; margin:0 0 14px;">Add an endpoint</h3>
+    <form method="post" action="{{ url_for('webhooks.webhooks_create') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="business_id" value="{{ business_id }}">
+      <div class="mb-3">
+        <label class="form-label">Endpoint URL</label>
+        <input type="url" name="url" class="input" placeholder="https://hooks.zapier.com/..." required>
+        <p class="text-muted" style="font-size:12px; margin-top:4px;">Must be a public https:// URL. Private/internal addresses are blocked.</p>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Description (optional)</label>
+        <input type="text" name="description" class="input" placeholder="e.g. Zapier — new booking to Sheets">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Events</label>
+        <div style="display:flex; flex-wrap:wrap; gap:14px; font-size:13px;">
+          <label class="wh-evt"><input type="checkbox" name="events" value="all" checked> All events</label>
+          {% for ev in event_types %}
+          <label class="wh-evt"><input type="checkbox" name="events" value="{{ ev }}"> {{ ev }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Add endpoint</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-6">
+  <div class="card-body">
+    <h3 style="font-size:15px; font-weight:700; margin:0 0 14px;">Your endpoints</h3>
+    {% if not endpoints %}
+    <p class="text-muted" style="font-size:14px;">No endpoints yet. Add one above to start receiving events.</p>
+    {% else %}
+    <div class="table-container">
+      <table class="table">
+        <thead><tr><th>URL</th><th>Events</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for e in endpoints %}
+          <tr>
+            <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              {{ e.url }}{% if e.description %}<br><span class="text-muted" style="font-size:12px;">{{ e.description }}</span>{% endif %}
+            </td>
+            <td><span class="badge">{{ e.events }}</span></td>
+            <td>{% if e.active %}<span style="color:#16a34a;">● Active</span>{% else %}<span class="text-muted">Paused</span>{% endif %}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <form method="post" action="{{ url_for('webhooks.webhooks_test', endpoint_id=e.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="business_id" value="{{ business_id }}">
+                <button class="btn btn-sm btn-secondary" type="submit">Send test</button>
+              </form>
+              <form method="post" action="{{ url_for('webhooks.webhooks_delete', endpoint_id=e.id) }}" style="display:inline;"
+                    onsubmit="return confirm('Delete this webhook endpoint?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="business_id" value="{{ business_id }}">
+                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h3 style="font-size:15px; font-weight:700; margin:0 0 14px;">Recent deliveries</h3>
+    {% if not deliveries %}
+    <p class="text-muted" style="font-size:14px;">No deliveries yet.</p>
+    {% else %}
+    <div class="table-container">
+      <table class="table">
+        <thead><tr><th>Event</th><th>Status</th><th>Attempts</th><th>Code</th><th>When</th></tr></thead>
+        <tbody>
+          {% for d in deliveries %}
+          <tr>
+            <td>{{ d.event_type }}</td>
+            <td>
+              {% if d.status == 'success' %}<span style="color:#16a34a;">success</span>
+              {% elif d.status == 'failed' %}<span style="color:#dc2626;" title="{{ d.last_error }}">failed</span>
+              {% else %}<span style="color:#d97706;">pending</span>{% endif %}
+            </td>
+            <td>{{ d.attempts }}</td>
+            <td>{{ d.response_code or '—' }}</td>
+            <td class="text-muted" style="font-size:12px;">{{ (d.delivered_at or d.created_at)[:16] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .wh-evt { display:inline-flex; align-items:center; gap:6px; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px; background:#f0f0f2; color:#525252; }
+</style>
+{% endblock %}

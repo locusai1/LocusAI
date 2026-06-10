@@ -105,6 +105,7 @@ from escalations_bp import escalations_bp
 from analytics_bp import analytics_bp
 from billing_bp import bp as billing_bp
 from public_booking_bp import bp as public_booking_bp
+from webhooks_bp import bp as webhooks_bp
 
 # SMS Blueprint (optional, requires Twilio or alternative provider)
 try:
@@ -134,6 +135,7 @@ app.register_blueprint(escalations_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(billing_bp)
 app.register_blueprint(public_booking_bp)
+app.register_blueprint(webhooks_bp)
 
 # Register SMS blueprint if available
 if SMS_AVAILABLE:
@@ -269,11 +271,19 @@ def _run_appointment_automations():
 # Skipped under pytest so the suite doesn't spawn live background threads.
 from core.workers import start_worker, heartbeat_snapshot
 
+def _webhook_dispatch_tick():
+    """One iteration: deliver due outbound webhook events."""
+    from core.webhooks import dispatch_pending
+    with app.app_context():
+        dispatch_pending()
+
+
 if not os.getenv("PYTEST_CURRENT_TEST"):
     start_worker("call_sync", _call_sync_tick, interval=180, initial_delay=10)
     start_worker("reminders", _reminder_tick, interval=60, initial_delay=20)
     start_worker("appointment_automation", _appointment_automation_tick,
                  interval=600, initial_delay=30)
+    start_worker("webhook_dispatch", _webhook_dispatch_tick, interval=15, initial_delay=15)
 
 # ============================================================================
 # Logging Configuration

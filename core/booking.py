@@ -21,6 +21,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+def _emit(event_type: str, business_id: int, data: dict) -> None:
+    """Fire an outbound webhook event; never let it break the booking flow."""
+    try:
+        from core.webhooks import emit_event
+        emit_event(business_id, event_type, data)
+    except Exception:
+        logger.debug("webhook emit skipped for %s", event_type, exc_info=True)
+
+
 BOOKING_TAG = re.compile(r"<BOOKING>\s*(\{.*?\})\s*</BOOKING>", re.DOTALL)
 
 # In-memory store for pending bookings (use Redis in production for multi-instance)
@@ -521,6 +531,11 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
         confirm_msg += f" Reference: {external_id}"
 
     logger.info(f"Confirmed booking {appt_id} from pending token {token[:8]}...")
+    _emit("booking.created", bid, {
+        "appointment_id": appt_id, "service": pending.get("service_name"),
+        "start_at": chosen_slot, "customer_name": name, "phone": phone, "email": email,
+        "source": "ai",
+    })
     return True, confirm_msg, appt_id
 
 
@@ -754,6 +769,10 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
                 cancel_reminders_for_appointment(appt_id)
             except Exception as e:
                 logger.warning(f"Failed to cancel reminders for {appt_id}: {e}")
+        _emit("appointment.cancelled", change["business_id"], {
+            "appointment_id": appt_id, "service": change.get("service"),
+            "start_at": change.get("old_slot"), "phone": change.get("phone"),
+        })
         svc = change.get("service") or "your appointment"
         return True, f"Done — your {svc} on {change.get('old_slot')} has been cancelled."
 
@@ -775,6 +794,11 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
             reschedule_reminders_for_appointment(appt_id, new_slot, customer_phone=change.get("phone"))
         except Exception as e:
             logger.warning(f"Failed to reschedule reminders for {appt_id}: {e}")
+    _emit("appointment.rescheduled", change["business_id"], {
+        "appointment_id": appt_id, "service": change.get("service"),
+        "old_start_at": change.get("old_slot"), "start_at": new_slot,
+        "phone": change.get("phone"),
+    })
     svc = change.get("service") or "your appointment"
     return True, f"All set — your {svc} has been moved to {new_slot}."
 
