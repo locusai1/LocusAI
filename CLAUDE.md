@@ -304,6 +304,13 @@ FROM_EMAIL=hello@locusai.co.uk
 
 # Error monitoring (code wired in dashboard.py — set SENTRY_DSN to activate)
 SENTRY_DSN=https://...@sentry.io/...
+
+# Backups (core/backup.py — `python -m core.backup`; local-only unless S3 set)
+BACKUP_DIR=backups            # local snapshot dir (point at a volume in prod)
+BACKUP_KEEP=14                # how many local snapshots to retain
+# BACKUP_S3_BUCKET=...        # optional: also upload off-box (needs boto3)
+# BACKUP_S3_PREFIX=locusai-db
+# BACKUP_S3_ENDPOINT=...      # optional: S3-compatible (e.g. Backblaze B2)
 ```
 
 ---
@@ -556,7 +563,7 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 | test_booking.py | 1 | Booking commit basic test |
 
 ```bash
-.venv/bin/python -m pytest tests/ -v                     # All 632
+.venv/bin/python -m pytest tests/ -v                     # All 682
 .venv/bin/python -m pytest tests/test_sentiment.py -v    # Specific file
 .venv/bin/python -m pytest tests/ -k "test_widget" -v    # Filter by name
 ```
@@ -574,7 +581,13 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - **Cookie consent banner**: present in `public_base.html` (also referenced in `privacy.html`)
 - Pricing displayed in **£ (GBP)** across `home.html`, `onboard.html`, `services.html`
 - Rebranding complete: AxisAI → LocusAI (all references updated)
-- Test suite: **632 tests passing** (verified Jun 2026)
+- Test suite: **682 tests passing** (verified Jun 2026)
+- **In-app onboarding checklist**: dashboard shows setup progress (`core/onboarding.py`) until complete
+- **Public self-serve booking page**: `/book/<slug>` — services + live availability, race-safe booking, reminders (`public_booking_bp.py`)
+- **Outbound webhooks / event bus**: `core/webhooks.py` + `webhooks_bp.py` — HMAC-signed, SSRF-safe, retried deliveries for booking/appointment/escalation events; `/integrations/webhooks` UI (Zapier/Make/n8n-ready)
+- **Weekly AI digest email**: `core/digest.py` — per-week performance summary to owners (supervised worker, opt-out, deduped)
+- **AI knowledge-gap suggestions**: `core/kb_suggestions.py` — GPT proposes KB entries from recent customer questions; "✨ Suggest from conversations" on `/kb`
+- **DB backup module**: `core/backup.py` — `python -m core.backup` (snapshot + rotate + optional S3/Backblaze)
 - **AI reschedule/cancel** of existing appointments (web chat): `<CANCEL>`/`<RESCHEDULE>` token flow in `core/booking.py`, widget confirm card, `/api/widget/change/*` endpoints
 - **Feature gating by plan** (`core/limits.py`): conversation quota, channel + user gates; trial/no-sub = ungated; widget `/session` returns 402 when a paid tier is over cap
 - **Supervised background workers** (`core/workers.py`): auto-restart + exponential backoff + heartbeats on `/health/ready` (no more silent death)
@@ -705,7 +718,7 @@ If NO to all three → Year 2+ feature.
 - [ ] **Dockerfile** — optional; Railway auto-builds from `requirements.txt` + `Procfile` (nixpacks). Add only if build needs pinning.
 - [ ] **Persistent DB on Railway** — ⚠️ SQLite is on ephemeral disk; data lost on redeploy. Attach a Railway volume or move to Railway Postgres BEFORE real users.
 - [x] **Sentry** error monitoring — DONE (code): env-gated in dashboard.py; set `SENTRY_DSN` to activate (free tier = 5K errors/month)
-- [ ] **Remote database backups** — current backup.sh is local only. Replace with hourly SQLite → S3/Backblaze.
+- [x] **Remote database backups** — DONE: `core/backup.py` (`python -m core.backup`) — snapshot + rotate + optional S3/Backblaze. Schedule via cron/Railway.
 - [ ] **Remove Tailwind CDN** from base.html → compile with `npx tailwindcss`
 
 ---
@@ -724,7 +737,7 @@ If NO to all three → Year 2+ feature.
 - [x] Error pages (404/500): DONE — extend standalone `public_base.html`, render for logged-out users (tested)
 
 #### Features
-- [x] **Appointment reschedule/cancel via AI** — DONE for web chat (`<CANCEL>`/`<RESCHEDULE>` flow); voice/SMS still to extend
+- [x] **Appointment reschedule/cancel via AI** — DONE for web chat + SMS (`<CANCEL>`/`<RESCHEDULE>`); native-Retell voice still to extend
 - [ ] **Google Calendar end-to-end** — code done, just needs GOOGLE_CLIENT_ID/SECRET + test
 - [x] **Appointment calendar view** — DONE: `/appointments/calendar` month + week grid
 - [ ] **In-app onboarding checklist** — new businesses see "0" KPIs; replace with setup checklist
@@ -740,8 +753,8 @@ If NO to all three → Year 2+ feature.
 ### TIER 2 — MEDIUM PRIORITY (Month 2-3)
 
 - [ ] Spanish / bilingual AI support
-- [ ] Public shareable booking page (`/book/<slug>`)
-- [ ] Zapier outbound webhooks → then Zapier app (unlocks 5,000+ apps)
+- [x] Public shareable booking page (`/book/<slug>`) — DONE (`public_booking_bp.py`)
+- [x] Zapier outbound webhooks — DONE: signed event bus (`core/webhooks.py`), `/integrations/webhooks`
 - [ ] Outlook / Microsoft 365 calendar (professional services + medical)
 - [ ] Calendly API — UI exists but uses raw JSON textarea, no actual API calls
 - [ ] HubSpot CRM — auto-create contact on first call, log activities
