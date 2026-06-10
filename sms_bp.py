@@ -148,6 +148,20 @@ def sms_webhook():
                 state=state,
             )
 
+            # Reschedule/cancel: SMS has no confirm UI, so when the AI emits a
+            # <CANCEL>/<RESCHEDULE> tag (after confirming verbally per its prompt),
+            # apply it immediately and reply with the outcome.
+            try:
+                from core.booking import extract_pending_change, confirm_pending_change
+                cleaned, change = extract_pending_change(response_text, business_data, session_id)
+                if change:
+                    ok, outcome = confirm_pending_change(change["token"])
+                    response_text = (cleaned + " " + outcome).strip() if cleaned else outcome
+                else:
+                    response_text = cleaned
+            except Exception as e:
+                logger.warning(f"SMS reschedule/cancel handling failed: {e}")
+
             if len(response_text) > 480:
                 response_text = response_text[:477] + "..."
 
