@@ -1016,10 +1016,18 @@ def dashboard():
                 voice_series_values = [0] * 7
 
     from datetime import datetime as dt
+    # Onboarding checklist for the active business (shown until complete)
+    try:
+        from core.onboarding import checklist_for_business
+        onboarding = checklist_for_business(getattr(g, "active_business_id", 0) or 0)
+    except Exception:
+        onboarding = {"steps": [], "complete": True, "done": 0, "total": 0, "percent": 100}
+
     return render_template(
         "dashboard.html",
         businesses=businesses,
         business=None,
+        onboarding=onboarding,
         appt_counts=appt_counts,
         kpis=kpis,
         series_labels=series_labels,
