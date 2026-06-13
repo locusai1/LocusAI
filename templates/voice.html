@@ -36,7 +36,7 @@
 </div>
 
 {# KPI strip #}
-<div class="kpi-strip" style="grid-template-columns: repeat(6,1fr); margin-bottom:20px;">
+<div class="kpi-strip" style="margin-bottom:20px;">
 
   <div class="kpi" style="--kpi-accent:#3b82f6;--kpi-glow:rgba(59,130,246,.18);">
     <div class="kpi__top"><div class="kpi__icon" style="background:rgba(59,130,246,.12);color:#3b82f6;">
@@ -340,7 +340,8 @@
 <style>
 .vc-grid { display:grid; grid-template-columns: 1fr 320px; gap:16px; }
 @media(max-width:1100px){ .vc-grid { grid-template-columns:1fr; } }
-.vc-col-main,.vc-col-side { display:flex;flex-direction:column;gap:16px; }
+.vc-col-main,.vc-col-side { display:flex;flex-direction:column;gap:16px; min-width:0; }
+.vc-col-main > *, .vc-col-side > * { min-width:0; }
 
 .vc-search {
   padding:5px 10px; font-size:12px; border-radius:var(--radius-md);
@@ -350,7 +351,7 @@
 }
 .vc-search:focus { border-color:var(--text-primary); }
 
-.vc-table-wrap { overflow-x:auto; }
+.vc-table-wrap { overflow-x:auto; min-width:0; }
 .vc-table { width:100%; border-collapse:collapse; font-size:12px; }
 .vc-table th {
   padding:9px 16px; text-align:left; font-size:10px; font-weight:700;
