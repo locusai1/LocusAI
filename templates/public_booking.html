@@ -3,8 +3,8 @@
 {% block meta_description %}Book an appointment with {{ business.name }} online — pick a service and time that suits you.{% endblock %}
 
 {% block content %}
-<section class="pbk">
-  <div class="pbk-card">
+<section class="pbk pf-aurora">
+  <div class="pbk-card" data-reveal>
     <div class="pbk-head">
       <h1 class="pbk-title">Book with {{ business.name }}</h1>
       <p class="pbk-sub">Pick a service and a time that works for you.</p>
@@ -131,46 +131,47 @@
 </script>
 
 <style>
-  .pbk { display:flex; justify-content:center; padding:48px 20px 80px; background:#fafafa; min-height:70vh; }
-  .pbk-card { width:100%; max-width:560px; background:#fff; border:1px solid #e8e8eb; border-radius:18px;
-              box-shadow:0 10px 40px -16px rgba(16,24,40,.18); padding:34px; }
-  .pbk-head { margin-bottom:22px; }
-  .pbk-title { font-size:26px; font-weight:800; letter-spacing:-.02em; margin:0; color:#171717; }
-  .pbk-sub { color:#737373; margin:6px 0 0; font-size:15px; }
-  .pbk-label { display:block; font-size:13px; font-weight:600; color:#171717; margin:18px 0 8px; }
-  .pbk-opt { color:#a3a3a3; font-weight:400; }
-  .pbk-input { width:100%; padding:11px 13px; border:1px solid #e0e0e3; border-radius:10px; font-size:15px;
-               font-family:inherit; background:#fff; }
-  .pbk-input:focus { outline:none; border-color:#171717; box-shadow:0 0 0 3px rgba(0,0,0,.06); }
+  .pbk { display:flex; justify-content:center; padding:56px 20px 88px; background:var(--pf-bg-soft); min-height:80vh; }
+  .pbk-card { width:100%; max-width:560px; background:#fff; border:1px solid var(--pf-line); border-radius:var(--pf-r-xl);
+              box-shadow:var(--pf-sh-lg); padding:36px; }
+  .pbk-head { margin-bottom:24px; }
+  .pbk-title { font-size:28px; font-weight:800; letter-spacing:-.03em; margin:0; color:var(--pf-ink); }
+  .pbk-sub { color:var(--pf-muted); margin:7px 0 0; font-size:15px; }
+  .pbk-label { display:block; font-size:13px; font-weight:600; color:var(--pf-ink); margin:18px 0 8px; }
+  .pbk-opt { color:var(--pf-faint); font-weight:400; }
+  .pbk-input { width:100%; padding:12px 14px; border:1px solid var(--pf-line-2); border-radius:var(--pf-r); font-size:15px;
+               font-family:inherit; background:#fff; transition:border-color .15s, box-shadow .15s; }
+  .pbk-input:focus { outline:none; border-color:var(--pf-a); box-shadow:0 0 0 4px rgba(109,94,252,.14); }
   .pbk-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .pbk-services { display:flex; flex-direction:column; gap:8px; }
-  .pbk-service { display:flex; align-items:center; gap:11px; padding:12px 14px; border:1px solid #e6e6e9;
-                 border-radius:11px; cursor:pointer; transition:border-color .15s, background .15s; }
-  .pbk-service:hover { border-color:#cfcfd4; }
-  .pbk-service input { accent-color:#171717; width:17px; height:17px; }
-  .pbk-service:has(input:checked) { border-color:#171717; background:#fafafa; }
+  .pbk-service { display:flex; align-items:center; gap:11px; padding:13px 15px; border:1px solid var(--pf-line);
+                 border-radius:var(--pf-r); cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s; }
+  .pbk-service:hover { border-color:var(--pf-line-2); }
+  .pbk-service input { accent-color:var(--pf-a); width:17px; height:17px; }
+  .pbk-service:has(input:checked) { border-color:var(--pf-a); background:var(--pf-bg-tint); box-shadow:0 0 0 3px rgba(109,94,252,.1); }
   .pbk-service-body { display:flex; flex-direction:column; }
-  .pbk-service-name { font-size:14.5px; font-weight:600; color:#171717; }
-  .pbk-service-meta { font-size:12.5px; color:#8a8a8a; }
+  .pbk-service-name { font-size:14.5px; font-weight:600; color:var(--pf-ink); }
+  .pbk-service-meta { font-size:12.5px; color:var(--pf-muted); }
   .pbk-slots { display:flex; flex-wrap:wrap; gap:8px; min-height:30px; }
-  .pbk-slot { padding:8px 14px; border:1px solid #e0e0e3; border-radius:9px; background:#fff; font-size:14px;
-              font-weight:600; color:#171717; cursor:pointer; transition:all .12s; }
-  .pbk-slot:hover { border-color:#171717; }
-  .pbk-slot.is-sel { background:#171717; color:#fff; border-color:#171717; }
-  .pbk-hint { font-size:13px; color:#a3a3a3; }
-  .pbk-btn { display:block; width:100%; text-align:center; padding:13px; border-radius:11px; font-size:15px;
-             font-weight:700; border:none; cursor:pointer; text-decoration:none; margin-top:24px; }
-  .pbk-btn-primary { background:#171717; color:#fff; }
-  .pbk-btn-primary:disabled { background:#d4d4d8; cursor:not-allowed; }
-  .pbk-btn-ghost { background:#f4f4f5; color:#171717; }
-  .pbk-fine { text-align:center; font-size:12px; color:#a3a3a3; margin-top:12px; }
-  .pbk-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:11px 14px; border-radius:10px; font-size:14px; margin-bottom:8px; }
-  .pbk-empty { color:#737373; font-size:15px; }
-  .pbk-success { text-align:center; padding:24px 0; }
-  .pbk-success-icon { width:60px; height:60px; border-radius:50%; background:#dcfce7; color:#16a34a;
-                      display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
-  .pbk-success h2 { font-size:22px; font-weight:700; margin:0 0 6px; }
-  .pbk-success p { color:#737373; margin:0 0 20px; }
-  @media (max-width:520px) { .pbk-grid2 { grid-template-columns:1fr; } .pbk-card { padding:24px; } }
+  .pbk-slot { padding:9px 15px; border:1px solid var(--pf-line-2); border-radius:var(--pf-r-sm); background:#fff; font-size:14px;
+              font-weight:600; color:var(--pf-ink); cursor:pointer; transition:all .12s; }
+  .pbk-slot:hover { border-color:var(--pf-a); color:var(--pf-a-3); }
+  .pbk-slot.is-sel { background:var(--pf-grad); color:#fff; border-color:transparent; box-shadow:var(--pf-glow); }
+  .pbk-hint { font-size:13px; color:var(--pf-faint); }
+  .pbk-btn { display:block; width:100%; text-align:center; padding:14px; border-radius:var(--pf-r); font-size:15px;
+             font-weight:700; border:none; cursor:pointer; text-decoration:none; margin-top:26px; transition:transform .15s, box-shadow .2s; }
+  .pbk-btn-primary { background:var(--pf-grad); color:#fff; box-shadow:var(--pf-sh); }
+  .pbk-btn-primary:not(:disabled):hover { transform:translateY(-2px); box-shadow:var(--pf-glow); }
+  .pbk-btn-primary:disabled { background:#d4d4d8; cursor:not-allowed; box-shadow:none; }
+  .pbk-btn-ghost { background:var(--pf-bg-tint); color:var(--pf-a-3); }
+  .pbk-fine { text-align:center; font-size:12px; color:var(--pf-faint); margin-top:12px; }
+  .pbk-error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:11px 14px; border-radius:var(--pf-r); font-size:14px; margin-bottom:10px; }
+  .pbk-empty { color:var(--pf-muted); font-size:15px; }
+  .pbk-success { text-align:center; padding:28px 0; }
+  .pbk-success-icon { width:64px; height:64px; border-radius:50%; background:var(--pf-green-bg); color:var(--pf-green);
+                      display:flex; align-items:center; justify-content:center; margin:0 auto 18px; }
+  .pbk-success h2 { font-size:23px; font-weight:800; letter-spacing:-.02em; margin:0 0 6px; color:var(--pf-ink); }
+  .pbk-success p { color:var(--pf-muted); margin:0 0 22px; }
+  @media (max-width:520px) { .pbk-grid2 { grid-template-columns:1fr; } .pbk-card { padding:26px; } }
 </style>
 {% endblock %}
