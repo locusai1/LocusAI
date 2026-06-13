@@ -9,7 +9,7 @@
       <p class="page-subtitle">Train your AI with FAQs and business information</p>
     </div>
     {% if business_id %}
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <button class="btn" id="kb-suggest-btn" type="button"
               onclick="loadKbSuggestions({{ business_id }})">
         ✨ Suggest from conversations

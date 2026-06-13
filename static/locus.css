@@ -351,6 +351,10 @@ button {
   flex-direction: column;
 }
 
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
 .flex-1 {
   flex: 1;
 }
@@ -986,6 +990,7 @@ button {
    ============================================================================ */
 .card {
   position: relative;
+  min-width: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
@@ -2002,6 +2007,9 @@ input[type="radio"]:focus {
    ============================================================================ */
 .table-container {
   overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   background: var(--bg-card);
@@ -3454,24 +3462,30 @@ html[data-theme="dark"] .modal-backdrop {
 .space-y-4 > * + * { margin-top: var(--space-4); }
 .space-y-6 > * + * { margin-top: var(--space-6); }
 
-/* Grid */
-.grid { display: grid; }
-.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+/* Grid — bare .grid is a single full-width (shrinkable) column; columns use
+   minmax(0,1fr) so grid items can shrink below content width (no mobile overflow). */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.col-span-2 { grid-column: span 2; }
+.col-span-3 { grid-column: span 3; }
 
 @media (min-width: 768px) {
-  .md\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-  .md\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-  .md\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .md\:flex { display: flex; }
   .md\:hidden { display: none; }
 }
 
 @media (min-width: 1024px) {
-  .lg\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-  .lg\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-  .lg\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .lg\:col-span-2 { grid-column: span 2; }
+  .lg\:col-span-3 { grid-column: span 3; }
 }
 
 /* ============================================================================
