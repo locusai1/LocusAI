@@ -682,7 +682,17 @@ html[data-theme="dark"] .ai-hero__orb svg { color: #09090b; }
 }
 @media (max-width: 768px) { .db-col-side { grid-template-columns: 1fr; } }
 
-.db-col-main, .db-col-side { display: flex; flex-direction: column; gap: 16px; }
+/* min-width:0 lets these grid/flex children shrink below content width so wide
+   content (chart, call list) can't push the page past the viewport on mobile. */
+.db-col-main, .db-col-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.db-col-main > *, .db-col-side > * { min-width: 0; }
+.db-card canvas { max-width: 100% !important; }
+
+@media (max-width: 768px) {
+  /* The hero's stat row duplicates the KPI strip and gets clipped on small
+     screens — hide it on mobile to declutter and avoid overflow. */
+  .ai-hero__stats { display: none; }
+}
 
 /* ── Card ────────────────────────────────────────────────────────────────── */
 .db-card {
