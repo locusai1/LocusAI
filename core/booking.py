@@ -690,6 +690,92 @@ def _resolve_target_appointment(business_id, payload, session_id):
     return candidates[0], None
 
 
+def _validate_reschedule_slot(bid: int, appt: Dict, new_dt: datetime) -> Tuple[Optional[str], Optional[str]]:
+    """Check a proposed new time is free (excluding the appointment being moved).
+    Returns (new_slot_str, None) if OK, else (None, speakable_error)."""
+    from core.db import check_slot_available
+
+    new_slot = new_dt.strftime("%Y-%m-%d %H:%M")
+    duration = 30
+    sid = _find_local_service_id(bid, appt.get("service") or "")
+    if sid:
+        with get_conn() as con:
+            r = con.execute("SELECT duration_min FROM services WHERE id=?", (sid,)).fetchone()
+            if r and r["duration_min"]:
+                duration = r["duration_min"]
+    if not check_slot_available(bid, new_slot, duration, exclude_appointment_id=appt["id"]):
+        alt = get_available_slots_for_day(bid, new_dt.strftime("%Y-%m-%d"), appt.get("service"), limit=1)
+        sug = f" The closest free time I can see is {alt[0]}." if alt else ""
+        return None, f"That time isn't available.{sug} Would another time work?"
+    return new_slot, None
+
+
+def _apply_cancel(
+    business_id: int, appt_id: int, service: Optional[str], old_slot: Optional[str], phone: Optional[str]
+) -> Tuple[bool, str]:
+    """Cancel an appointment: update status, cancel reminders, emit event.
+    Single source of truth shared by web/SMS confirm flow and voice functions."""
+    from core.db import update_appointment_status
+
+    if not update_appointment_status(appt_id, "cancelled"):
+        return False, "Sorry, I couldn't cancel that. Please call us and we'll sort it out."
+    if REMINDERS_AVAILABLE:
+        try:
+            from core.reminders import cancel_reminders_for_appointment
+
+            cancel_reminders_for_appointment(appt_id)
+        except Exception as e:
+            logger.warning(f"Failed to cancel reminders for {appt_id}: {e}")
+    _emit(
+        "appointment.cancelled",
+        business_id,
+        {"appointment_id": appt_id, "service": service, "start_at": old_slot, "phone": phone},
+    )
+    svc = service or "your appointment"
+    return True, f"Done — your {svc} on {old_slot} has been cancelled."
+
+
+def _apply_reschedule(
+    business_id: int,
+    appt_id: int,
+    service: Optional[str],
+    old_slot: Optional[str],
+    new_slot: str,
+    phone: Optional[str],
+) -> Tuple[bool, str]:
+    """Move an appointment to new_slot: update row, reschedule reminders, emit event."""
+    try:
+        with get_conn() as con:
+            con.execute(
+                "UPDATE appointments SET start_at=? WHERE id=? AND status IN ('pending','confirmed')",
+                (new_slot, appt_id),
+            )
+            con.commit()
+    except Exception as e:
+        logger.error(f"Failed to reschedule appointment {appt_id}: {e}")
+        return False, "Sorry, I couldn't move that appointment. Please call us and we'll help."
+    if REMINDERS_AVAILABLE:
+        try:
+            from core.reminders import reschedule_reminders_for_appointment
+
+            reschedule_reminders_for_appointment(appt_id, new_slot, customer_phone=phone)
+        except Exception as e:
+            logger.warning(f"Failed to reschedule reminders for {appt_id}: {e}")
+    _emit(
+        "appointment.rescheduled",
+        business_id,
+        {
+            "appointment_id": appt_id,
+            "service": service,
+            "old_start_at": old_slot,
+            "start_at": new_slot,
+            "phone": phone,
+        },
+    )
+    svc = service or "your appointment"
+    return True, f"All set — your {svc} has been moved to {new_slot}."
+
+
 def extract_pending_change(
     text: str,
     business: Dict,
@@ -726,25 +812,9 @@ def extract_pending_change(
             return (
                 clean_text + "\n\nWhat date and time would you like to move it to?"
             ).strip(), None
-        new_slot = new_dt.strftime("%Y-%m-%d %H:%M")
-        # Verify the new slot is free (excluding the appointment being moved).
-        from core.db import check_slot_available
-
-        duration = 30
-        sid = _find_local_service_id(bid, appt.get("service") or "")
-        if sid:
-            with get_conn() as con:
-                r = con.execute("SELECT duration_min FROM services WHERE id=?", (sid,)).fetchone()
-                if r and r["duration_min"]:
-                    duration = r["duration_min"]
-        if not check_slot_available(bid, new_slot, duration, exclude_appointment_id=appt["id"]):
-            alt = get_available_slots_for_day(
-                bid, new_dt.strftime("%Y-%m-%d"), appt.get("service"), limit=1
-            )
-            sug = f" The closest free time I can see is {alt[0]}." if alt else ""
-            return (
-                clean_text + f"\n\nThat time isn't available.{sug} Would another time work?"
-            ).strip(), None
+        new_slot, slot_err = _validate_reschedule_slot(bid, appt, new_dt)
+        if slot_err:
+            return (clean_text + "\n\n" + slot_err).strip(), None
 
     token = _generate_booking_token(bid, session_id or 0)
     now = time.time()
