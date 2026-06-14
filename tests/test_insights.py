@@ -5,8 +5,9 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 
-def _call(test_db, bid, started_at, duration=120, status="ended", booking_discussed=0,
-          booking_confirmed=0):
+def _call(
+    test_db, bid, started_at, duration=120, status="ended", booking_discussed=0, booking_confirmed=0
+):
     from core.db import get_conn
 
     with patch("core.db.DB_PATH", test_db), get_conn() as con:
@@ -14,8 +15,15 @@ def _call(test_db, bid, started_at, duration=120, status="ended", booking_discus
             "INSERT INTO voice_calls (business_id, retell_call_id, direction, from_number, "
             "call_status, started_at, duration_seconds, booking_discussed, booking_confirmed) "
             "VALUES (?, ?, 'inbound', '+1', ?, ?, ?, ?, ?)",
-            (bid, uuid.uuid4().hex, status, started_at,
-             duration, booking_discussed, booking_confirmed),
+            (
+                bid,
+                uuid.uuid4().hex,
+                status,
+                started_at,
+                duration,
+                booking_discussed,
+                booking_confirmed,
+            ),
         )
         con.commit()
 
@@ -25,9 +33,13 @@ def _ai_appt(test_db, bid, service="Haircut"):
 
     with patch("core.db.DB_PATH", test_db):
         return create_appointment(
-            business_id=bid, customer_name="J", phone="+1", service=service,
+            business_id=bid,
+            customer_name="J",
+            phone="+1",
+            service=service,
             start_at=(datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M"),
-            status="confirmed", source="ai",
+            status="confirmed",
+            source="ai",
         )
 
 
@@ -38,7 +50,9 @@ class TestMissedRevenue:
         bid = sample_business["id"]
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _call(test_db, bid, now, duration=0, status="error")  # missed
-        _call(test_db, bid, now, duration=90, booking_discussed=1, booking_confirmed=0)  # unconverted
+        _call(
+            test_db, bid, now, duration=90, booking_discussed=1, booking_confirmed=0
+        )  # unconverted
         _call(test_db, bid, now, duration=90, booking_discussed=1, booking_confirmed=1)  # converted
         with patch("core.db.DB_PATH", test_db):
             r = compute_missed_revenue(bid, days=30)

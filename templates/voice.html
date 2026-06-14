@@ -531,6 +531,31 @@ function filterCalls(q) {
   });
 }
 
+/* ── Call feedback (thumbs) ── */
+function rateCall(btn) {
+  var rating = btn.dataset.rating;
+  var callId = btn.dataset.call;
+  var note = '';
+  if (rating === 'down') {
+    note = window.prompt('What did the AI get wrong? (optional — helps improve it)') || '';
+  }
+  var csrf = document.querySelector('meta[name=csrf-token]').content;
+  var body = new URLSearchParams();
+  body.append('csrf_token', csrf);
+  body.append('voice_call_id', callId);
+  body.append('rating', rating);
+  if (note) body.append('note', note);
+  fetch("{{ url_for('call_feedback') }}", { method: 'POST', body: body })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok) {
+        var cell = btn.parentElement;
+        cell.querySelectorAll('.vc-thumb').forEach(function (b) { b.classList.remove('rated'); });
+        btn.classList.add('rated');
+      }
+    });
+}
+
 /* ── Call detail drawer ── */
 function openCall(callId) {
   document.getElementById('callDrawer').classList.add('open');
@@ -801,5 +826,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .db-btn-primary:hover { opacity:.9; }
 .db-btn-primary:disabled { opacity:.5;cursor:not-allowed; }
+.vc-thumb { background:none;border:none;cursor:pointer;font-size:15px;opacity:.35;padding:2px 3px;transition:opacity .15s,transform .15s; }
+.vc-thumb:hover { opacity:.8; }
+.vc-thumb.rated { opacity:1;transform:scale(1.15); }
 </style>
 {% endblock %}

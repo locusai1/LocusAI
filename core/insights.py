@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 MIN_COHORT = 3  # need at least this many businesses before showing a benchmark
 
 _MISSED_SQL = (
-    "duration_seconds IS NULL OR duration_seconds = 0 "
-    "OR call_status IN ('error', 'registered')"
+    "duration_seconds IS NULL OR duration_seconds = 0 OR call_status IN ('error', 'registered')"
 )
 
 
@@ -55,10 +54,7 @@ def compute_missed_revenue(business_id: int, days: int = 30) -> Dict:
         }
 
     def _is_missed(c):
-        return (
-            c["duration_seconds"] in (None, 0)
-            or c["call_status"] in ("error", "registered")
-        )
+        return c["duration_seconds"] in (None, 0) or c["call_status"] in ("error", "registered")
 
     missed = [c for c in calls if _is_missed(c)]
     answered = [c for c in calls if not _is_missed(c)]
@@ -176,17 +172,13 @@ def compute_benchmarks(business_id: int, days: int = 30) -> Dict:
     """Compare this business to an anonymised cohort of similar (active) businesses."""
     start_date, end_date = _period(days)
     with get_conn() as con:
-        businesses = con.execute(
-            "SELECT id FROM businesses WHERE archived = 0"
-        ).fetchall()
+        businesses = con.execute("SELECT id FROM businesses WHERE archived = 0").fetchall()
 
         answer_rates: List[float] = []
         conv_rates: List[float] = []
         me = None
         for b in businesses:
-            answered, total, ai_bookings = _business_call_stats(
-                con, b["id"], start_date, end_date
-            )
+            answered, total, ai_bookings = _business_call_stats(con, b["id"], start_date, end_date)
             if total == 0:
                 continue  # no activity → not part of the cohort
             ar = answered / total * 100
@@ -212,7 +204,5 @@ def compute_benchmarks(business_id: int, days: int = 30) -> Dict:
         "your_conversion_rate": me["conversion_rate"],
         "cohort_conversion_rate": round(_median(conv_rates), 1),
         "answer_rate_verdict": "above" if me["answer_rate"] >= _median(answer_rates) else "below",
-        "conversion_verdict": "above"
-        if me["conversion_rate"] >= _median(conv_rates)
-        else "below",
+        "conversion_verdict": "above" if me["conversion_rate"] >= _median(conv_rates) else "below",
     }
