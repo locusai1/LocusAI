@@ -442,3 +442,9 @@ html[data-theme="dark"] .pf-stats { background: var(--pf-line); }
 
 /* Parallax drift for the aurora glow (driven by JS --pf-par-x/y) */
 .pf-aurora::before { transform: translate3d(var(--pf-par-x,0), var(--pf-par-y,0), 0); transition: transform .25s ease-out; }
+
+/* Always-dark surfaces — must NOT use --pf-ink (which inverts in dark mode) */
+:root { --pf-dark: #0b0b14; }
+.pf-cta, .pf-auth__aside { background: var(--pf-dark); }
+.pf-btn-dark { background: var(--pf-dark); color: #fff; }
+.pf-btn-white { color: var(--pf-dark); }
