@@ -57,8 +57,11 @@ FALLBACK_MODELS = [
     ("openai", "gpt-3.5-turbo"),
 ]
 
-# Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY or None)
+# Initialize OpenAI client.
+# Use a placeholder key when none is configured so import never fails (the
+# constructor raises on a missing key). Real calls still require a valid key;
+# tests mock the client, and the app degrades gracefully without one.
+client = OpenAI(api_key=OPENAI_API_KEY or "sk-not-configured")
 
 # Fallback response when all AI models fail
 FALLBACK_RESPONSE = (
