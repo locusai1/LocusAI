@@ -1362,6 +1362,23 @@ def _trigger_missed_call_sms(caller_phone: str, business_id: int) -> None:
     threading.Thread(target=_send, daemon=True).start()
 
 
+def _business_redacts_transcripts(call_id: str) -> bool:
+    """Return True if the call's business has transcript PII redaction enabled."""
+    from core.db import get_conn
+
+    try:
+        with get_conn() as con:
+            row = con.execute(
+                """SELECT b.redact_transcripts AS r
+                   FROM voice_calls v JOIN businesses b ON b.id = v.business_id
+                   WHERE v.retell_call_id = ?""",
+                (call_id,),
+            ).fetchone()
+        return bool(row and row["r"])
+    except Exception:
+        return False
+
+
 def handle_call_analyzed(data: Dict) -> Dict:
     """Handle call_analyzed webhook event."""
     call = data.get("call", {})
@@ -1370,6 +1387,11 @@ def handle_call_analyzed(data: Dict) -> Dict:
 
     sentiment = analysis.get("sentiment")
     summary = analysis.get("summary")
+
+    if summary and _business_redacts_transcripts(call_id):
+        from core.security import redact_pii_text
+
+        summary = redact_pii_text(summary)
 
     update_voice_call(
         call_id,

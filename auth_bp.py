@@ -259,6 +259,15 @@ def login():
     # Set login timestamp for session timeout checks
     session["login_time"] = datetime.now().isoformat()
 
+    try:
+        from core.audit import log_audit_from_request
+
+        log_audit_from_request(
+            "auth.login", user_id=row["id"], user_email=row["email"], entity_type="user"
+        )
+    except Exception:
+        pass
+
     # For non-admins, select their first business automatically
     if row["role"] != "admin":
         with get_conn() as con:
@@ -798,6 +807,14 @@ def users_delete(user_id: int):
             con.execute("DELETE FROM business_users WHERE user_id=?", (user_id,))
             con.execute("DELETE FROM users WHERE id=?", (user_id,))
         logger.info(f"Admin deleted user {user_id}")
+        try:
+            from core.audit import log_audit_from_request
+
+            log_audit_from_request(
+                "user.deleted", entity_type="user", entity_id=user_id
+            )
+        except Exception:
+            pass
         flash("User deleted.", "ok")
     except Exception as e:
         logger.error(f"Failed to delete user {user_id}: {e}")

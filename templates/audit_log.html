@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Audit log · LocusAI{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:20px;">
+  <h1 class="page-title">Audit log</h1>
+  <p class="text-muted" style="margin-top:4px;">
+    An immutable record of sensitive actions — who did what, when, and from where.
+    Retained for two years for compliance and security review.
+  </p>
+</div>
+
+<div class="card">
+  <div class="table-container" style="overflow-x:auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>When (UTC)</th>
+          <th>Action</th>
+          <th>User</th>
+          <th>Entity</th>
+          <th>IP</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td style="white-space:nowrap;font-variant-numeric:tabular-nums;">{{ e.created_at }}</td>
+          <td><code>{{ e.action }}</code></td>
+          <td>{{ e.user_email or '—' }}</td>
+          <td>{% if e.entity_type %}{{ e.entity_type }}{% if e.entity_id %} #{{ e.entity_id }}{% endif %}{% else %}—{% endif %}</td>
+          <td class="text-muted">{{ e.ip or '—' }}</td>
+          <td class="text-muted" style="font-size:12px;max-width:320px;">
+            {% if e.detail %}{{ e.detail }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:32px;">No audited actions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

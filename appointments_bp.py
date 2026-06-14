@@ -293,6 +293,18 @@ def appointments_set_status(appt_id: int):
         pass
 
     logger.info(f"Appointment {appt_id} status changed to {new_status} by user {_user().get('id')}")
+    try:
+        from core.audit import log_audit_from_request
+
+        log_audit_from_request(
+            "appointment.status_changed",
+            business_id=bid,
+            entity_type="appointment",
+            entity_id=appt_id,
+            detail={"status": new_status},
+        )
+    except Exception:
+        pass
     flash("Status updated.", "ok")
     return redirect(return_to)
 

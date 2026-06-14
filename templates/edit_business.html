@@ -72,6 +72,21 @@
         </label>
       </div>
 
+      <div style="border:1px solid var(--border-default,#e5e5e5);border-radius:11px;padding:14px 16px;">
+        <label class="flex items-start gap-3" style="cursor:pointer;">
+          <input type="checkbox" name="redact_transcripts" value="1" style="margin-top:3px;"
+                 {% if business.get('redact_transcripts') %}checked{% endif %}>
+          <span>
+            <span style="font-weight:600;">Redact PII from call transcripts</span>
+            <span class="text-muted" style="display:block;font-size:13px;line-height:1.5;margin-top:2px;">
+              For regulated businesses (medical, legal, finance). When on, emails, phone
+              numbers, and card numbers are stripped from stored transcripts and call
+              summaries before they’re saved — they never touch the database in raw form.
+            </span>
+          </span>
+        </label>
+      </div>
+
       <div class="grid md:grid-cols-3 gap-4 items-start">
         <div>
           <label class="form-label">Accent Color</label>

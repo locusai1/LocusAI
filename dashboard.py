@@ -329,6 +329,22 @@ def _kb_autolearn_tick():
             app.logger.info(f"KB auto-learn: added {added} entries")
 
 
+def _data_purge_tick():
+    """One iteration: enforce per-business data retention + trim the audit log."""
+    from core.audit import log_audit, purge_old_audit
+    from core.db import cleanup_old_data
+
+    with app.app_context():
+        counts = cleanup_old_data()
+        audit_removed = purge_old_audit()
+        if any(counts.values()) or audit_removed:
+            app.logger.info(f"Data purge: {counts}, audit_removed={audit_removed}")
+            log_audit(
+                "data.retention_purge",
+                detail={**counts, "audit_rows_removed": audit_removed},
+            )
+
+
 # Bootstrap an admin from env (ADMIN_EMAIL/ADMIN_PASSWORD) if one is missing.
 # Lets you create the production admin via Railway Variables + a redeploy, with
 # no CLI access needed; idempotent (only creates when absent).
@@ -349,6 +365,7 @@ if not os.getenv("PYTEST_CURRENT_TEST"):
     start_worker("webhook_dispatch", _webhook_dispatch_tick, interval=15, initial_delay=15)
     start_worker("weekly_digest", _digest_tick, interval=21600, initial_delay=120)  # ~6h
     start_worker("kb_autolearn", _kb_autolearn_tick, interval=86400, initial_delay=300)  # daily
+    start_worker("data_purge", _data_purge_tick, interval=86400, initial_delay=600)  # daily
 
 # ============================================================================
 # Logging Configuration
@@ -1253,12 +1270,23 @@ def edit_business(business_id: int):
 
         # Self-improving KB toggle (checkbox: absent = off).
         fields["kb_autolearn_enabled"] = 1 if request.form.get("kb_autolearn_enabled") else 0
+        # Transcript PII redaction toggle (compliance; checkbox absent = off).
+        fields["redact_transcripts"] = 1 if request.form.get("redact_transcripts") else 0
 
         ensure_tenant_key(business_id)
 
         try:
             update_business(business_id, **{k: v for k, v in fields.items() if v is not None})
             write_meta_from_db(business_id)
+            from core.audit import log_audit_from_request
+
+            log_audit_from_request(
+                "business.updated",
+                business_id=business_id,
+                entity_type="business",
+                entity_id=business_id,
+                detail={"fields": sorted(fields.keys())},
+            )
             flash("Business updated.", "ok")
             app.logger.info(f"Business {business_id} updated by user {user.get('id')}")
         except Exception as e:
@@ -1519,6 +1547,18 @@ def voice_dashboard():
         voice_settings=voice_settings,
         now=datetime.now(),
     )
+
+
+@app.route("/audit")
+def audit_log_view():
+    """Compliance audit trail for the active business (and global admin events)."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    from core.audit import list_audit
+
+    entries = list_audit(business_id, limit=300)
+    return render_template("audit_log.html", entries=entries)
 
 
 @app.route("/test-ai")
