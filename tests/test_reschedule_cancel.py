@@ -150,6 +150,118 @@ class TestRescheduleFlow:
         assert "date and time" in clean.lower()
 
 
+class TestVoiceFunctions:
+    """Direct-apply functions used by the native Retell agent's custom functions."""
+
+    def test_voice_find_appointments(self, test_db, sample_business):
+        from core import booking
+
+        bid = sample_business["id"]
+        _make_appt(test_db, bid)
+        with patch("core.db.DB_PATH", test_db):
+            appts = booking.voice_find_appointments(bid, "+14155551234")
+        assert len(appts) == 1
+        assert appts[0]["service"] == "Haircut"
+
+    def test_voice_cancel_applies(self, test_db, sample_business):
+        from core import booking
+        from core.db import get_conn
+
+        bid = sample_business["id"]
+        aid = _make_appt(test_db, bid)
+        with patch("core.db.DB_PATH", test_db):
+            ok, msg = booking.voice_cancel_appointment(bid, phone="+14155551234", service="Haircut")
+            assert ok is True
+            with get_conn() as con:
+                status = con.execute(
+                    "SELECT status FROM appointments WHERE id=?", (aid,)
+                ).fetchone()["status"]
+        assert status == "cancelled"
+        assert "cancelled" in msg.lower()
+
+    def test_voice_cancel_no_match(self, test_db, sample_business):
+        from core import booking
+
+        bid = sample_business["id"]
+        with patch("core.db.DB_PATH", test_db):
+            ok, msg = booking.voice_cancel_appointment(bid, phone="+19990001111")
+        assert ok is False
+        assert "couldn't find" in msg.lower()
+
+    def test_voice_reschedule_applies(self, test_db, sample_business):
+        from core import booking
+        from core.db import get_conn
+
+        bid = sample_business["id"]
+        aid = _make_appt(test_db, bid, when=_future(days=3, hour=14))
+        new_dt = _future(days=5, hour=11)
+        with patch("core.db.DB_PATH", test_db), patch(
+            "core.db.check_slot_available", return_value=True
+        ):
+            ok, msg = booking.voice_reschedule_appointment(
+                bid, new_datetime=new_dt, phone="+14155551234", service="Haircut"
+            )
+            assert ok is True
+            with get_conn() as con:
+                start = con.execute(
+                    "SELECT start_at FROM appointments WHERE id=?", (aid,)
+                ).fetchone()["start_at"]
+        assert start == new_dt
+
+    def test_voice_reschedule_bad_datetime(self, test_db, sample_business):
+        from core import booking
+
+        bid = sample_business["id"]
+        _make_appt(test_db, bid)
+        with patch("core.db.DB_PATH", test_db):
+            ok, msg = booking.voice_reschedule_appointment(
+                bid, new_datetime="not a date", phone="+14155551234"
+            )
+        assert ok is False
+        assert "date and time" in msg.lower()
+
+
+class TestVoiceFunctionEndpoints:
+    """The Retell custom-function webhook endpoints in voice_bp."""
+
+    def test_cancel_endpoint(self, client, sample_business, test_db):
+        from core.db import get_conn
+
+        bid = sample_business["id"]
+        aid = _make_appt(test_db, bid)
+        with patch("core.db.DB_PATH", test_db), patch(
+            "voice_bp._verify_retell_request", return_value=True
+        ), patch("voice_bp._get_business_by_phone", return_value=bid):
+            resp = client.post(
+                "/api/voice/fn/cancel-appointment",
+                json={
+                    "call": {"from_number": "+14155551234", "to_number": "+442046203253"},
+                    "args": {"service": "Haircut"},
+                },
+            )
+            assert resp.status_code == 200
+            assert resp.get_json()["success"] is True
+            with get_conn() as con:
+                status = con.execute(
+                    "SELECT status FROM appointments WHERE id=?", (aid,)
+                ).fetchone()["status"]
+        assert status == "cancelled"
+
+    def test_find_endpoint_no_appointments(self, client, sample_business, test_db):
+        bid = sample_business["id"]
+        with patch("core.db.DB_PATH", test_db), patch(
+            "voice_bp._verify_retell_request", return_value=True
+        ), patch("voice_bp._get_business_by_phone", return_value=bid):
+            resp = client.post(
+                "/api/voice/fn/find-appointments",
+                json={"call": {"from_number": "+19990001111", "to_number": "+442046203253"}},
+            )
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["success"] is True
+        assert body["count"] == 0
+
+
 class TestWidgetChangeEndpoints:
     def test_confirm_change_endpoint(self, client, sample_business, test_db):
         from core import booking

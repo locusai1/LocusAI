@@ -162,6 +162,110 @@ def voice_webhook():
 
 
 # ============================================================================
+# Retell Custom Functions — real-time reschedule/cancel during native LLM calls
+# ============================================================================
+# The native Retell agent invokes these mid-call (registered as custom tools on
+# the Retell LLM). Each returns a short JSON message the agent speaks back.
+
+
+def _fn_context(data: dict):
+    """Pull (business_id, caller_phone, args) from a Retell custom-function call."""
+    call = data.get("call", {}) or {}
+    from_number = call.get("from_number") or ""
+    to_number = call.get("to_number") or ""
+    business_id = _get_business_by_phone(to_number) or 1
+    args = data.get("args", {}) or data.get("arguments", {}) or {}
+    return business_id, from_number, args
+
+
+def _speak_dt(s: str) -> str:
+    """Format '2026-06-15 14:30' as 'Monday 15 June at 2:30 PM' for the agent to read."""
+    from datetime import datetime
+
+    try:
+        dt = datetime.strptime(s, "%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return s
+    return dt.strftime("%A %-d %B at %-I:%M %p")
+
+
+@bp.route("/fn/find-appointments", methods=["POST"])
+def fn_find_appointments():
+    """Custom function: list the caller's upcoming appointments."""
+    if not _verify_retell_request():
+        return Response("Unauthorized", status=403)
+    data = request.get_json(force=True, silent=True) or {}
+    business_id, from_number, args = _fn_context(data)
+    phone = (args.get("phone") or from_number or "").strip() or None
+
+    from core.booking import voice_find_appointments
+
+    appts = voice_find_appointments(business_id, phone)
+    if not appts:
+        return jsonify(
+            {
+                "success": True,
+                "count": 0,
+                "message": "I couldn't find any upcoming appointments under this number.",
+            }
+        )
+    parts = [f"{a['service']} on {_speak_dt(a['start_at'])}" for a in appts[:3]]
+    return jsonify(
+        {
+            "success": True,
+            "count": len(appts),
+            "appointments": [
+                {"service": a["service"], "datetime": a["start_at"]} for a in appts
+            ],
+            "message": "I found: " + "; ".join(parts) + ".",
+        }
+    )
+
+
+@bp.route("/fn/cancel-appointment", methods=["POST"])
+def fn_cancel_appointment():
+    """Custom function: cancel the caller's appointment (after verbal confirmation)."""
+    if not _verify_retell_request():
+        return Response("Unauthorized", status=403)
+    data = request.get_json(force=True, silent=True) or {}
+    business_id, from_number, args = _fn_context(data)
+    phone = (args.get("phone") or from_number or "").strip() or None
+
+    from core.booking import voice_cancel_appointment
+
+    ok, message = voice_cancel_appointment(
+        business_id,
+        phone=phone,
+        service=args.get("service"),
+        when=args.get("appointment_datetime") or args.get("datetime"),
+    )
+    logger.info(f"Voice cancel (business {business_id}, {phone}): ok={ok}")
+    return jsonify({"success": ok, "message": message})
+
+
+@bp.route("/fn/reschedule-appointment", methods=["POST"])
+def fn_reschedule_appointment():
+    """Custom function: move the caller's appointment to a new time."""
+    if not _verify_retell_request():
+        return Response("Unauthorized", status=403)
+    data = request.get_json(force=True, silent=True) or {}
+    business_id, from_number, args = _fn_context(data)
+    phone = (args.get("phone") or from_number or "").strip() or None
+
+    from core.booking import voice_reschedule_appointment
+
+    ok, message = voice_reschedule_appointment(
+        business_id,
+        new_datetime=args.get("new_datetime") or args.get("new_appointment_datetime"),
+        phone=phone,
+        service=args.get("service"),
+        old_when=args.get("current_datetime") or args.get("appointment_datetime"),
+    )
+    logger.info(f"Voice reschedule (business {business_id}, {phone}): ok={ok}")
+    return jsonify({"success": ok, "message": message})
+
+
+# ============================================================================
 # LLM Response Webhook (Real-time conversation)
 # ============================================================================
 

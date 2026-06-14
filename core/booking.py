@@ -875,69 +875,96 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
     if time.time() > change.get("expires_at", 0):
         return False, "That request has expired. Please tell me again what you'd like to change."
 
-    from core.db import update_appointment_status
-
     appt_id = change["appointment_id"]
     action = change["action"]
+    bid = change["business_id"]
 
     if action == "cancel":
-        ok = update_appointment_status(appt_id, "cancelled")
-        if not ok:
-            return False, "Sorry, I couldn't cancel that. Please call us and we'll sort it out."
-        if REMINDERS_AVAILABLE:
-            try:
-                from core.reminders import cancel_reminders_for_appointment
-
-                cancel_reminders_for_appointment(appt_id)
-            except Exception as e:
-                logger.warning(f"Failed to cancel reminders for {appt_id}: {e}")
-        _emit(
-            "appointment.cancelled",
-            change["business_id"],
-            {
-                "appointment_id": appt_id,
-                "service": change.get("service"),
-                "start_at": change.get("old_slot"),
-                "phone": change.get("phone"),
-            },
+        return _apply_cancel(
+            bid, appt_id, change.get("service"), change.get("old_slot"), change.get("phone")
         )
-        svc = change.get("service") or "your appointment"
-        return True, f"Done — your {svc} on {change.get('old_slot')} has been cancelled."
 
     # reschedule
-    new_slot = change["new_slot"]
-    try:
-        with get_conn() as con:
-            con.execute(
-                "UPDATE appointments SET start_at=? WHERE id=? AND status IN ('pending','confirmed')",
-                (new_slot, appt_id),
-            )
-            con.commit()
-    except Exception as e:
-        logger.error(f"Failed to reschedule appointment {appt_id}: {e}")
-        return False, "Sorry, I couldn't move that appointment. Please call us and we'll help."
-    if REMINDERS_AVAILABLE:
-        try:
-            from core.reminders import reschedule_reminders_for_appointment
-
-            reschedule_reminders_for_appointment(
-                appt_id, new_slot, customer_phone=change.get("phone")
-            )
-        except Exception as e:
-            logger.warning(f"Failed to reschedule reminders for {appt_id}: {e}")
-    _emit(
-        "appointment.rescheduled",
-        change["business_id"],
-        {
-            "appointment_id": appt_id,
-            "service": change.get("service"),
-            "old_start_at": change.get("old_slot"),
-            "start_at": new_slot,
-            "phone": change.get("phone"),
-        },
+    return _apply_reschedule(
+        bid,
+        appt_id,
+        change.get("service"),
+        change.get("old_slot"),
+        change["new_slot"],
+        change.get("phone"),
     )
-    svc = change.get("service") or "your appointment"
-    return True, f"All set — your {svc} has been moved to {new_slot}."
+
+
+# ============================================================================
+# Voice functions — direct apply (Retell custom-function calls, native LLM)
+# ============================================================================
+# The native Retell agent can't emit our <CANCEL>/<RESCHEDULE> tags, so voice
+# uses real-time function calls instead: the agent confirms verbally with the
+# caller, then invokes one of these. They resolve the appointment and apply the
+# change in one step, returning a speakable message.
+
+
+def voice_find_appointments(
+    business_id: int, phone: Optional[str], session_id: Optional[int] = None
+) -> list:
+    """Upcoming appointments for a caller (by phone), for the agent to read back."""
+    return find_upcoming_appointments(business_id, phone=phone, session_id=session_id)
+
+
+def voice_cancel_appointment(
+    business_id: int,
+    *,
+    phone: Optional[str] = None,
+    service: Optional[str] = None,
+    when: Optional[str] = None,
+    appointment_id: Optional[int] = None,
+    session_id: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Resolve the caller's appointment and cancel it. Returns (ok, speakable_message)."""
+    payload = {
+        "phone": phone,
+        "service": service,
+        "datetime": when,
+        "appointment_id": appointment_id,
+    }
+    appt, err = _resolve_target_appointment(business_id, payload, session_id)
+    if err:
+        return False, err
+    return _apply_cancel(
+        business_id, appt["id"], appt.get("service"), appt.get("start_at"), appt.get("phone")
+    )
+
+
+def voice_reschedule_appointment(
+    business_id: int,
+    *,
+    new_datetime: Optional[str],
+    phone: Optional[str] = None,
+    service: Optional[str] = None,
+    old_when: Optional[str] = None,
+    appointment_id: Optional[int] = None,
+    session_id: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Resolve the caller's appointment and move it to new_datetime.
+    Returns (ok, speakable_message)."""
+    new_dt = _parse_when(new_datetime or "")
+    if not new_dt:
+        return False, "What date and time would you like to move it to?"
+    payload = {
+        "phone": phone,
+        "service": service,
+        "old_datetime": old_when,
+        "appointment_id": appointment_id,
+    }
+    appt, err = _resolve_target_appointment(business_id, payload, session_id)
+    if err:
+        return False, err
+    new_slot, slot_err = _validate_reschedule_slot(business_id, appt, new_dt)
+    if slot_err:
+        return False, slot_err
+    return _apply_reschedule(
+        business_id, appt["id"], appt.get("service"), appt.get("start_at"), new_slot, appt.get("phone")
+    )
 
 
 # ============================================================================
