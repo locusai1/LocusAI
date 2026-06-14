@@ -355,6 +355,26 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_reminders_appointment ON reminders(appointment_id);"
         )
 
+        # ---- lead_followups (post-call "you asked, didn't book" nurture SMS) ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS lead_followups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            voice_call_id INTEGER,
+            phone TEXT NOT NULL,
+            booking_url TEXT,
+            message TEXT NOT NULL,
+            scheduled_for TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'failed', 'cancelled')),
+            sent_at TEXT,
+            error_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(voice_call_id),
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        );""")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_lead_followups_due ON lead_followups(status, scheduled_for);"
+        )
+
         # ---- widget_settings ----
         cur.execute("""CREATE TABLE IF NOT EXISTS widget_settings (
             business_id INTEGER PRIMARY KEY,
@@ -472,6 +492,20 @@ def init_db() -> None:
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
         );""")
+
+        # voice_settings: post-call lead follow-up controls (opt-out per business)
+        _safe_alter_add_column(
+            cur,
+            "voice_settings",
+            "lead_followup_enabled",
+            "ALTER TABLE voice_settings ADD COLUMN lead_followup_enabled INTEGER DEFAULT 1",
+        )
+        _safe_alter_add_column(
+            cur,
+            "voice_settings",
+            "lead_followup_delay_hours",
+            "ALTER TABLE voice_settings ADD COLUMN lead_followup_delay_hours INTEGER DEFAULT 24",
+        )
 
         # ---- Add columns to existing tables ----
         # Sessions: channel, phone, customer_id, escalated

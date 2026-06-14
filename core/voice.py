@@ -1370,6 +1370,16 @@ def handle_call_analyzed(data: Dict) -> Dict:
 
     logger.info(f"Call analyzed: {call_id}, sentiment={sentiment}")
 
+    # If the caller asked about booking but didn't book, schedule a nurture SMS.
+    try:
+        from core.followups import maybe_schedule_lead_followup
+
+        vc = get_voice_call(call_id)
+        if vc:
+            maybe_schedule_lead_followup(vc)
+    except Exception:
+        logger.debug("lead follow-up scheduling skipped", exc_info=True)
+
     return {"call_id": call_id, "sentiment": sentiment}
 
 

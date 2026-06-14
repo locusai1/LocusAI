@@ -283,6 +283,16 @@ def _run_appointment_automations():
             except Exception as e:
                 app.logger.warning(f"Review request SMS failed for appt {appt['id']}: {e}")
 
+    # --- Post-call lead follow-up (nurture unconverted callers) ---
+    try:
+        from core.followups import dispatch_due_followups
+
+        n = dispatch_due_followups()
+        if n:
+            app.logger.info(f"Dispatched {n} lead follow-up SMS")
+    except Exception as e:
+        app.logger.warning(f"Lead follow-up dispatch failed: {e}")
+
 
 # Start all three workers under supervision (auto-restart + heartbeat + backoff).
 # Skipped under pytest so the suite doesn't spawn live background threads.
