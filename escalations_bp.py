@@ -1,16 +1,18 @@
 # escalations_bp.py — Escalation management routes
 # Production-grade escalation dashboard for human handoff
 
+import logging
 from typing import Optional
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, g
+
+from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, session, url_for
+
 from core.db import get_business_by_id, get_conn
 from core.escalation import (
-    get_pending_escalations,
     get_all_escalations,
     get_escalation,
-    update_escalation_status
+    get_pending_escalations,
+    update_escalation_status,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ escalations_bp = Blueprint("escalations", __name__)
 # =============================================================================
 # Authentication Helpers
 # =============================================================================
+
 
 def _user() -> Optional[dict]:
     """Get the current user from session."""
@@ -44,7 +47,7 @@ def _owner_can_access(business_id: int) -> bool:
     with get_conn() as con:
         row = con.execute(
             "SELECT 1 FROM business_users WHERE user_id=? AND business_id=?",
-            (user["id"], business_id)
+            (user["id"], business_id),
         ).fetchone()
         return row is not None
 
@@ -53,32 +56,34 @@ def _owner_can_access(business_id: int) -> bool:
 # Template Filters
 # =============================================================================
 
-@escalations_bp.app_template_filter('priority_badge')
+
+@escalations_bp.app_template_filter("priority_badge")
 def priority_badge_filter(priority: str) -> str:
     """Return Tailwind classes for priority badge."""
     badges = {
-        'urgent': 'bg-red-100 text-red-800 border-red-200',
-        'high': 'bg-orange-100 text-orange-800 border-orange-200',
-        'normal': 'bg-blue-100 text-blue-800 border-blue-200',
-        'low': 'bg-gray-100 text-gray-600 border-gray-200',
+        "urgent": "bg-red-100 text-red-800 border-red-200",
+        "high": "bg-orange-100 text-orange-800 border-orange-200",
+        "normal": "bg-blue-100 text-blue-800 border-blue-200",
+        "low": "bg-gray-100 text-gray-600 border-gray-200",
     }
-    return badges.get(priority, badges['normal'])
+    return badges.get(priority, badges["normal"])
 
 
-@escalations_bp.app_template_filter('status_badge')
+@escalations_bp.app_template_filter("status_badge")
 def status_badge_filter(status: str) -> str:
     """Return Tailwind classes for status badge."""
     badges = {
-        'pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        'acknowledged': 'bg-blue-100 text-blue-800 border-blue-200',
-        'resolved': 'bg-green-100 text-green-800 border-green-200',
+        "pending": "bg-yellow-100 text-yellow-800 border-yellow-200",
+        "acknowledged": "bg-blue-100 text-blue-800 border-blue-200",
+        "resolved": "bg-green-100 text-green-800 border-green-200",
     }
-    return badges.get(status, badges['pending'])
+    return badges.get(status, badges["pending"])
 
 
 # =============================================================================
 # Main Routes
 # =============================================================================
+
 
 @escalations_bp.route("/escalations")
 def escalations_index():
@@ -87,7 +92,7 @@ def escalations_index():
     if redir:
         return redir
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         flash("Please select a business first.", "err")
         return redirect(url_for("dashboard"))
@@ -120,7 +125,7 @@ def escalations_index():
         "pending": sum(1 for e in all_escalations if e.get("status") == "pending"),
         "acknowledged": sum(1 for e in all_escalations if e.get("status") == "acknowledged"),
         "resolved": sum(1 for e in all_escalations if e.get("status") == "resolved"),
-        "all": len(all_escalations)
+        "all": len(all_escalations),
     }
 
     return render_template(
@@ -128,7 +133,7 @@ def escalations_index():
         escalations=escalations,
         status_filter=status_filter,
         counts=counts,
-        business=business
+        business=business,
     )
 
 
@@ -139,7 +144,7 @@ def escalation_detail(escalation_id: int):
     if redir:
         return redir
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         flash("Please select a business first.", "err")
         return redirect(url_for("dashboard"))
@@ -160,11 +165,7 @@ def escalation_detail(escalation_id: int):
 
     business = get_business_by_id(business_id)
 
-    return render_template(
-        "escalation_detail.html",
-        escalation=escalation,
-        business=business
-    )
+    return render_template("escalation_detail.html", escalation=escalation, business=business)
 
 
 @escalations_bp.route("/escalations/<int:escalation_id>/acknowledge", methods=["POST"])
@@ -174,7 +175,7 @@ def acknowledge_escalation(escalation_id: int):
     if redir:
         return redir
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
 
     escalation = get_escalation(escalation_id)
     if not escalation or escalation.get("business_id") != business_id:
@@ -196,7 +197,7 @@ def resolve_escalation(escalation_id: int):
     if redir:
         return redir
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     user_email = g.user.get("email", "staff") if hasattr(g, "user") and g.user else "staff"
 
     escalation = get_escalation(escalation_id)
@@ -210,7 +211,7 @@ def resolve_escalation(escalation_id: int):
         escalation_id,
         "resolved",
         resolved_by=user_email,
-        resolution_notes=resolution_notes or "Resolved"
+        resolution_notes=resolution_notes or "Resolved",
     ):
         flash("Escalation resolved.", "ok")
     else:
@@ -223,13 +224,14 @@ def resolve_escalation(escalation_id: int):
 # API Routes
 # =============================================================================
 
+
 @escalations_bp.route("/api/escalations/pending")
 def api_pending_escalations():
     """Get pending escalations as JSON (for notifications/polling)."""
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -238,10 +240,7 @@ def api_pending_escalations():
         return jsonify({"error": "Access denied"}), 403
 
     escalations = get_pending_escalations(business_id, limit=20)
-    return jsonify({
-        "count": len(escalations),
-        "escalations": escalations
-    })
+    return jsonify({"count": len(escalations), "escalations": escalations})
 
 
 @escalations_bp.route("/api/escalations/<int:escalation_id>/status", methods=["POST"])
@@ -250,7 +249,7 @@ def api_update_status(escalation_id: int):
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
 
     # Explicit authorization check (defense in depth)
     if not _owner_can_access(business_id):
@@ -270,7 +269,7 @@ def api_update_status(escalation_id: int):
         escalation_id,
         new_status,
         resolved_by=data.get("resolved_by"),
-        resolution_notes=data.get("resolution_notes")
+        resolution_notes=data.get("resolution_notes"),
     ):
         return jsonify({"success": True, "status": new_status})
     else:

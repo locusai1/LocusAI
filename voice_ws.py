@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import sys
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,28 +15,28 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-from core.db import get_conn, log_message, get_business_by_id
 from core.ai import process_message_for_voice
+from core.db import get_business_by_id, log_message
 from core.voice import (
-    get_voice_call,
-    update_voice_call,
-    extract_voice_booking,
-    detect_booking_response,
-    confirm_voice_booking,
     cancel_voice_booking,
-    get_voice_pending_booking,
+    cancel_voice_change,
+    confirm_voice_booking,
+    confirm_voice_change,
+    detect_booking_response,
+    extract_voice_booking,
     get_caller_info_by_call_id,
+    get_voice_call,
+    get_voice_pending_booking,
     # Expanded intents
     get_voice_pending_change,
     store_voice_pending_change,
-    confirm_voice_change,
-    cancel_voice_change,
+    update_voice_call,
 )
+
 try:
     from core.kb import search_kb as kb_search
 except ImportError:
     kb_search = None
-from core.sentiment import analyze_sentiment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,7 +73,9 @@ class RetellLLMWebSocket:
             if call_id and call_id in self.active_calls:
                 del self.active_calls[call_id]
 
-    async def process_message(self, data: Dict, websocket: WebSocketServerProtocol) -> Optional[Dict]:
+    async def process_message(
+        self, data: Dict, websocket: WebSocketServerProtocol
+    ) -> Optional[Dict]:
         """Process incoming message from Retell."""
 
         interaction_type = data.get("interaction_type")
@@ -134,10 +136,7 @@ class RetellLLMWebSocket:
         # Return acknowledgment (Retell may not need a response here)
         return {
             "response_type": "config",
-            "config": {
-                "auto_reconnect": True,
-                "call_details_received": True
-            }
+            "config": {"auto_reconnect": True, "call_details_received": True},
         }
 
     async def handle_transcript_update(self, data: Dict):
@@ -148,19 +147,24 @@ class RetellLLMWebSocket:
         if call_id in self.active_calls:
             self.active_calls[call_id]["transcript"] = transcript
 
-    async def handle_response_required(self, data: Dict, websocket: WebSocketServerProtocol) -> Dict:
+    async def handle_response_required(
+        self, data: Dict, websocket: WebSocketServerProtocol
+    ) -> Dict:
         """Handle request for AI response - this is where the magic happens."""
         call_id = data.get("call_id")
         transcript = data.get("transcript", [])
 
         # Get or initialize call state
-        call_state = self.active_calls.get(call_id, {
-            "call_id": call_id,
-            "transcript": transcript,
-            "business_id": None,
-            "session_id": None,
-            "state": {},
-        })
+        call_state = self.active_calls.get(
+            call_id,
+            {
+                "call_id": call_id,
+                "transcript": transcript,
+                "business_id": None,
+                "session_id": None,
+                "state": {},
+            },
+        )
         call_state["transcript"] = transcript
         self.active_calls[call_id] = call_state
 
@@ -176,7 +180,7 @@ class RetellLLMWebSocket:
                 "response_type": "response",
                 "response_id": data.get("response_id", 0),
                 "content": "",
-                "content_complete": True
+                "content_complete": True,
             }
 
         # Get business info
@@ -233,9 +237,15 @@ class RetellLLMWebSocket:
                     voice_call = get_voice_call(call_id) if call_id else None
                     if voice_call:
                         direction = voice_call.get("direction", "inbound")
-                        caller_phone = voice_call.get("from_number") if direction == "inbound" else voice_call.get("to_number")
+                        caller_phone = (
+                            voice_call.get("from_number")
+                            if direction == "inbound"
+                            else voice_call.get("to_number")
+                        )
 
-                success, message = confirm_voice_change(call_id, business_id, caller_phone, session_id)
+                success, message = confirm_voice_change(
+                    call_id, business_id, caller_phone, session_id
+                )
                 if success:
                     response_text = f"{message} Is there anything else I can help you with?"
                 else:
@@ -287,7 +297,7 @@ class RetellLLMWebSocket:
                 user_input=last_user_message,
                 business_data=business_data,
                 state=state,
-                customer_info=customer_info
+                customer_info=customer_info,
             )
 
             # Check for booking in response
@@ -313,15 +323,13 @@ class RetellLLMWebSocket:
         except Exception as e:
             logger.error(f"Error processing voice message: {e}", exc_info=True)
             return self._create_response(
-                data,
-                "I'm sorry, I'm having a bit of trouble right now. Could you repeat that?"
+                data, "I'm sorry, I'm having a bit of trouble right now. Could you repeat that?"
             )
 
     async def handle_reminder(self, data: Dict) -> Dict:
         """Handle reminder when user hasn't spoken."""
         return self._create_response(
-            data,
-            "Are you still there? Is there anything I can help you with?"
+            data, "Are you still there? Is there anything I can help you with?"
         )
 
     def _create_response(self, data: Dict, content: str) -> Dict:
@@ -330,7 +338,7 @@ class RetellLLMWebSocket:
             "response_type": "response",
             "response_id": data.get("response_id", 0),
             "content": content,
-            "content_complete": True
+            "content_complete": True,
         }
 
     def _extract_voice_change(self, response: str, call_id: str) -> tuple:
@@ -342,42 +350,44 @@ class RetellLLMWebSocket:
         import re
 
         # Check for cancel tag
-        cancel_pattern = r'<VOICE_CANCEL>(.*?)</VOICE_CANCEL>'
+        cancel_pattern = r"<VOICE_CANCEL>(.*?)</VOICE_CANCEL>"
         cancel_match = re.search(cancel_pattern, response, re.DOTALL)
 
         if cancel_match:
-            cleaned = re.sub(cancel_pattern, '', response).strip()
+            cleaned = re.sub(cancel_pattern, "", response).strip()
             try:
                 change_json = cancel_match.group(1).strip()
                 change_data = json.loads(change_json)
                 # Store for confirmation
-                store_voice_pending_change(call_id, 'cancel', change_data)
+                store_voice_pending_change(call_id, "cancel", change_data)
                 logger.info(f"Stored pending cancel for call {call_id}: {change_data}")
-                return cleaned, {'type': 'cancel', 'data': change_data}
+                return cleaned, {"type": "cancel", "data": change_data}
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse VOICE_CANCEL JSON: {e}")
                 return response, None
 
         # Check for reschedule tag
-        reschedule_pattern = r'<VOICE_RESCHEDULE>(.*?)</VOICE_RESCHEDULE>'
+        reschedule_pattern = r"<VOICE_RESCHEDULE>(.*?)</VOICE_RESCHEDULE>"
         reschedule_match = re.search(reschedule_pattern, response, re.DOTALL)
 
         if reschedule_match:
-            cleaned = re.sub(reschedule_pattern, '', response).strip()
+            cleaned = re.sub(reschedule_pattern, "", response).strip()
             try:
                 change_json = reschedule_match.group(1).strip()
                 change_data = json.loads(change_json)
                 # Store for confirmation
-                store_voice_pending_change(call_id, 'reschedule', change_data)
+                store_voice_pending_change(call_id, "reschedule", change_data)
                 logger.info(f"Stored pending reschedule for call {call_id}: {change_data}")
-                return cleaned, {'type': 'reschedule', 'data': change_data}
+                return cleaned, {"type": "reschedule", "data": change_data}
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse VOICE_RESCHEDULE JSON: {e}")
                 return response, None
 
         return response, None
 
-    async def _stream_response(self, data: Dict, content: str, websocket: WebSocketServerProtocol) -> Dict:
+    async def _stream_response(
+        self, data: Dict, content: str, websocket: WebSocketServerProtocol
+    ) -> Dict:
         """Stream response word by word for more natural speech.
 
         Retell can start speaking before the full response is received,
@@ -388,7 +398,8 @@ class RetellLLMWebSocket:
         # Split into chunks (phrases/sentences for natural pacing)
         # Split on punctuation to maintain natural pauses
         import re
-        chunks = re.split(r'(?<=[.!?,])\s+', content)
+
+        chunks = re.split(r"(?<=[.!?,])\s+", content)
         chunks = [c for c in chunks if c.strip()]
 
         if len(chunks) <= 1:
@@ -397,18 +408,18 @@ class RetellLLMWebSocket:
                 "response_type": "response",
                 "response_id": response_id,
                 "content": content,
-                "content_complete": True
+                "content_complete": True,
             }
 
         # Stream chunks
         for i, chunk in enumerate(chunks):
-            is_last = (i == len(chunks) - 1)
+            is_last = i == len(chunks) - 1
 
             response = {
                 "response_type": "response",
                 "response_id": response_id,
                 "content": chunk + (" " if not is_last else ""),
-                "content_complete": is_last
+                "content_complete": is_last,
             }
 
             await websocket.send(json.dumps(response))

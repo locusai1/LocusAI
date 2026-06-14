@@ -7,7 +7,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from core import settings
 from core.db import get_conn
@@ -32,8 +32,7 @@ PLANS: Dict[str, Dict[str, Any]] = {
             "Booking confirmation flow",
             "Email support",
         ],
-        "limits": {"conversations": 100, "users": 1, "businesses": 1,
-                   "channels": ["web"]},
+        "limits": {"conversations": 100, "users": 1, "businesses": 1, "channels": ["web"]},
     },
     "professional": {
         "key": "professional",
@@ -49,8 +48,12 @@ PLANS: Dict[str, Dict[str, Any]] = {
             "Google Calendar sync",
             "Caller recognition",
         ],
-        "limits": {"conversations": 500, "users": 3, "businesses": 1,
-                   "channels": ["web", "voice", "sms"]},
+        "limits": {
+            "conversations": 500,
+            "users": 3,
+            "businesses": 1,
+            "channels": ["web", "voice", "sms"],
+        },
         "popular": True,
     },
     "business": {
@@ -66,8 +69,12 @@ PLANS: Dict[str, Dict[str, Any]] = {
             "Full analytics suite",
             "Priority support",
         ],
-        "limits": {"conversations": -1, "users": 10, "businesses": -1,
-                   "channels": ["web", "voice", "sms"]},
+        "limits": {
+            "conversations": -1,
+            "users": 10,
+            "businesses": -1,
+            "channels": ["web", "voice", "sms"],
+        },
     },
 }
 
@@ -127,8 +134,7 @@ def get_subscription(user_id: int) -> Optional[Dict[str, Any]]:
     """Most recent subscription row for a user (any status)."""
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM subscriptions WHERE user_id=? "
-            "ORDER BY updated_at DESC, id DESC LIMIT 1",
+            "SELECT * FROM subscriptions WHERE user_id=? ORDER BY updated_at DESC, id DESC LIMIT 1",
             (user_id,),
         ).fetchone()
         return dict(row) if row else None
@@ -210,9 +216,7 @@ def upsert_subscription(
                 return
             sets = ", ".join(f"{k}=?" for k in provided)
             params = list(provided.values()) + [_now(), existing["id"]]
-            con.execute(
-                f"UPDATE subscriptions SET {sets}, updated_at=? WHERE id=?", params
-            )
+            con.execute(f"UPDATE subscriptions SET {sets}, updated_at=? WHERE id=?", params)
         else:
             cols = ["user_id"] + list(provided.keys())
             placeholders = ", ".join("?" * len(cols))
@@ -294,9 +298,7 @@ def verify_webhook(payload: bytes, sig_header: str):
     if s is None or not settings.STRIPE_WEBHOOK_SECRET:
         return None
     try:
-        return s.Webhook.construct_event(
-            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-        )
+        return s.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
     except Exception:
         logger.warning("Stripe webhook signature verification failed")
         return None
@@ -340,8 +342,11 @@ def apply_event(event: Dict[str, Any]) -> bool:
         )
         return True
 
-    if etype in ("customer.subscription.updated", "customer.subscription.created",
-                 "customer.subscription.deleted"):
+    if etype in (
+        "customer.subscription.updated",
+        "customer.subscription.created",
+        "customer.subscription.deleted",
+    ):
         user_id = _user_id_from_metadata(obj)
         # Fall back to matching by stripe customer/subscription id.
         if not user_id:

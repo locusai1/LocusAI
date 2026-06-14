@@ -2,13 +2,14 @@
 # Production-grade AI receptionist with escalation capabilities and circuit breaker
 
 import logging
-import time
 import os
-from typing import Optional, Dict, Any, List, Tuple
+import time
+from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
+
+from core.db import get_business_by_id, get_session_messages
 from core.settings import OPENAI_API_KEY
-from core.db import get_session_messages, get_business_by_id
 
 try:
     from core.kb import search_kb as kb_search
@@ -16,25 +17,29 @@ except Exception:
     kb_search = None
 
 try:
-    from core.sentiment import analyze_sentiment, SentimentType, IntentType, SentimentResult
+    from core.sentiment import analyze_sentiment
+
     SENTIMENT_AVAILABLE = True
 except Exception:
     SENTIMENT_AVAILABLE = False
 
 try:
-    from core.escalation import handle_escalation, get_escalation_response
+    from core.escalation import get_escalation_response, handle_escalation
+
     ESCALATION_AVAILABLE = True
 except Exception:
     ESCALATION_AVAILABLE = False
 
 try:
-    from core.circuit_breaker import get_ai_circuit_breaker, CircuitOpenError
+    from core.circuit_breaker import get_ai_circuit_breaker
+
     CIRCUIT_BREAKER_AVAILABLE = True
 except Exception:
     CIRCUIT_BREAKER_AVAILABLE = False
 
 try:
-    from core.observability import get_metrics, Metrics
+    from core.observability import Metrics, get_metrics
+
     OBSERVABILITY_AVAILABLE = True
 except Exception:
     OBSERVABILITY_AVAILABLE = False
@@ -61,6 +66,7 @@ FALLBACK_RESPONSE = (
     "Could I take your name and number so we can call you back shortly?"
 )
 
+
 def _row_to_dict(row):
     """Accepts dict or sqlite3.Row and returns a plain dict."""
     try:
@@ -68,13 +74,14 @@ def _row_to_dict(row):
     except Exception:
         return row or {}
 
+
 def _business_prompt(bd: dict, sentiment_context: Optional[Dict] = None) -> str:
     """Build the system prompt with optional sentiment-aware adjustments."""
     name = bd.get("name", "this business")
     hours = bd.get("hours", "not provided")
-    addr  = bd.get("address", "not provided")
-    serv  = bd.get("services", "not provided")
-    tone  = bd.get("tone", "friendly and professional")
+    addr = bd.get("address", "not provided")
+    serv = bd.get("services", "not provided")
+    tone = bd.get("tone", "friendly and professional")
 
     # Base prompt
     base_prompt = f"""
@@ -141,6 +148,7 @@ IMPORTANT: The customer seems confused. Please:
 
     return (base_prompt + escalation_guidance + sentiment_guidance).strip()
 
+
 def _history_from_db(session_id: int, limit: int = 12):
     """Build chat history from DB messages for the session (chronological)."""
     if not session_id:
@@ -151,6 +159,7 @@ def _history_from_db(session_id: int, limit: int = 12):
         role = "assistant" if m["sender"] == "bot" else "user"
         history.append({"role": role, "content": m["text"]})
     return history
+
 
 def _kb_snippets(business_id: int, query: str, limit: int = 3):
     """Fetch short knowledge snippets via KB search (if available)."""
@@ -181,7 +190,7 @@ def _voice_business_prompt(
     kb_entries: Optional[List] = None,
     customer_info: Optional[Dict] = None,
     availability_info: Optional[str] = None,
-    appointments_context: Optional[str] = None
+    appointments_context: Optional[str] = None,
 ) -> str:
     """Build voice-optimized system prompt — top-tier, natural, fully contextual.
 
@@ -244,7 +253,9 @@ def _voice_business_prompt(
     # Add caller recognition context if we know them
     if customer_info and customer_info.get("name"):
         cust_name = customer_info.get("name", "")
-        visit_count = customer_info.get("total_appointments", 0) or customer_info.get("visit_count", 0)
+        visit_count = customer_info.get("total_appointments", 0) or customer_info.get(
+            "visit_count", 0
+        )
         last_service = customer_info.get("last_service", "")
         last_visit = customer_info.get("last_visit", "")
         preferred_staff = customer_info.get("preferred_staff", "")
@@ -256,7 +267,7 @@ You know this caller! Greet them warmly by name.
 """
         if visit_count > 0:
             if visit_count == 1:
-                base_prompt += f"- They've visited once before\n"
+                base_prompt += "- They've visited once before\n"
             else:
                 base_prompt += f"- Returning customer with {visit_count} previous visits\n"
 
@@ -446,15 +457,11 @@ def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
                 # Record success metrics
                 if metrics:
                     metrics.observe_histogram(
-                        Metrics.AI_REQUEST_DURATION,
-                        duration,
-                        {"model": model}
+                        Metrics.AI_REQUEST_DURATION, duration, {"model": model}
                     )
-                    if hasattr(resp, 'usage') and resp.usage:
+                    if hasattr(resp, "usage") and resp.usage:
                         metrics.inc_counter(
-                            Metrics.AI_TOKENS_USED,
-                            {"model": model},
-                            resp.usage.total_tokens
+                            Metrics.AI_TOKENS_USED, {"model": model}, resp.usage.total_tokens
                         )
 
                 # Record circuit breaker success
@@ -470,13 +477,10 @@ def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
                 # Record failure metrics
                 if metrics:
                     metrics.inc_counter(
-                        Metrics.AI_ERRORS_TOTAL,
-                        {"model": model, "error_type": type(e).__name__}
+                        Metrics.AI_ERRORS_TOTAL, {"model": model, "error_type": type(e).__name__}
                     )
                     metrics.observe_histogram(
-                        Metrics.AI_REQUEST_DURATION,
-                        duration,
-                        {"model": model, "status": "error"}
+                        Metrics.AI_REQUEST_DURATION, duration, {"model": model, "status": "error"}
                     )
 
                 # Record circuit breaker failure
@@ -489,7 +493,7 @@ def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
 
                 # Retry with backoff
                 if attempt < max_retries:
-                    backoff = 2 ** attempt  # 1s, 2s, 4s...
+                    backoff = 2**attempt  # 1s, 2s, 4s...
                     time.sleep(min(backoff, 10))
                     continue
 
@@ -500,12 +504,13 @@ def _call_ai_with_resilience(messages: List[Dict], max_retries: int = 2) -> str:
     logger.error("All AI models failed, returning fallback response")
     return ""
 
+
 def process_message(
     user_input: str,
     business_data: Dict,
     state: Optional[Dict] = None,
     customer_id: Optional[int] = None,
-    customer_info: Optional[Dict] = None
+    customer_info: Optional[Dict] = None,
 ) -> str:
     """
     Generate a human-like receptionist reply with sentiment awareness.
@@ -544,7 +549,7 @@ def process_message(
             sentiment_result = analyze_sentiment(
                 text=user_text,
                 conversation_history=conversation_history,
-                failed_attempts=failed_attempts
+                failed_attempts=failed_attempts,
             )
 
             # Build context for prompt adjustment
@@ -552,7 +557,7 @@ def process_message(
                 "sentiment": sentiment_result.sentiment.value,
                 "intent": sentiment_result.intent.value,
                 "confidence": sentiment_result.confidence,
-                "frustration_score": sentiment_result.details.get("frustration_score", 0)
+                "frustration_score": sentiment_result.details.get("frustration_score", 0),
             }
 
             logger.debug(
@@ -581,7 +586,8 @@ def process_message(
                 session_id=session_id,
                 customer_id=customer_id,
                 customer_info=customer_info,
-                conversation_history=conversation_history + [{"role": "user", "content": user_text}]
+                conversation_history=conversation_history
+                + [{"role": "user", "content": user_text}],
             )
 
             if escalation_id:
@@ -623,10 +629,9 @@ def process_message(
     # Optional RAG: inject relevant knowledge
     kb_snips = _kb_snippets(business_id, user_text, limit=3)
     if kb_snips:
-        messages.append({
-            "role": "system",
-            "content": "Relevant business knowledge:\n" + "\n".join(kb_snips)
-        })
+        messages.append(
+            {"role": "system", "content": "Relevant business knowledge:\n" + "\n".join(kb_snips)}
+        )
 
     messages.append({"role": "user", "content": user_text})
 
@@ -649,11 +654,13 @@ def process_message(
     # Track sentiment trends in state for analytics
     if sentiment_result:
         sentiment_history = state.setdefault("sentiment_history", [])
-        sentiment_history.append({
-            "sentiment": sentiment_result.sentiment.value,
-            "confidence": sentiment_result.confidence,
-            "intent": sentiment_result.intent.value
-        })
+        sentiment_history.append(
+            {
+                "sentiment": sentiment_result.sentiment.value,
+                "confidence": sentiment_result.confidence,
+                "intent": sentiment_result.intent.value,
+            }
+        )
         if len(sentiment_history) > 20:
             del sentiment_history[:-20]
 
@@ -664,12 +671,16 @@ def _get_business_services(business_id: int) -> List[Dict]:
     """Fetch active services for a business."""
     try:
         from core.db import get_conn
+
         with get_conn() as con:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT name, duration_min, price FROM services
                 WHERE business_id = ? AND active = 1
                 ORDER BY name
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             return [dict(r) for r in rows]
     except Exception:
         return []
@@ -686,10 +697,12 @@ def _get_kb_entries_for_voice(business_id: int, query: str, limit: int = 5) -> L
             if isinstance(r, dict):
                 entries.append(r)
             else:
-                entries.append({
-                    "question": r.get("title", "") if hasattr(r, "get") else "",
-                    "answer": r.get("content", "") if hasattr(r, "get") else ""
-                })
+                entries.append(
+                    {
+                        "question": r.get("title", "") if hasattr(r, "get") else "",
+                        "answer": r.get("content", "") if hasattr(r, "get") else "",
+                    }
+                )
         return entries
     except Exception:
         return []
@@ -700,7 +713,7 @@ def process_message_for_voice(
     business_data: Dict,
     state: Optional[Dict] = None,
     customer_id: Optional[int] = None,
-    customer_info: Optional[Dict] = None
+    customer_info: Optional[Dict] = None,
 ) -> str:
     """
     Generate a voice-optimized receptionist reply with full business context.
@@ -744,13 +757,13 @@ def process_message_for_voice(
             sentiment_result = analyze_sentiment(
                 text=user_text,
                 conversation_history=conversation_history,
-                failed_attempts=failed_attempts
+                failed_attempts=failed_attempts,
             )
             sentiment_context = {
                 "sentiment": sentiment_result.sentiment.value,
                 "intent": sentiment_result.intent.value,
                 "confidence": sentiment_result.confidence,
-                "frustration_score": sentiment_result.details.get("frustration_score", 0)
+                "frustration_score": sentiment_result.details.get("frustration_score", 0),
             }
         except Exception as e:
             logger.warning(f"Sentiment analysis failed: {e}")
@@ -770,14 +783,17 @@ def process_message_for_voice(
                 session_id=session_id,
                 customer_id=customer_id,
                 customer_info=customer_info,
-                conversation_history=conversation_history + [{"role": "user", "content": user_text}]
+                conversation_history=conversation_history
+                + [{"role": "user", "content": user_text}],
             )
 
             if escalation_id:
                 state["escalated"] = True
                 state["escalation_id"] = escalation_id
                 # Voice-optimized escalation response
-                return "I understand. Let me connect you with a team member who can help you directly."
+                return (
+                    "I understand. Let me connect you with a team member who can help you directly."
+                )
         except Exception as e:
             logger.error(f"Escalation handling failed: {e}")
 
@@ -791,6 +807,7 @@ def process_message_for_voice(
     if business_id:
         try:
             from core.booking import format_availability_for_voice
+
             availability_info = format_availability_for_voice(business_id)
         except Exception as e:
             logger.warning(f"Could not fetch availability: {e}")
@@ -800,6 +817,7 @@ def process_message_for_voice(
     if business_id and customer_info and customer_info.get("phone"):
         try:
             from core.voice import get_caller_appointments_context
+
             appointments_context = get_caller_appointments_context(
                 business_id, customer_info.get("phone")
             )
@@ -838,7 +856,7 @@ def process_message_with_metadata(
     business_data: Dict,
     state: Optional[Dict] = None,
     customer_id: Optional[int] = None,
-    customer_info: Optional[Dict] = None
+    customer_info: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """
     Enhanced version that returns metadata along with the reply.
@@ -860,7 +878,7 @@ def process_message_with_metadata(
         business_data=business_data,
         state=state,
         customer_id=customer_id,
-        customer_info=customer_info
+        customer_info=customer_info,
     )
 
     # Extract metadata from state

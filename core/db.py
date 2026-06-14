@@ -1,12 +1,12 @@
 # core/db.py — SQLite helpers for LocusAI (tenancy + sessions + users)
 # Production-grade database layer with proper error handling and transactions
 
-import sqlite3
-import os
-import uuid
 import logging
-from typing import Optional, List, Dict, Any, Union
+import os
+import sqlite3
+import uuid
 from contextlib import contextmanager
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ if _db_dir and not os.path.isdir(_db_dir):
 # ============================================================================
 # Connection Management
 # ============================================================================
+
 
 def get_conn() -> sqlite3.Connection:
     """Get a database connection with proper configuration."""
@@ -65,6 +66,7 @@ def transaction():
 # Schema Helpers
 # ============================================================================
 
+
 def _col_exists(cur: sqlite3.Cursor, table: str, col: str) -> bool:
     """Check if a column exists in a table (safe - table name validated)."""
     # Validate table name to prevent injection
@@ -95,6 +97,7 @@ def _safe_alter_add_column(cur: sqlite3.Cursor, table: str, col: str, ddl: str) 
 # Database Initialization
 # ============================================================================
 
+
 def init_db() -> None:
     """Initialize database schema with all required tables."""
     with get_conn() as con:
@@ -116,7 +119,10 @@ def init_db() -> None:
             ("tone", "ALTER TABLE businesses ADD COLUMN tone TEXT"),
             ("escalation_phone", "ALTER TABLE businesses ADD COLUMN escalation_phone TEXT"),
             ("escalation_email", "ALTER TABLE businesses ADD COLUMN escalation_email TEXT"),
-            ("data_retention_days", "ALTER TABLE businesses ADD COLUMN data_retention_days INTEGER DEFAULT 365"),
+            (
+                "data_retention_days",
+                "ALTER TABLE businesses ADD COLUMN data_retention_days INTEGER DEFAULT 365",
+            ),
             ("accent_color", "ALTER TABLE businesses ADD COLUMN accent_color TEXT"),
             ("logo_path", "ALTER TABLE businesses ADD COLUMN logo_path TEXT"),
             ("tenant_key", "ALTER TABLE businesses ADD COLUMN tenant_key TEXT"),
@@ -130,7 +136,9 @@ def init_db() -> None:
 
         # Indexes
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_businesses_slug ON businesses(slug);")
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_businesses_tenant_key ON businesses(tenant_key);")
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_businesses_tenant_key ON businesses(tenant_key);"
+        )
 
         # ---- users ----
         cur.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -161,8 +169,12 @@ def init_db() -> None:
         );""")
 
         # Fix legacy schema
-        if _col_exists(cur, "sessions", "started_at") and not _col_exists(cur, "sessions", "created_at"):
-            _safe_alter_add_column(cur, "sessions", "created_at", "ALTER TABLE sessions ADD COLUMN created_at TEXT")
+        if _col_exists(cur, "sessions", "started_at") and not _col_exists(
+            cur, "sessions", "created_at"
+        ):
+            _safe_alter_add_column(
+                cur, "sessions", "created_at", "ALTER TABLE sessions ADD COLUMN created_at TEXT"
+            )
 
         # ---- messages ----
         cur.execute("""CREATE TABLE IF NOT EXISTS messages (
@@ -196,9 +208,15 @@ def init_db() -> None:
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
         );""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_appointments_business ON appointments(business_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_appointments_start ON appointments(business_id, start_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_appointments_status ON appointments(business_id, status);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_appointments_business ON appointments(business_id);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_appointments_start ON appointments(business_id, start_at);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_appointments_status ON appointments(business_id, status);"
+        )
 
         # ---- services ----
         cur.execute("""CREATE TABLE IF NOT EXISTS services (
@@ -310,8 +328,12 @@ def init_db() -> None:
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
         );""")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_customers_business ON customers(business_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_customers_email ON customers(business_id, email);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_customers_phone ON customers(business_id, phone);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_customers_email ON customers(business_id, email);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_customers_phone ON customers(business_id, phone);"
+        )
 
         # ---- reminders ----
         cur.execute("""CREATE TABLE IF NOT EXISTS reminders (
@@ -326,8 +348,12 @@ def init_db() -> None:
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
         );""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_reminders_scheduled ON reminders(status, scheduled_for);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_reminders_appointment ON reminders(appointment_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_reminders_scheduled ON reminders(status, scheduled_for);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_reminders_appointment ON reminders(appointment_id);"
+        )
 
         # ---- widget_settings ----
         cur.execute("""CREATE TABLE IF NOT EXISTS widget_settings (
@@ -363,7 +389,9 @@ def init_db() -> None:
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL,
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
         );""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_escalations_business ON escalations(business_id, status);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_escalations_business ON escalations(business_id, status);"
+        )
 
         # ---- voice_calls ----
         cur.execute("""CREATE TABLE IF NOT EXISTS voice_calls (
@@ -406,10 +434,18 @@ def init_db() -> None:
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
             FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
         );""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_business ON voice_calls(business_id, created_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_status ON voice_calls(business_id, call_status);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_retell ON voice_calls(retell_call_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_voice_calls_customer ON voice_calls(customer_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_voice_calls_business ON voice_calls(business_id, created_at);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_voice_calls_status ON voice_calls(business_id, call_status);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_voice_calls_retell ON voice_calls(retell_call_id);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_voice_calls_customer ON voice_calls(customer_id);"
+        )
 
         # ---- voice_settings ----
         cur.execute("""CREATE TABLE IF NOT EXISTS voice_settings (
@@ -442,7 +478,10 @@ def init_db() -> None:
         session_columns = [
             ("channel", "ALTER TABLE sessions ADD COLUMN channel TEXT DEFAULT 'web'"),
             ("phone", "ALTER TABLE sessions ADD COLUMN phone TEXT"),
-            ("customer_id", "ALTER TABLE sessions ADD COLUMN customer_id INTEGER REFERENCES customers(id)"),
+            (
+                "customer_id",
+                "ALTER TABLE sessions ADD COLUMN customer_id INTEGER REFERENCES customers(id)",
+            ),
             ("escalated", "ALTER TABLE sessions ADD COLUMN escalated INTEGER DEFAULT 0"),
             ("escalated_at", "ALTER TABLE sessions ADD COLUMN escalated_at TEXT"),
             ("escalation_reason", "ALTER TABLE sessions ADD COLUMN escalation_reason TEXT"),
@@ -451,10 +490,17 @@ def init_db() -> None:
             _safe_alter_add_column(cur, "sessions", col, ddl)
 
         # Messages: channel
-        _safe_alter_add_column(cur, "messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT DEFAULT 'web'")
+        _safe_alter_add_column(
+            cur, "messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT DEFAULT 'web'"
+        )
 
         # Appointments: customer_id
-        _safe_alter_add_column(cur, "appointments", "customer_id", "ALTER TABLE appointments ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
+        _safe_alter_add_column(
+            cur,
+            "appointments",
+            "customer_id",
+            "ALTER TABLE appointments ADD COLUMN customer_id INTEGER REFERENCES customers(id)",
+        )
 
         # ---- email_verification_tokens ----
         cur.execute("""CREATE TABLE IF NOT EXISTS email_verification_tokens (
@@ -471,7 +517,10 @@ def init_db() -> None:
 
         # Users: trial and verification columns
         user_extra_columns = [
-            ("email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"),
+            (
+                "email_verified",
+                "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+            ),
             ("trial_ends_at", "ALTER TABLE users ADD COLUMN trial_ends_at TEXT"),
             ("signup_source", "ALTER TABLE users ADD COLUMN signup_source TEXT"),
         ]
@@ -506,8 +555,12 @@ def init_db() -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );""")
         cur.execute("CREATE INDEX IF NOT EXISTS ix_sub_user ON subscriptions(user_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_sub_customer ON subscriptions(stripe_customer_id);")
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_sub_stripe_id ON subscriptions(stripe_subscription_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_sub_customer ON subscriptions(stripe_customer_id);"
+        )
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_sub_stripe_id ON subscriptions(stripe_subscription_id);"
+        )
 
         # ---- sms_opt_outs (TCPA STOP keyword compliance) ----
         # Global per-phone opt-out (all tenants share one sending number).
@@ -549,8 +602,12 @@ def init_db() -> None:
             delivered_at TEXT,
             FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
         );""")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_status ON webhook_deliveries(status, next_attempt_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS ix_whd_endpoint ON webhook_deliveries(endpoint_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_whd_status ON webhook_deliveries(status, next_attempt_at);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_whd_endpoint ON webhook_deliveries(endpoint_id);"
+        )
 
         # ---- weekly digest send log (dedupe one send per business per week) ----
         cur.execute("""CREATE TABLE IF NOT EXISTS digest_log (
@@ -569,13 +626,12 @@ def init_db() -> None:
 # Business Operations
 # ============================================================================
 
+
 def list_businesses(limit: int = 100, include_archived: bool = False) -> List[Dict[str, Any]]:
     """List all businesses, optionally including archived ones."""
     with get_conn() as con:
         if include_archived:
-            rows = con.execute(
-                "SELECT * FROM businesses ORDER BY id LIMIT ?", (limit,)
-            ).fetchall()
+            rows = con.execute("SELECT * FROM businesses ORDER BY id LIMIT ?", (limit,)).fetchall()
         else:
             rows = con.execute(
                 "SELECT * FROM businesses WHERE archived = 0 ORDER BY id LIMIT ?", (limit,)
@@ -598,12 +654,26 @@ def get_business_by_slug(slug: str) -> Optional[Dict[str, Any]]:
 
 
 # Whitelist of allowed columns for update_business to prevent SQL injection
-_BUSINESS_ALLOWED_COLUMNS = frozenset({
-    "name", "slug", "hours", "address", "services", "tone",
-    "escalation_phone", "escalation_email", "data_retention_days",
-    "accent_color", "logo_path", "tenant_key", "settings_json",
-    "files_path", "static_path", "archived"
-})
+_BUSINESS_ALLOWED_COLUMNS = frozenset(
+    {
+        "name",
+        "slug",
+        "hours",
+        "address",
+        "services",
+        "tone",
+        "escalation_phone",
+        "escalation_email",
+        "data_retention_days",
+        "accent_color",
+        "logo_path",
+        "tenant_key",
+        "settings_json",
+        "files_path",
+        "static_path",
+        "archived",
+    }
+)
 
 
 def update_business(business_id: int, **fields) -> bool:
@@ -638,13 +708,15 @@ def create_business(name: str, slug: str, **extra_fields) -> Optional[int]:
             tenant_key = str(uuid.uuid4())
             cur.execute(
                 "INSERT INTO businesses(name, slug, tenant_key) VALUES(?, ?, ?)",
-                (name, slug, tenant_key)
+                (name, slug, tenant_key),
             )
             business_id = cur.lastrowid
 
             # Update any extra fields
             if extra_fields and business_id:
-                safe_fields = {k: v for k, v in extra_fields.items() if k in _BUSINESS_ALLOWED_COLUMNS}
+                safe_fields = {
+                    k: v for k, v in extra_fields.items() if k in _BUSINESS_ALLOWED_COLUMNS
+                }
                 if safe_fields:
                     cols = [f"{k}=?" for k in safe_fields.keys()]
                     vals = list(safe_fields.values()) + [business_id]
@@ -675,6 +747,7 @@ def ensure_tenant_key(business_id: int) -> str:
 # Session & Message Operations
 # ============================================================================
 
+
 def create_session(business_id: int) -> int:
     """Create a new chat session. Returns the session ID."""
     with transaction() as con:
@@ -688,7 +761,7 @@ def get_session_messages(session_id: int, limit: int = 100) -> List[sqlite3.Row]
     with get_conn() as con:
         return con.execute(
             "SELECT * FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-            (session_id, limit)
+            (session_id, limit),
         ).fetchall()
 
 
@@ -705,7 +778,7 @@ def log_message(session_id: int, sender: str, text: str) -> Optional[int]:
             cur = con.cursor()
             cur.execute(
                 "INSERT INTO messages(session_id, sender, text) VALUES(?, ?, ?)",
-                (session_id, sender, text)
+                (session_id, sender, text),
             )
             return cur.lastrowid
     except Exception as e:
@@ -716,6 +789,7 @@ def log_message(session_id: int, sender: str, text: str) -> Optional[int]:
 # ============================================================================
 # Appointment Operations
 # ============================================================================
+
 
 def create_appointment(
     business_id: int,
@@ -731,7 +805,7 @@ def create_appointment(
     notes: Optional[str] = None,
     customer_email: Optional[str] = None,
     customer_id: Optional[int] = None,
-    con: Optional[sqlite3.Connection] = None
+    con: Optional[sqlite3.Connection] = None,
 ) -> Optional[int]:
     """Create an appointment. Returns the appointment ID or None on failure.
 
@@ -739,19 +813,33 @@ def create_appointment(
     - With connection: Uses the provided connection (for transactions)
     - Without connection: Creates its own transaction
     """
+
     def _do_insert(conn: sqlite3.Connection) -> int:
         cur = conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO appointments(
                 business_id, customer_name, phone, customer_email, service,
                 start_at, status, session_id, external_provider_key,
                 external_id, source, notes, customer_id
             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            business_id, customer_name, phone, customer_email, service,
-            start_at, status, session_id, external_provider_key,
-            external_id, source, notes, customer_id
-        ))
+        """,
+            (
+                business_id,
+                customer_name,
+                phone,
+                customer_email,
+                service,
+                start_at,
+                status,
+                session_id,
+                external_provider_key,
+                external_id,
+                source,
+                notes,
+                customer_id,
+            ),
+        )
         return cur.lastrowid
 
     try:
@@ -795,7 +883,7 @@ def check_slot_available(
     start_at: str,
     duration_min: int,
     exclude_appointment_id: Optional[int] = None,
-    con: Optional[sqlite3.Connection] = None
+    con: Optional[sqlite3.Connection] = None,
 ) -> bool:
     """Check if a time slot is available (no conflicting appointments).
 
@@ -853,7 +941,7 @@ def create_appointment_atomic(
     source: Optional[str] = None,
     notes: Optional[str] = None,
     customer_email: Optional[str] = None,
-    customer_id: Optional[int] = None
+    customer_id: Optional[int] = None,
 ) -> tuple:
     """Atomically check slot availability and create appointment.
 
@@ -877,17 +965,30 @@ def create_appointment_atomic(
 
         # Create the appointment
         cur = con.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO appointments(
                 business_id, customer_name, phone, customer_email, service,
                 start_at, status, session_id, external_provider_key,
                 external_id, source, notes, customer_id
             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            business_id, customer_name, phone, customer_email, service,
-            start_at, status, session_id, external_provider_key,
-            external_id, source, notes, customer_id
-        ))
+        """,
+            (
+                business_id,
+                customer_name,
+                phone,
+                customer_email,
+                service,
+                start_at,
+                status,
+                session_id,
+                external_provider_key,
+                external_id,
+                source,
+                notes,
+                customer_id,
+            ),
+        )
         appt_id = cur.lastrowid
         con.commit()
         con.close()
@@ -904,6 +1005,7 @@ def create_appointment_atomic(
 # Data Retention / Cleanup
 # ============================================================================
 
+
 def cleanup_old_data(business_id: Optional[int] = None) -> Dict[str, int]:
     """Clean up old data based on retention policies. Returns counts of deleted records."""
     counts = {"messages": 0, "sessions": 0, "appointments": 0}
@@ -913,7 +1015,7 @@ def cleanup_old_data(business_id: Optional[int] = None) -> Dict[str, int]:
         if business_id:
             businesses = con.execute(
                 "SELECT id, data_retention_days FROM businesses WHERE id = ? AND data_retention_days IS NOT NULL",
-                (business_id,)
+                (business_id,),
             ).fetchall()
         else:
             businesses = con.execute(
@@ -925,30 +1027,39 @@ def cleanup_old_data(business_id: Optional[int] = None) -> Dict[str, int]:
             days = biz["data_retention_days"] or 365
 
             # Delete old messages (via sessions)
-            cur = con.execute("""
+            cur = con.execute(
+                """
                 DELETE FROM messages WHERE session_id IN (
                     SELECT id FROM sessions
                     WHERE business_id = ?
                       AND datetime(created_at) < datetime('now', ? || ' days')
                 )
-            """, (bid, -days))
+            """,
+                (bid, -days),
+            )
             counts["messages"] += cur.rowcount
 
             # Delete old sessions
-            cur = con.execute("""
+            cur = con.execute(
+                """
                 DELETE FROM sessions
                 WHERE business_id = ?
                   AND datetime(created_at) < datetime('now', ? || ' days')
-            """, (bid, -days))
+            """,
+                (bid, -days),
+            )
             counts["sessions"] += cur.rowcount
 
             # Delete old completed/cancelled appointments
-            cur = con.execute("""
+            cur = con.execute(
+                """
                 DELETE FROM appointments
                 WHERE business_id = ?
                   AND status IN ('completed', 'cancelled')
                   AND datetime(created_at) < datetime('now', ? || ' days')
-            """, (bid, -days))
+            """,
+                (bid, -days),
+            )
             counts["appointments"] += cur.rowcount
 
     if any(counts.values()):

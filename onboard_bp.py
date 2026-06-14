@@ -3,12 +3,11 @@
 
 import logging
 import sqlite3
-from typing import Optional
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from core.db import get_conn, init_db, create_business
-from core.validators import slugify, validate_name, validate_slug, validate_email, safe_int
+from core.db import create_business, get_conn, init_db
+from core.validators import safe_int, slugify, validate_email, validate_name, validate_slug
 
 logger = logging.getLogger(__name__)
 
@@ -92,15 +91,15 @@ def business_new():
 
         # Check for duplicate slug
         with get_conn() as con:
-            existing = con.execute(
-                "SELECT id FROM businesses WHERE slug = ?", (slug,)
-            ).fetchone()
+            existing = con.execute("SELECT id FROM businesses WHERE slug = ?", (slug,)).fetchone()
             if existing:
                 flash(f"A business with slug '{slug}' already exists.", "err")
                 return render_template("onboard.html", form=request.form, business=None)
 
         # Extra fields from wizard
-        welcome_msg = (request.form.get("welcome_message") or request.form.get("welcome_message_hidden") or "").strip()
+        welcome_msg = (
+            request.form.get("welcome_message") or request.form.get("welcome_message_hidden") or ""
+        ).strip()
 
         # Create the business
         try:
@@ -113,7 +112,7 @@ def business_new():
                 tone=tone or None,
                 escalation_phone=esc_phone or None,
                 escalation_email=esc_email or None,
-                data_retention_days=rdays
+                data_retention_days=rdays,
             )
 
             if new_id:
@@ -121,6 +120,7 @@ def business_new():
                 if welcome_msg:
                     try:
                         from widget_bp import get_or_create_widget_settings, update_widget_settings
+
                         get_or_create_widget_settings(new_id)
                         update_widget_settings(new_id, welcome_message=welcome_msg)
                     except Exception as e:
@@ -131,6 +131,7 @@ def business_new():
                 if user.get("role") == "owner":
                     try:
                         from core.db import assign_user_to_business
+
                         assign_user_to_business(user["id"], new_id)
                     except Exception as e:
                         logger.warning(f"Could not assign user to business: {e}")

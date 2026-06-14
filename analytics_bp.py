@@ -3,8 +3,9 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Any, Tuple
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, g
+from typing import Any, Dict, List, Optional, Tuple
+
+from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, session, url_for
 
 from core.db import get_conn
 
@@ -16,6 +17,7 @@ analytics_bp = Blueprint("analytics", __name__)
 # =============================================================================
 # Authentication Helpers
 # =============================================================================
+
 
 def _user() -> Optional[dict]:
     return session.get("user")
@@ -31,6 +33,7 @@ def _need_login():
 # =============================================================================
 # Date Range Helpers
 # =============================================================================
+
 
 def _parse_date_range(range_key: str) -> Tuple[str, str, str]:
     """
@@ -49,7 +52,7 @@ def _parse_date_range(range_key: str) -> Tuple[str, str, str]:
         "last_month": (
             (today.replace(day=1) - timedelta(days=1)).replace(day=1),
             today.replace(day=1) - timedelta(days=1),
-            "Last Month"
+            "Last Month",
         ),
         "this_year": (today.replace(month=1, day=1), today, "This Year"),
     }
@@ -79,20 +82,25 @@ def _get_comparison_range(start_date: str, end_date: str) -> Tuple[str, str]:
 # Data Aggregation Functions
 # =============================================================================
 
+
 def _get_overview_stats(business_id: int, start_date: str, end_date: str) -> Dict[str, Any]:
     """Get high-level overview statistics."""
     with get_conn() as con:
         # Total conversations
-        conversations = con.execute("""
+        conversations = con.execute(
+            """
             SELECT COUNT(*) as total,
                    COUNT(CASE WHEN escalated = 1 THEN 1 END) as escalated
             FROM sessions
             WHERE business_id = ?
               AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Total appointments
-        appointments = con.execute("""
+        appointments = con.execute(
+            """
             SELECT COUNT(*) as total,
                    COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed,
                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
@@ -100,10 +108,13 @@ def _get_overview_stats(business_id: int, start_date: str, end_date: str) -> Dic
             FROM appointments
             WHERE business_id = ?
               AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Total messages
-        messages = con.execute("""
+        messages = con.execute(
+            """
             SELECT COUNT(*) as total,
                    COUNT(CASE WHEN sender = 'user' THEN 1 END) as user_msgs,
                    COUNT(CASE WHEN sender = 'bot' THEN 1 END) as bot_msgs
@@ -111,58 +122,74 @@ def _get_overview_stats(business_id: int, start_date: str, end_date: str) -> Dic
             JOIN sessions s ON m.session_id = s.id
             WHERE s.business_id = ?
               AND date(m.timestamp) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # New customers
-        customers = con.execute("""
+        customers = con.execute(
+            """
             SELECT COUNT(*) as total
             FROM customers
             WHERE business_id = ?
               AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Escalations
-        escalations = con.execute("""
+        escalations = con.execute(
+            """
             SELECT COUNT(*) as total,
                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
                    COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved
             FROM escalations
             WHERE business_id = ?
               AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         return {
             "conversations": {
                 "total": conversations["total"] or 0,
                 "escalated": conversations["escalated"] or 0,
-                "escalation_rate": round((conversations["escalated"] or 0) / max(conversations["total"] or 1, 1) * 100, 1)
+                "escalation_rate": round(
+                    (conversations["escalated"] or 0) / max(conversations["total"] or 1, 1) * 100, 1
+                ),
             },
             "appointments": {
                 "total": appointments["total"] or 0,
                 "confirmed": appointments["confirmed"] or 0,
                 "cancelled": appointments["cancelled"] or 0,
                 "no_show": appointments["no_show"] or 0,
-                "confirmation_rate": round((appointments["confirmed"] or 0) / max(appointments["total"] or 1, 1) * 100, 1)
+                "confirmation_rate": round(
+                    (appointments["confirmed"] or 0) / max(appointments["total"] or 1, 1) * 100, 1
+                ),
             },
             "messages": {
                 "total": messages["total"] or 0,
                 "user": messages["user_msgs"] or 0,
                 "bot": messages["bot_msgs"] or 0,
-                "avg_per_session": round((messages["total"] or 0) / max(conversations["total"] or 1, 1), 1)
+                "avg_per_session": round(
+                    (messages["total"] or 0) / max(conversations["total"] or 1, 1), 1
+                ),
             },
-            "customers": {
-                "new": customers["total"] or 0
-            },
+            "customers": {"new": customers["total"] or 0},
             "escalations": {
                 "total": escalations["total"] or 0,
                 "pending": escalations["pending"] or 0,
                 "resolved": escalations["resolved"] or 0,
-                "resolution_rate": round((escalations["resolved"] or 0) / max(escalations["total"] or 1, 1) * 100, 1)
-            }
+                "resolution_rate": round(
+                    (escalations["resolved"] or 0) / max(escalations["total"] or 1, 1) * 100, 1
+                ),
+            },
         }
 
 
-def _get_trend_data(business_id: int, start_date: str, end_date: str, granularity: str = "day") -> Dict[str, List]:
+def _get_trend_data(
+    business_id: int, start_date: str, end_date: str, granularity: str = "day"
+) -> Dict[str, List]:
     """Get time-series data for trend charts."""
     # SECURITY: Use pre-defined queries to avoid SQL injection
     # Each granularity has its own safe query - no string interpolation
@@ -170,7 +197,8 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
     with get_conn() as con:
         if granularity == "hour":
             # Hourly grouping
-            conversations = con.execute("""
+            conversations = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d %H:00', created_at) as period,
                        COUNT(*) as count
                 FROM sessions
@@ -178,9 +206,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d %H:00', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            appointments = con.execute("""
+            appointments = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d %H:00', created_at) as period,
                        COUNT(*) as count
                 FROM appointments
@@ -188,9 +219,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d %H:00', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            messages = con.execute("""
+            messages = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d %H:00', m.timestamp) as period,
                        COUNT(*) as count
                 FROM messages m
@@ -199,11 +233,14 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(m.timestamp) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d %H:00', m.timestamp)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
         elif granularity == "week":
             # Weekly grouping
-            conversations = con.execute("""
+            conversations = con.execute(
+                """
                 SELECT strftime('%Y-W%W', created_at) as period,
                        COUNT(*) as count
                 FROM sessions
@@ -211,9 +248,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-W%W', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            appointments = con.execute("""
+            appointments = con.execute(
+                """
                 SELECT strftime('%Y-W%W', created_at) as period,
                        COUNT(*) as count
                 FROM appointments
@@ -221,9 +261,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-W%W', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            messages = con.execute("""
+            messages = con.execute(
+                """
                 SELECT strftime('%Y-W%W', m.timestamp) as period,
                        COUNT(*) as count
                 FROM messages m
@@ -232,11 +275,14 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(m.timestamp) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-W%W', m.timestamp)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
         else:
             # Daily grouping (default)
-            conversations = con.execute("""
+            conversations = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d', created_at) as period,
                        COUNT(*) as count
                 FROM sessions
@@ -244,9 +290,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            appointments = con.execute("""
+            appointments = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d', created_at) as period,
                        COUNT(*) as count
                 FROM appointments
@@ -254,9 +303,12 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(created_at) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d', created_at)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
-            messages = con.execute("""
+            messages = con.execute(
+                """
                 SELECT strftime('%Y-%m-%d', m.timestamp) as period,
                        COUNT(*) as count
                 FROM messages m
@@ -265,20 +317,23 @@ def _get_trend_data(business_id: int, start_date: str, end_date: str, granularit
                   AND date(m.timestamp) BETWEEN ? AND ?
                 GROUP BY strftime('%Y-%m-%d', m.timestamp)
                 ORDER BY period
-            """, (business_id, start_date, end_date)).fetchall()
+            """,
+                (business_id, start_date, end_date),
+            ).fetchall()
 
         return {
             "labels": [r["period"] for r in conversations] or [r["period"] for r in appointments],
             "conversations": [r["count"] for r in conversations],
             "appointments": [r["count"] for r in appointments],
-            "messages": [r["count"] for r in messages]
+            "messages": [r["count"] for r in messages],
         }
 
 
 def _get_hourly_distribution(business_id: int, start_date: str, end_date: str) -> Dict[str, List]:
     """Get distribution of activity by hour of day."""
     with get_conn() as con:
-        hourly = con.execute("""
+        hourly = con.execute(
+            """
             SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour,
                    COUNT(*) as count
             FROM sessions
@@ -286,7 +341,9 @@ def _get_hourly_distribution(business_id: int, start_date: str, end_date: str) -
               AND date(created_at) BETWEEN ? AND ?
             GROUP BY hour
             ORDER BY hour
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         # Fill in all 24 hours
         hour_map = {r["hour"]: r["count"] for r in hourly}
@@ -299,7 +356,8 @@ def _get_hourly_distribution(business_id: int, start_date: str, end_date: str) -
 def _get_daily_distribution(business_id: int, start_date: str, end_date: str) -> Dict[str, List]:
     """Get distribution of activity by day of week."""
     with get_conn() as con:
-        daily = con.execute("""
+        daily = con.execute(
+            """
             SELECT CAST(strftime('%w', created_at) AS INTEGER) as dow,
                    COUNT(*) as count
             FROM sessions
@@ -307,7 +365,9 @@ def _get_daily_distribution(business_id: int, start_date: str, end_date: str) ->
               AND date(created_at) BETWEEN ? AND ?
             GROUP BY dow
             ORDER BY dow
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         # Fill in all 7 days (0=Sunday, 6=Saturday)
         day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -317,16 +377,21 @@ def _get_daily_distribution(business_id: int, start_date: str, end_date: str) ->
         return {"labels": day_names, "counts": counts}
 
 
-def _get_appointment_status_breakdown(business_id: int, start_date: str, end_date: str) -> Dict[str, Any]:
+def _get_appointment_status_breakdown(
+    business_id: int, start_date: str, end_date: str
+) -> Dict[str, Any]:
     """Get appointment status distribution."""
     with get_conn() as con:
-        statuses = con.execute("""
+        statuses = con.execute(
+            """
             SELECT status, COUNT(*) as count
             FROM appointments
             WHERE business_id = ?
               AND date(created_at) BETWEEN ? AND ?
             GROUP BY status
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         status_map = {r["status"]: r["count"] for r in statuses}
 
@@ -337,16 +402,19 @@ def _get_appointment_status_breakdown(business_id: int, start_date: str, end_dat
                 status_map.get("confirmed", 0),
                 status_map.get("cancelled", 0),
                 status_map.get("no_show", 0),
-                status_map.get("completed", 0)
+                status_map.get("completed", 0),
             ],
-            "colors": ["#f59e0b", "#10b981", "#ef4444", "#6b7280", "#3b82f6"]
+            "colors": ["#f59e0b", "#10b981", "#ef4444", "#6b7280", "#3b82f6"],
         }
 
 
-def _get_top_services(business_id: int, start_date: str, end_date: str, limit: int = 5) -> List[Dict]:
+def _get_top_services(
+    business_id: int, start_date: str, end_date: str, limit: int = 5
+) -> List[Dict]:
     """Get most popular services by appointment count."""
     with get_conn() as con:
-        services = con.execute("""
+        services = con.execute(
+            """
             SELECT a.service, COUNT(*) as count,
                    COALESCE(s.price, 0) as price
             FROM appointments a
@@ -357,15 +425,21 @@ def _get_top_services(business_id: int, start_date: str, end_date: str, limit: i
             GROUP BY a.service
             ORDER BY count DESC
             LIMIT ?
-        """, (business_id, start_date, end_date, limit)).fetchall()
+        """,
+            (business_id, start_date, end_date, limit),
+        ).fetchall()
 
-        return [{"name": r["service"], "count": r["count"], "revenue": r["count"] * r["price"]} for r in services]
+        return [
+            {"name": r["service"], "count": r["count"], "revenue": r["count"] * r["price"]}
+            for r in services
+        ]
 
 
 def _get_escalation_reasons(business_id: int, start_date: str, end_date: str) -> Dict[str, List]:
     """Get breakdown of escalation reasons."""
     with get_conn() as con:
-        reasons = con.execute("""
+        reasons = con.execute(
+            """
             SELECT reason, COUNT(*) as count
             FROM escalations
             WHERE business_id = ?
@@ -373,11 +447,15 @@ def _get_escalation_reasons(business_id: int, start_date: str, end_date: str) ->
             GROUP BY reason
             ORDER BY count DESC
             LIMIT 10
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         return {
-            "labels": [r["reason"][:40] + "..." if len(r["reason"]) > 40 else r["reason"] for r in reasons],
-            "counts": [r["count"] for r in reasons]
+            "labels": [
+                r["reason"][:40] + "..." if len(r["reason"]) > 40 else r["reason"] for r in reasons
+            ],
+            "counts": [r["count"] for r in reasons],
         }
 
 
@@ -385,40 +463,52 @@ def _get_conversion_funnel(business_id: int, start_date: str, end_date: str) -> 
     """Get conversion funnel metrics."""
     with get_conn() as con:
         # Total sessions
-        sessions = con.execute("""
+        sessions = con.execute(
+            """
             SELECT COUNT(*) as count FROM sessions
             WHERE business_id = ? AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()["count"]
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()["count"]
 
         # Sessions with 2+ messages (engaged)
-        engaged = con.execute("""
+        engaged = con.execute(
+            """
             SELECT COUNT(DISTINCT s.id) as count
             FROM sessions s
             JOIN messages m ON m.session_id = s.id
             WHERE s.business_id = ? AND date(s.created_at) BETWEEN ? AND ?
             GROUP BY s.id
             HAVING COUNT(m.id) >= 2
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
         engaged_count = len(engaged)
 
         # Sessions with booking intent detected (approximation via appointments)
-        appointments = con.execute("""
+        appointments = con.execute(
+            """
             SELECT COUNT(*) as count FROM appointments
             WHERE business_id = ? AND date(created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()["count"]
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()["count"]
 
         # Confirmed appointments
-        confirmed = con.execute("""
+        confirmed = con.execute(
+            """
             SELECT COUNT(*) as count FROM appointments
             WHERE business_id = ? AND date(created_at) BETWEEN ? AND ?
               AND status IN ('confirmed', 'completed')
-        """, (business_id, start_date, end_date)).fetchone()["count"]
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()["count"]
 
         return {
             "sessions": sessions,
             "engaged": engaged_count,
             "bookings": appointments,
-            "confirmed": confirmed
+            "confirmed": confirmed,
         }
 
 
@@ -426,7 +516,8 @@ def _get_response_metrics(business_id: int, start_date: str, end_date: str) -> D
     """Get AI response and performance metrics."""
     with get_conn() as con:
         # Average messages per session
-        avg_msgs = con.execute("""
+        avg_msgs = con.execute(
+            """
             SELECT AVG(msg_count) as avg_msgs
             FROM (
                 SELECT s.id, COUNT(m.id) as msg_count
@@ -435,10 +526,13 @@ def _get_response_metrics(business_id: int, start_date: str, end_date: str) -> D
                 WHERE s.business_id = ? AND date(s.created_at) BETWEEN ? AND ?
                 GROUP BY s.id
             )
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Sessions by message count buckets
-        buckets = con.execute("""
+        buckets = con.execute(
+            """
             SELECT
                 CASE
                     WHEN msg_count <= 2 THEN '1-2'
@@ -462,14 +556,16 @@ def _get_response_metrics(business_id: int, start_date: str, end_date: str) -> D
                     WHEN '6-10' THEN 3
                     ELSE 4
                 END
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         return {
             "avg_messages_per_session": round(avg_msgs["avg_msgs"] or 0, 1),
             "session_length_distribution": {
                 "labels": [r["bucket"] for r in buckets],
-                "counts": [r["count"] for r in buckets]
-            }
+                "counts": [r["count"] for r in buckets],
+            },
         }
 
 
@@ -477,7 +573,8 @@ def _get_customer_insights(business_id: int, start_date: str, end_date: str) -> 
     """Get customer-related insights."""
     with get_conn() as con:
         # New vs returning (based on session count)
-        customer_types = con.execute("""
+        customer_types = con.execute(
+            """
             SELECT
                 CASE WHEN session_count = 1 THEN 'new' ELSE 'returning' END as type,
                 COUNT(*) as count
@@ -490,12 +587,15 @@ def _get_customer_insights(business_id: int, start_date: str, end_date: str) -> 
                 GROUP BY customer_id
             )
             GROUP BY type
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         type_map = {r["type"]: r["count"] for r in customer_types}
 
         # Top customers by appointments
-        top_customers = con.execute("""
+        top_customers = con.execute(
+            """
             SELECT c.name, c.email, c.phone, COUNT(a.id) as appointment_count
             FROM customers c
             JOIN appointments a ON a.customer_id = c.id
@@ -504,12 +604,14 @@ def _get_customer_insights(business_id: int, start_date: str, end_date: str) -> 
             GROUP BY c.id
             ORDER BY appointment_count DESC
             LIMIT 5
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         return {
             "new_customers": type_map.get("new", 0),
             "returning_customers": type_map.get("returning", 0),
-            "top_customers": [dict(r) for r in top_customers]
+            "top_customers": [dict(r) for r in top_customers],
         }
 
 
@@ -517,7 +619,8 @@ def _get_revenue_metrics(business_id: int, start_date: str, end_date: str) -> Di
     """Calculate actual and projected revenue from appointments."""
     with get_conn() as con:
         # Revenue from completed/confirmed appointments with known prices
-        revenue = con.execute("""
+        revenue = con.execute(
+            """
             SELECT
                 COALESCE(SUM(CASE WHEN a.status IN ('confirmed','completed') THEN COALESCE(s.price, 0) ELSE 0 END), 0) as earned,
                 COALESCE(SUM(COALESCE(s.price, 0)), 0) as potential,
@@ -527,10 +630,13 @@ def _get_revenue_metrics(business_id: int, start_date: str, end_date: str) -> Di
             LEFT JOIN services s ON a.service = s.name AND s.business_id = a.business_id
             WHERE a.business_id = ?
               AND date(a.created_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Daily revenue trend
-        daily_rev = con.execute("""
+        daily_rev = con.execute(
+            """
             SELECT strftime('%Y-%m-%d', a.created_at) as day,
                    COALESCE(SUM(CASE WHEN a.status IN ('confirmed','completed') THEN COALESCE(s.price, 0) ELSE 0 END), 0) as revenue
             FROM appointments a
@@ -538,10 +644,13 @@ def _get_revenue_metrics(business_id: int, start_date: str, end_date: str) -> Di
             WHERE a.business_id = ?
               AND date(a.created_at) BETWEEN ? AND ?
             GROUP BY day ORDER BY day
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
     # Calculate projection: annualize the earned revenue over the period
     from datetime import datetime as _dt
+
     start = _dt.fromisoformat(start_date).date()
     end = _dt.fromisoformat(end_date).date()
     period_days = (end - start).days + 1
@@ -560,7 +669,7 @@ def _get_revenue_metrics(business_id: int, start_date: str, end_date: str) -> Di
         "daily_trend": {
             "labels": [r["day"] for r in daily_rev],
             "amounts": [r["revenue"] for r in daily_rev],
-        }
+        },
     }
 
 
@@ -575,7 +684,8 @@ def _get_voice_analytics(business_id: int, start_date: str, end_date: str) -> Di
             return {"available": False}
 
         # "missed" = call never answered (duration NULL or 0, or status error/registered)
-        summary = con.execute("""
+        summary = con.execute(
+            """
             SELECT
                 COUNT(*) as total,
                 COUNT(CASE WHEN (duration_seconds IS NULL OR duration_seconds = 0
@@ -586,24 +696,32 @@ def _get_voice_analytics(business_id: int, start_date: str, end_date: str) -> Di
             FROM voice_calls
             WHERE business_id = ?
               AND date(started_at) BETWEEN ? AND ?
-        """, (business_id, start_date, end_date)).fetchone()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchone()
 
         # Call intents breakdown
-        intents = con.execute("""
+        intents = con.execute(
+            """
             SELECT call_intent, COUNT(*) as count
             FROM voice_calls
             WHERE business_id = ? AND date(started_at) BETWEEN ? AND ?
               AND call_intent IS NOT NULL AND call_intent != ''
             GROUP BY call_intent ORDER BY count DESC LIMIT 6
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         # Daily call volume
-        daily = con.execute("""
+        daily = con.execute(
+            """
             SELECT strftime('%Y-%m-%d', started_at) as day, COUNT(*) as count
             FROM voice_calls
             WHERE business_id = ? AND date(started_at) BETWEEN ? AND ?
             GROUP BY day ORDER BY day
-        """, (business_id, start_date, end_date)).fetchall()
+        """,
+            (business_id, start_date, end_date),
+        ).fetchall()
 
         total = summary["total"] or 0
         answered = summary["answered"] or 0
@@ -622,7 +740,7 @@ def _get_voice_analytics(business_id: int, start_date: str, end_date: str) -> Di
             "daily": {
                 "labels": [r["day"] for r in daily],
                 "counts": [r["count"] for r in daily],
-            }
+            },
         }
 
 
@@ -643,6 +761,7 @@ def _calculate_change(current: int, previous: int) -> Dict[str, Any]:
 # Routes
 # =============================================================================
 
+
 @analytics_bp.route("/analytics")
 def analytics_index():
     """Main analytics dashboard."""
@@ -650,7 +769,7 @@ def analytics_index():
     if redir:
         return redir
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         flash("Please select a business first.", "err")
         return redirect(url_for("dashboard"))
@@ -669,21 +788,17 @@ def analytics_index():
     # Calculate changes
     changes = {
         "conversations": _calculate_change(
-            current_stats["conversations"]["total"],
-            previous_stats["conversations"]["total"]
+            current_stats["conversations"]["total"], previous_stats["conversations"]["total"]
         ),
         "appointments": _calculate_change(
-            current_stats["appointments"]["total"],
-            previous_stats["appointments"]["total"]
+            current_stats["appointments"]["total"], previous_stats["appointments"]["total"]
         ),
         "customers": _calculate_change(
-            current_stats["customers"]["new"],
-            previous_stats["customers"]["new"]
+            current_stats["customers"]["new"], previous_stats["customers"]["new"]
         ),
         "escalations": _calculate_change(
-            current_stats["escalations"]["total"],
-            previous_stats["escalations"]["total"]
-        )
+            current_stats["escalations"]["total"], previous_stats["escalations"]["total"]
+        ),
     }
 
     # Get chart data
@@ -717,7 +832,7 @@ def analytics_index():
         range_key=range_key,
         range_label=range_label,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
     )
 
 
@@ -727,7 +842,7 @@ def api_overview():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -744,7 +859,7 @@ def api_trends():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -762,7 +877,7 @@ def api_export():
     if _user() is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    business_id = getattr(g, 'active_business_id', None)
+    business_id = getattr(g, "active_business_id", None)
     if not business_id:
         return jsonify({"error": "No business selected"}), 400
 
@@ -775,7 +890,7 @@ def api_export():
 
     # Build CSV
     lines = [
-        f"LocusAI Analytics Export",
+        "LocusAI Analytics Export",
         f"Period: {range_label} ({start_date} to {end_date})",
         "",
         "Overview Metrics",
@@ -788,7 +903,7 @@ def api_export():
         f"New Customers,{stats['customers']['new']}",
         "",
         "Daily Trends",
-        "Date,Conversations,Appointments,Messages"
+        "Date,Conversations,Appointments,Messages",
     ]
 
     for i, label in enumerate(trends["labels"]):
@@ -800,8 +915,11 @@ def api_export():
     csv_content = "\n".join(lines)
 
     from flask import Response
+
     return Response(
         csv_content,
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment;filename=analytics_{start_date}_{end_date}.csv"}
+        headers={
+            "Content-Disposition": f"attachment;filename=analytics_{start_date}_{end_date}.csv"
+        },
     )

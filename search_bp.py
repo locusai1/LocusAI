@@ -1,8 +1,10 @@
 # search_bp.py — Global search across customers, appointments, KB, businesses
-from flask import Blueprint, render_template, request, session, redirect, url_for, g
+from flask import Blueprint, g, redirect, render_template, request, session, url_for
+
 from core.db import get_conn
 
 bp = Blueprint("search", __name__)
+
 
 def _need_login():
     return session.get("user") is None
@@ -27,17 +29,23 @@ def search_index():
             # Businesses (admin sees all, owner sees theirs)
             user = session.get("user", {})
             if user.get("role") == "admin":
-                businesses = con.execute("""
+                businesses = con.execute(
+                    """
                     SELECT * FROM businesses
                     WHERE (lower(name) LIKE ? OR lower(slug) LIKE ?) AND archived = 0
                     ORDER BY id DESC LIMIT 20
-                """, (like, like)).fetchall()
+                """,
+                    (like, like),
+                ).fetchall()
             elif business_id:
-                businesses = con.execute("""
+                businesses = con.execute(
+                    """
                     SELECT * FROM businesses
                     WHERE id = ? AND (lower(name) LIKE ? OR lower(slug) LIKE ?) AND archived = 0
                     LIMIT 5
-                """, (business_id, like, like)).fetchall()
+                """,
+                    (business_id, like, like),
+                ).fetchall()
 
             # Appointments — scoped to active business if set
             appt_query = """
@@ -55,24 +63,30 @@ def search_index():
 
             # Customers — scoped to active business
             if business_id:
-                customers = con.execute("""
+                customers = con.execute(
+                    """
                     SELECT id, name, email, phone, total_appointments, created_at
                     FROM customers
                     WHERE business_id = ?
                       AND (lower(name) LIKE ? OR lower(email) LIKE ? OR lower(phone) LIKE ?)
                     ORDER BY total_appointments DESC LIMIT 30
-                """, (business_id, like, like, like)).fetchall()
+                """,
+                    (business_id, like, like, like),
+                ).fetchall()
 
             # KB entries — use FTS5 if available, fallback to LIKE
             if business_id:
                 try:
-                    kb_entries = con.execute("""
+                    kb_entries = con.execute(
+                        """
                         SELECT k.id, k.question, k.answer, k.tags
                         FROM kb_entries k
                         WHERE k.business_id = ?
                           AND (lower(k.question) LIKE ? OR lower(k.answer) LIKE ? OR lower(k.tags) LIKE ?)
                         ORDER BY k.id DESC LIMIT 10
-                    """, (business_id, like, like, like)).fetchall()
+                    """,
+                        (business_id, like, like, like),
+                    ).fetchall()
                 except Exception:
                     pass
 

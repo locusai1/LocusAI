@@ -1,7 +1,8 @@
 # tests/test_ics.py — Tests for core/ics.py (iCalendar Generation)
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 
 
 class TestMakeIcs:
@@ -10,20 +11,22 @@ class TestMakeIcs:
     def test_make_ics_returns_bytes(self):
         """Should return bytes."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test Appointment",
             description="Test description",
-            start=datetime.now() + timedelta(days=1)
+            start=datetime.now() + timedelta(days=1),
         )
         assert isinstance(result, bytes)
 
     def test_make_ics_utf8_encoded(self):
         """Should be UTF-8 encoded."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test Appointment",
             description="Test description",
-            start=datetime.now() + timedelta(days=1)
+            start=datetime.now() + timedelta(days=1),
         )
         # Should decode without errors
         text = result.decode("utf-8")
@@ -32,10 +35,9 @@ class TestMakeIcs:
     def test_make_ics_vcalendar_format(self):
         """Should have proper VCALENDAR structure."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "BEGIN:VCALENDAR" in result
@@ -46,10 +48,11 @@ class TestMakeIcs:
     def test_make_ics_contains_summary(self):
         """Should include the summary."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="My Haircut Appointment",
             description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            start=datetime.now() + timedelta(days=1),
         ).decode("utf-8")
 
         assert "SUMMARY:My Haircut Appointment" in result
@@ -57,10 +60,11 @@ class TestMakeIcs:
     def test_make_ics_contains_description(self):
         """Should include the description."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test",
             description="Appointment at Test Salon for haircut",
-            start=datetime.now() + timedelta(days=1)
+            start=datetime.now() + timedelta(days=1),
         ).decode("utf-8")
 
         assert "DESCRIPTION:" in result
@@ -69,11 +73,12 @@ class TestMakeIcs:
     def test_make_ics_contains_location(self):
         """Should include location when provided."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test",
             description="Desc",
             start=datetime.now() + timedelta(days=1),
-            location="123 Main Street, City"
+            location="123 Main Street, City",
         ).decode("utf-8")
 
         assert "LOCATION:123 Main Street" in result
@@ -81,12 +86,9 @@ class TestMakeIcs:
     def test_make_ics_default_duration(self):
         """Should use default 60 minute duration."""
         from core.ics import make_ics
+
         start = datetime(2026, 3, 15, 14, 0)  # 2:00 PM
-        result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=start
-        ).decode("utf-8")
+        result = make_ics(summary="Test", description="Desc", start=start).decode("utf-8")
 
         # DTSTART should be 14:00, DTEND should be 15:00
         assert "DTSTART:20260315T140000" in result
@@ -95,13 +97,11 @@ class TestMakeIcs:
     def test_make_ics_custom_duration(self):
         """Should respect custom duration."""
         from core.ics import make_ics
+
         start = datetime(2026, 3, 15, 14, 0)  # 2:00 PM
-        result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=start,
-            duration_min=30
-        ).decode("utf-8")
+        result = make_ics(summary="Test", description="Desc", start=start, duration_min=30).decode(
+            "utf-8"
+        )
 
         # DTSTART should be 14:00, DTEND should be 14:30
         assert "DTSTART:20260315T140000" in result
@@ -110,10 +110,9 @@ class TestMakeIcs:
     def test_make_ics_contains_uid(self):
         """Should contain unique identifier."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "UID:" in result
@@ -121,6 +120,7 @@ class TestMakeIcs:
     def test_make_ics_unique_uids(self):
         """Should generate unique UIDs for each call."""
         from core.ics import make_ics
+
         start = datetime.now() + timedelta(days=1)
 
         result1 = make_ics(summary="Test1", description="Desc", start=start).decode("utf-8")
@@ -135,10 +135,9 @@ class TestMakeIcs:
     def test_make_ics_contains_dtstamp(self):
         """Should contain timestamp of creation."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "DTSTAMP:" in result
@@ -146,10 +145,9 @@ class TestMakeIcs:
     def test_make_ics_version_2(self):
         """Should specify VERSION:2.0."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "VERSION:2.0" in result
@@ -157,10 +155,9 @@ class TestMakeIcs:
     def test_make_ics_prodid(self):
         """Should include PRODID."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "PRODID:" in result
@@ -168,10 +165,9 @@ class TestMakeIcs:
     def test_make_ics_crlf_line_endings(self):
         """Should use CRLF line endings per iCalendar spec."""
         from core.ics import make_ics
+
         result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description="Desc", start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "\r\n" in result
@@ -179,10 +175,11 @@ class TestMakeIcs:
     def test_make_ics_escapes_newlines_in_description(self):
         """Should escape newlines in description."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test",
             description="Line one\nLine two\nLine three",
-            start=datetime.now() + timedelta(days=1)
+            start=datetime.now() + timedelta(days=1),
         ).decode("utf-8")
 
         # Newlines in content should be escaped as \n
@@ -191,11 +188,12 @@ class TestMakeIcs:
     def test_make_ics_handles_unicode(self):
         """Should handle unicode characters."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Appointment at Café René",
             description="Meeting with José García",
             start=datetime.now() + timedelta(days=1),
-            location="München, Germany"
+            location="München, Germany",
         ).decode("utf-8")
 
         assert "Café" in result
@@ -209,6 +207,7 @@ class TestDateFormatting:
     def test_fmt_basic_date(self):
         """Should format datetime correctly."""
         from core.ics import _fmt
+
         dt = datetime(2026, 1, 15, 9, 30, 0)
         result = _fmt(dt)
         assert result == "20260115T093000"
@@ -216,6 +215,7 @@ class TestDateFormatting:
     def test_fmt_midnight(self):
         """Should format midnight correctly."""
         from core.ics import _fmt
+
         dt = datetime(2026, 12, 31, 0, 0, 0)
         result = _fmt(dt)
         assert result == "20261231T000000"
@@ -223,6 +223,7 @@ class TestDateFormatting:
     def test_fmt_end_of_day(self):
         """Should format end of day correctly."""
         from core.ics import _fmt
+
         dt = datetime(2026, 6, 15, 23, 59, 59)
         result = _fmt(dt)
         assert result == "20260615T235959"
@@ -234,11 +235,12 @@ class TestEdgeCases:
     def test_make_ics_empty_location(self):
         """Should handle empty location."""
         from core.ics import make_ics
+
         result = make_ics(
             summary="Test",
             description="Desc",
             start=datetime.now() + timedelta(days=1),
-            location=""
+            location="",
         ).decode("utf-8")
 
         assert "LOCATION:" in result
@@ -246,11 +248,10 @@ class TestEdgeCases:
     def test_make_ics_long_description(self):
         """Should handle long description."""
         from core.ics import make_ics
+
         long_desc = "This is a very long description. " * 50
         result = make_ics(
-            summary="Test",
-            description=long_desc,
-            start=datetime.now() + timedelta(days=1)
+            summary="Test", description=long_desc, start=datetime.now() + timedelta(days=1)
         ).decode("utf-8")
 
         assert "DESCRIPTION:" in result
@@ -258,13 +259,11 @@ class TestEdgeCases:
     def test_make_ics_zero_duration(self):
         """Should handle zero duration (event with no duration)."""
         from core.ics import make_ics
+
         start = datetime(2026, 3, 15, 14, 0)
-        result = make_ics(
-            summary="Test",
-            description="Desc",
-            start=start,
-            duration_min=0
-        ).decode("utf-8")
+        result = make_ics(summary="Test", description="Desc", start=start, duration_min=0).decode(
+            "utf-8"
+        )
 
         # DTSTART and DTEND should be the same
         assert "DTSTART:20260315T140000" in result
@@ -273,12 +272,13 @@ class TestEdgeCases:
     def test_make_ics_multi_hour_duration(self):
         """Should handle multi-hour duration."""
         from core.ics import make_ics
+
         start = datetime(2026, 3, 15, 10, 0)
         result = make_ics(
             summary="Test",
             description="Desc",
             start=start,
-            duration_min=180  # 3 hours
+            duration_min=180,  # 3 hours
         ).decode("utf-8")
 
         assert "DTSTART:20260315T100000" in result

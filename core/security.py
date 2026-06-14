@@ -1,25 +1,27 @@
 # core/security.py — Security utilities and audit logging for LocusAI
 # Provides centralized security functions, audit logging, and data protection
 
-import logging
 import hashlib
 import hmac
+import logging
 import re
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple
 from functools import wraps
+from typing import Any, Dict, Optional, Tuple
 
-from flask import request, g, session
+from flask import g, request, session
 
 logger = logging.getLogger(__name__)
-security_logger = logging.getLogger('security')
+security_logger = logging.getLogger("security")
 
 # ============================================================================
 # Security Event Types
 # ============================================================================
 
+
 class SecurityEvent:
     """Constants for security event types."""
+
     # Authentication events
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILED = "login_failed"
@@ -59,12 +61,13 @@ class SecurityEvent:
 # Audit Logging
 # ============================================================================
 
+
 def log_security_event(
     event_type: str,
     user_id: Optional[int] = None,
     business_id: Optional[int] = None,
     details: Optional[Dict[str, Any]] = None,
-    severity: str = "INFO"
+    severity: str = "INFO",
 ) -> None:
     """Log a security-relevant event for audit trail.
 
@@ -86,7 +89,7 @@ def log_security_event(
             ip_address = request.remote_addr or "unknown"
             user_agent = request.user_agent.string if request.user_agent else "unknown"
             path = request.path
-        if hasattr(g, 'request_id'):
+        if hasattr(g, "request_id"):
             request_id = g.request_id
     except RuntimeError:
         # Outside of request context
@@ -135,11 +138,7 @@ def log_admin_action(action: str, target: str, details: Optional[Dict] = None) -
     log_security_event(
         SecurityEvent.ADMIN_ACTION,
         user_id=user_id,
-        details={
-            "action": action,
-            "target": target,
-            **(details or {})
-        }
+        details={"action": action, "target": target, **(details or {})},
     )
 
 
@@ -152,10 +151,7 @@ def log_data_access(data_type: str, record_id: int, business_id: int) -> None:
         SecurityEvent.PII_ACCESS,
         user_id=user_id,
         business_id=business_id,
-        details={
-            "data_type": data_type,
-            "record_id": record_id
-        }
+        details={"data_type": data_type, "record_id": record_id},
     )
 
 
@@ -173,11 +169,27 @@ _SENSITIVE_PATTERNS = {
 }
 
 # Keys that should always be masked
-_SENSITIVE_KEYS = frozenset({
-    "password", "password_hash", "secret", "token", "api_key", "apikey",
-    "access_token", "refresh_token", "authorization", "auth", "credential",
-    "ssn", "social_security", "credit_card", "card_number", "cvv", "cvc"
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "password",
+        "password_hash",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "authorization",
+        "auth",
+        "credential",
+        "ssn",
+        "social_security",
+        "credit_card",
+        "card_number",
+        "cvv",
+        "cvc",
+    }
+)
 
 
 def mask_pii(value: str, visible_chars: int = 3) -> str:
@@ -271,18 +283,16 @@ def _truncate(value: str, max_length: int = 100) -> str:
         return ""
     if len(value) <= max_length:
         return value
-    return value[:max_length - 3] + "..."
+    return value[: max_length - 3] + "..."
 
 
 # ============================================================================
 # Webhook Signature Verification
 # ============================================================================
 
+
 def verify_signature_hmac(
-    payload: bytes,
-    signature: str,
-    secret: str,
-    algorithm: str = "sha256"
+    payload: bytes, signature: str, secret: str, algorithm: str = "sha256"
 ) -> bool:
     """Verify an HMAC signature.
 
@@ -303,11 +313,7 @@ def verify_signature_hmac(
         logger.error(f"Unknown hash algorithm: {algorithm}")
         return False
 
-    expected = hmac.new(
-        secret.encode('utf-8'),
-        payload,
-        hash_func
-    ).hexdigest()
+    expected = hmac.new(secret.encode("utf-8"), payload, hash_func).hexdigest()
 
     # Handle signatures with algorithm prefix (e.g., "sha256=abc123")
     if "=" in signature:
@@ -317,12 +323,8 @@ def verify_signature_hmac(
     return hmac.compare_digest(expected.lower(), signature.lower())
 
 
-
 def verify_stripe_signature(
-    payload: bytes,
-    sig_header: str,
-    webhook_secret: str,
-    tolerance: int = 300
+    payload: bytes, sig_header: str, webhook_secret: str, tolerance: int = 300
 ) -> Optional[Dict]:
     """Verify a Stripe webhook signature.
 
@@ -360,9 +362,7 @@ def verify_stripe_signature(
         # Compute expected signature
         signed_payload = f"{timestamp}.{payload.decode('utf-8')}"
         expected = hmac.new(
-            webhook_secret.encode('utf-8'),
-            signed_payload.encode('utf-8'),
-            hashlib.sha256
+            webhook_secret.encode("utf-8"), signed_payload.encode("utf-8"), hashlib.sha256
         ).hexdigest()
 
         if hmac.compare_digest(expected, v1_signature):
@@ -379,6 +379,7 @@ def verify_stripe_signature(
 # Security Decorators
 # ============================================================================
 
+
 def audit_action(event_type: str, get_business_id=None):
     """Decorator to automatically log security events for actions.
 
@@ -386,6 +387,7 @@ def audit_action(event_type: str, get_business_id=None):
         event_type: The type of security event
         get_business_id: Optional callable to extract business_id from request
     """
+
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
@@ -398,7 +400,7 @@ def audit_action(event_type: str, get_business_id=None):
                     business_id = get_business_id()
                 except Exception:
                     pass
-            elif hasattr(g, 'active_business_id'):
+            elif hasattr(g, "active_business_id"):
                 business_id = g.active_business_id
 
             # Log before action
@@ -406,17 +408,20 @@ def audit_action(event_type: str, get_business_id=None):
                 event_type,
                 user_id=user_id,
                 business_id=business_id,
-                details={"endpoint": request.endpoint if request else None}
+                details={"endpoint": request.endpoint if request else None},
             )
 
             return f(*args, **kwargs)
+
         return wrapped
+
     return decorator
 
 
 # ============================================================================
 # Input Sanitization Helpers
 # ============================================================================
+
 
 def sanitize_html(text: str) -> str:
     """Remove all HTML tags from text for safe display.
@@ -437,9 +442,7 @@ def sanitize_for_log(text: str, max_length: int = 500) -> str:
 
     # Remove control characters except newline and tab
     cleaned = "".join(
-        c if c in ('\n', '\t') or (ord(c) >= 32 and ord(c) < 127)
-        else ' '
-        for c in text
+        c if c in ("\n", "\t") or (ord(c) >= 32 and ord(c) < 127) else " " for c in text
     )
 
     # Truncate
@@ -454,11 +457,7 @@ def sanitize_for_log(text: str, max_length: int = 500) -> str:
 _rate_limits: Dict[str, Dict] = {}
 
 
-def check_rate_limit(
-    key: str,
-    limit: int,
-    window_seconds: int = 60
-) -> Tuple[bool, int]:
+def check_rate_limit(key: str, limit: int, window_seconds: int = 60) -> Tuple[bool, int]:
     """Check if a rate limit has been exceeded.
 
     Args:
@@ -476,10 +475,7 @@ def check_rate_limit(
 
     if not data or now > data.get("window_end", now):
         # Start new window
-        _rate_limits[key] = {
-            "count": 1,
-            "window_end": now + timedelta(seconds=window_seconds)
-        }
+        _rate_limits[key] = {"count": 1, "window_end": now + timedelta(seconds=window_seconds)}
         return True, limit - 1
 
     # Increment counter

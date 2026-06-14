@@ -15,9 +15,11 @@ def _next_weekday():
 
 def _service_id(test_db, business_id):
     from core.db import get_conn
+
     with get_conn() as con:
-        r = con.execute("SELECT id FROM services WHERE business_id=? AND active=1 LIMIT 1",
-                        (business_id,)).fetchone()
+        r = con.execute(
+            "SELECT id FROM services WHERE business_id=? AND active=1 LIMIT 1", (business_id,)
+        ).fetchone()
     return r["id"]
 
 
@@ -41,8 +43,10 @@ class TestPublicBookingPage:
     def test_slots_json(self, client, sample_business, test_db):
         sid = _service_id(test_db, sample_business["id"])
         with patch("core.db.DB_PATH", test_db):
-            resp = client.get(f"/book/{sample_business['slug']}/slots",
-                              query_string={"service_id": sid, "date": _next_weekday()})
+            resp = client.get(
+                f"/book/{sample_business['slug']}/slots",
+                query_string={"service_id": sid, "date": _next_weekday()},
+            )
         assert resp.status_code == 200
         data = resp.get_json()
         assert "slots" in data
@@ -51,8 +55,10 @@ class TestPublicBookingPage:
 
     def test_slots_rejects_foreign_service(self, client, sample_business, test_db):
         with patch("core.db.DB_PATH", test_db):
-            resp = client.get(f"/book/{sample_business['slug']}/slots",
-                              query_string={"service_id": 99999, "date": _next_weekday()})
+            resp = client.get(
+                f"/book/{sample_business['slug']}/slots",
+                query_string={"service_id": 99999, "date": _next_weekday()},
+            )
         assert resp.get_json()["slots"] == []
 
 
@@ -61,21 +67,32 @@ class TestPublicBookingSubmit:
         sid = _service_id(test_db, sample_business["id"])
         day = _next_weekday()
         with patch("core.db.DB_PATH", test_db):
-            slots = client.get(f"/book/{sample_business['slug']}/slots",
-                               query_string={"service_id": sid, "date": day}).get_json()["slots"]
+            slots = client.get(
+                f"/book/{sample_business['slug']}/slots",
+                query_string={"service_id": sid, "date": day},
+            ).get_json()["slots"]
             slot_value = slots[0]["value"]
             tok = _csrf(client)
-            resp = client.post(f"/book/{sample_business['slug']}", data={
-                "csrf_token": tok, "service_id": sid, "slot": slot_value,
-                "name": "Web Booker", "phone": "+14155551212", "email": "web@example.com",
-            })
+            resp = client.post(
+                f"/book/{sample_business['slug']}",
+                data={
+                    "csrf_token": tok,
+                    "service_id": sid,
+                    "slot": slot_value,
+                    "name": "Web Booker",
+                    "phone": "+14155551212",
+                    "email": "web@example.com",
+                },
+            )
             assert resp.status_code in (302, 303)
             assert "booked=1" in resp.headers["Location"]
             from core.db import get_conn
+
             with get_conn() as con:
                 row = con.execute(
                     "SELECT * FROM appointments WHERE business_id=? AND customer_name=?",
-                    (sample_business["id"], "Web Booker")).fetchone()
+                    (sample_business["id"], "Web Booker"),
+                ).fetchone()
             assert row is not None
             assert row["start_at"] == slot_value
             assert row["source"] == "api"
@@ -85,10 +102,15 @@ class TestPublicBookingSubmit:
         sid = _service_id(test_db, sample_business["id"])
         with patch("core.db.DB_PATH", test_db):
             tok = _csrf(client)
-            resp = client.post(f"/book/{sample_business['slug']}", data={
-                "csrf_token": tok, "service_id": sid, "slot": f"{_next_weekday()} 10:00",
-                "name": "No Phone",
-            })
+            resp = client.post(
+                f"/book/{sample_business['slug']}",
+                data={
+                    "csrf_token": tok,
+                    "service_id": sid,
+                    "slot": f"{_next_weekday()} 10:00",
+                    "name": "No Phone",
+                },
+            )
         assert resp.status_code == 400
         assert "phone" in resp.get_data(as_text=True).lower()
 

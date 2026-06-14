@@ -8,15 +8,17 @@
 import json
 import logging
 import re
-from typing import List, Dict, Any
+from typing import Dict, List
 
 from core.db import get_conn
 from core.settings import OPENAI_API_KEY, OPENAI_MODEL
 
 logger = logging.getLogger(__name__)
 
-_QUESTION_HINT = re.compile(r"\?|^(do|does|can|could|are|is|how|what|when|where|why|which|who|will|would|should)\b",
-                            re.IGNORECASE)
+_QUESTION_HINT = re.compile(
+    r"\?|^(do|does|can|could|are|is|how|what|when|where|why|which|who|will|would|should)\b",
+    re.IGNORECASE,
+)
 
 
 def gather_recent_questions(business_id: int, days: int = 30, limit: int = 80) -> List[str]:
@@ -24,21 +26,27 @@ def gather_recent_questions(business_id: int, days: int = 30, limit: int = 80) -
     since = f"-{int(days)} days"
     qs: List[str] = []
     with get_conn() as con:
-        rows = con.execute("""
+        rows = con.execute(
+            """
             SELECT m.text FROM messages m
             JOIN sessions s ON s.id = m.session_id
             WHERE s.business_id = ? AND m.sender = 'user'
               AND m.timestamp >= datetime('now', ?)
             ORDER BY m.timestamp DESC LIMIT ?
-        """, (business_id, since, limit)).fetchall()
+        """,
+            (business_id, since, limit),
+        ).fetchall()
         qs.extend((r["text"] or "").strip() for r in rows)
 
-        vrows = con.execute("""
+        vrows = con.execute(
+            """
             SELECT caller_message FROM voice_calls
             WHERE business_id = ? AND caller_message IS NOT NULL AND caller_message != ''
               AND created_at >= datetime('now', ?)
             ORDER BY created_at DESC LIMIT ?
-        """, (business_id, since, limit)).fetchall()
+        """,
+            (business_id, since, limit),
+        ).fetchall()
         qs.extend((r["caller_message"] or "").strip() for r in vrows)
 
     # Keep question-like, de-duplicate, trim.
@@ -59,7 +67,8 @@ def gather_recent_questions(business_id: int, days: int = 30, limit: int = 80) -
 def existing_questions(business_id: int) -> List[str]:
     with get_conn() as con:
         rows = con.execute(
-            "SELECT question FROM kb_entries WHERE business_id=?", (business_id,)).fetchall()
+            "SELECT question FROM kb_entries WHERE business_id=?", (business_id,)
+        ).fetchall()
     return [(r["question"] or "").strip().lower() for r in rows]
 
 
@@ -70,10 +79,14 @@ def is_configured() -> bool:
 def _complete(prompt: str) -> str:
     """Single LLM completion returning text. Isolated for easy testing."""
     from core.ai import client
+
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that returns only valid JSON."},
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that returns only valid JSON.",
+            },
             {"role": "user", "content": prompt},
         ],
         temperature=0.3,
@@ -123,7 +136,7 @@ def _parse(raw: str) -> List[Dict[str, str]]:
             return []
     items = data.get("suggestions") if isinstance(data, dict) else data
     out = []
-    for it in (items or []):
+    for it in items or []:
         q = (it.get("question") or "").strip()
         a = (it.get("answer") or "").strip()
         if q and a:
@@ -131,7 +144,9 @@ def _parse(raw: str) -> List[Dict[str, str]]:
     return out[:5]
 
 
-def suggest_kb_entries(business_id: int, business_name: str = "the business") -> List[Dict[str, str]]:
+def suggest_kb_entries(
+    business_id: int, business_name: str = "the business"
+) -> List[Dict[str, str]]:
     """Return suggested KB entries, or [] when not configured / not enough data."""
     if not is_configured():
         return []

@@ -1,20 +1,22 @@
 # core/booking.py — detect + commit AI-suggested bookings
 # Supports both auto-commit (legacy) and confirmation flow (new)
 from __future__ import annotations
-import json
-import re
-import logging
+
 import hashlib
+import json
+import logging
+import re
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
 
-from core.db import get_conn, create_appointment
+from core.db import create_appointment, get_conn
 from core.integrations import get_business_provider, get_business_provider_key
 
 # Import reminders module (optional)
 try:
     from core.reminders import schedule_reminders_for_appointment
+
     REMINDERS_AVAILABLE = True
 except ImportError:
     REMINDERS_AVAILABLE = False
@@ -26,6 +28,7 @@ def _emit(event_type: str, business_id: int, data: dict) -> None:
     """Fire an outbound webhook event; never let it break the booking flow."""
     try:
         from core.webhooks import emit_event
+
         emit_event(business_id, event_type, data)
     except Exception:
         logger.debug("webhook emit skipped for %s", event_type, exc_info=True)
@@ -38,45 +41,67 @@ BOOKING_TAG = re.compile(r"<BOOKING>\s*(\{.*?\})\s*</BOOKING>", re.DOTALL)
 _PENDING_BOOKINGS: Dict[str, Dict[str, Any]] = {}
 PENDING_BOOKING_TTL = 300  # 5 minutes
 
+
 def _parse_when(s: str) -> Optional[datetime]:
-    if not s: return None
+    if not s:
+        return None
     s = s.strip()
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
-        try: return datetime.strptime(s, fmt)
-        except: pass
+        try:
+            return datetime.strptime(s, fmt)
+        except:
+            pass
     try:
-        return datetime.fromisoformat(s.replace("Z",""))
+        return datetime.fromisoformat(s.replace("Z", ""))
     except:
         return None
 
-def _find_local_service_id(business_id:int, name:str) -> Optional[int]:
-    if not name: return None
+
+def _find_local_service_id(business_id: int, name: str) -> Optional[int]:
+    if not name:
+        return None
     name_norm = name.strip().lower()
     with get_conn() as con:
         # exact match
-        row = con.execute("SELECT id FROM services WHERE business_id=? AND lower(name)=?", (business_id, name_norm)).fetchone()
-        if row: return int(row["id"])
+        row = con.execute(
+            "SELECT id FROM services WHERE business_id=? AND lower(name)=?",
+            (business_id, name_norm),
+        ).fetchone()
+        if row:
+            return int(row["id"])
         # prefix or contains
-        row = con.execute("SELECT id,name FROM services WHERE business_id=? ORDER BY name", (business_id,)).fetchall()
+        row = con.execute(
+            "SELECT id,name FROM services WHERE business_id=? ORDER BY name", (business_id,)
+        ).fetchall()
     for r in row:
         n = r["name"].strip().lower()
         if n.startswith(name_norm) or name_norm in n:
             return int(r["id"])
     return None
 
-def _pick_slot_near(provider, service_id:Optional[int], date_pref:datetime) -> Optional[str]:
+
+def _pick_slot_near(provider, service_id: Optional[int], date_pref: datetime) -> Optional[str]:
     # try preferred date, else today/tomorrow
-    for day in [date_pref, date_pref or datetime.now(), datetime.now(), datetime.now()+timedelta(days=1)]:
+    for day in [
+        date_pref,
+        date_pref or datetime.now(),
+        datetime.now(),
+        datetime.now() + timedelta(days=1),
+    ]:
         date_str = day.strftime("%Y-%m-%d")
         slots = provider.fetch_slots(service_id, date_str) or []
-        if not slots: 
+        if not slots:
             continue
         if date_pref:
             # choose slot closest to requested time
             target = date_pref
+
             def dist(s):
-                try: return abs((datetime.strptime(s, "%Y-%m-%d %H:%M") - target).total_seconds())
-                except: return 10**12
+                try:
+                    return abs((datetime.strptime(s, "%Y-%m-%d %H:%M") - target).total_seconds())
+                except:
+                    return 10**12
+
             slots.sort(key=dist)
         return slots[0]
     return None
@@ -86,11 +111,9 @@ def _pick_slot_near(provider, service_id:Optional[int], date_pref:datetime) -> O
 # Real-Time Availability Checking
 # ============================================================================
 
+
 def get_available_slots_for_day(
-    business_id: int,
-    date_str: str,
-    service_name: Optional[str] = None,
-    limit: int = 10
+    business_id: int, date_str: str, service_name: Optional[str] = None, limit: int = 10
 ) -> list:
     """Get available time slots for a specific day.
 
@@ -116,7 +139,7 @@ def get_available_slots_for_day(
         with get_conn() as con:
             row = con.execute(
                 "SELECT id FROM services WHERE business_id = ? AND active = 1 LIMIT 1",
-                (business_id,)
+                (business_id,),
             ).fetchone()
             if row:
                 service_id = row["id"]
@@ -139,10 +162,7 @@ def get_available_slots_for_day(
 
 
 def get_next_available_slots(
-    business_id: int,
-    service_name: Optional[str] = None,
-    num_slots: int = 5,
-    days_ahead: int = 7
+    business_id: int, service_name: Optional[str] = None, num_slots: int = 5, days_ahead: int = 7
 ) -> list:
     """Get the next available slots across multiple days.
 
@@ -165,7 +185,7 @@ def get_next_available_slots(
         with get_conn() as con:
             row = con.execute(
                 "SELECT id FROM services WHERE business_id = ? AND active = 1 LIMIT 1",
-                (business_id,)
+                (business_id,),
             ).fetchone()
             if row:
                 service_id = row["id"]
@@ -209,20 +229,13 @@ def get_next_available_slots(
             total_slots += 1
 
         if times:
-            results.append({
-                "day": day_name,
-                "date": date_str,
-                "times": times
-            })
+            results.append({"day": day_name, "date": date_str, "times": times})
 
     return results
 
 
 def check_time_available(
-    business_id: int,
-    date_str: str,
-    time_str: str,
-    service_name: Optional[str] = None
+    business_id: int, date_str: str, time_str: str, service_name: Optional[str] = None
 ) -> Tuple[bool, Optional[str]]:
     """Check if a specific time slot is available.
 
@@ -244,8 +257,7 @@ def check_time_available(
         if service_id:
             with get_conn() as con:
                 row = con.execute(
-                    "SELECT duration_min FROM services WHERE id = ?",
-                    (service_id,)
+                    "SELECT duration_min FROM services WHERE id = ?", (service_id,)
                 ).fetchone()
                 if row:
                     duration_min = row["duration_min"]
@@ -288,6 +300,7 @@ def format_availability_for_voice(business_id: int, service_name: Optional[str] 
 # Pending Booking Management (Confirmation Flow)
 # ============================================================================
 
+
 def _generate_booking_token(business_id: int, session_id: int) -> str:
     """Generate a unique token for a pending booking."""
     data = f"{business_id}:{session_id}:{time.time()}:{id(object())}"
@@ -298,7 +311,8 @@ def _cleanup_expired_bookings() -> None:
     """Remove expired pending bookings to prevent memory bloat."""
     now = time.time()
     expired = [
-        token for token, data in _PENDING_BOOKINGS.items()
+        token
+        for token, data in _PENDING_BOOKINGS.items()
         if now - data.get("created_at", 0) > PENDING_BOOKING_TTL
     ]
     for token in expired:
@@ -307,9 +321,7 @@ def _cleanup_expired_bookings() -> None:
 
 
 def extract_pending_booking(
-    text: str,
-    business: Dict,
-    session_id: Optional[int]
+    text: str, business: Dict, session_id: Optional[int]
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """
     Extract booking data from AI response without committing.
@@ -334,7 +346,11 @@ def extract_pending_booking(
     except json.JSONDecodeError as e:
         logger.warning(f"Invalid booking JSON in AI response: {e}")
         clean_text = BOOKING_TAG.sub("", text).strip()
-        return clean_text + "\n\n[I tried to create a booking but encountered an issue. Could you please provide your details again?]", None
+        return (
+            clean_text
+            + "\n\n[I tried to create a booking but encountered an issue. Could you please provide your details again?]",
+            None,
+        )
 
     # Extract and normalize fields
     name = (payload.get("name") or "").strip() or None
@@ -376,14 +392,16 @@ def extract_pending_booking(
 
     # Find available slot
     chosen_slot = _pick_slot_near(
-        provider,
-        local_service_id if provider.key == "local" else svc_id,
-        when_dt or datetime.now()
+        provider, local_service_id if provider.key == "local" else svc_id, when_dt or datetime.now()
     )
 
     if not chosen_slot:
         clean_text = BOOKING_TAG.sub("", text).strip()
-        return clean_text + "\n\n[I couldn't find any available slots for that time. Would you like to try a different date or time?]", None
+        return (
+            clean_text
+            + "\n\n[I couldn't find any available slots for that time. Would you like to try a different date or time?]",
+            None,
+        )
 
     # Generate token and store pending booking
     token = _generate_booking_token(bid, session_id or 0)
@@ -436,7 +454,11 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
     _cleanup_expired_bookings()
 
     if token not in _PENDING_BOOKINGS:
-        return False, "Booking has expired or was already processed. Please start a new booking.", None
+        return (
+            False,
+            "Booking has expired or was already processed. Please start a new booking.",
+            None,
+        )
 
     pending = _PENDING_BOOKINGS.pop(token)
 
@@ -458,13 +480,18 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
     # Create booking on external provider if applicable
     external_id = None
     try:
-        result = provider.create_booking({
-            "customer_name": pending.get("customer_name"),
-            "phone": pending.get("phone"),
-            "service_id": local_service_id if provider.key == "local" else svc_id,
-            "service_name": pending.get("service_name"),
-            "start_at": chosen_slot,
-        }) or {}
+        result = (
+            provider.create_booking(
+                {
+                    "customer_name": pending.get("customer_name"),
+                    "phone": pending.get("phone"),
+                    "service_id": local_service_id if provider.key == "local" else svc_id,
+                    "service_name": pending.get("service_name"),
+                    "start_at": chosen_slot,
+                }
+            )
+            or {}
+        )
         external_id = result.get("external_id")
     except Exception as e:
         logger.warning(f"External provider booking failed: {e}")
@@ -478,13 +505,10 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
 
     try:
         from customers_bp import find_or_create_customer
+
         if name or email or phone:
             customer_id = find_or_create_customer(
-                business_id=bid,
-                name=name,
-                email=email,
-                phone=phone,
-                source="ai_booking"
+                business_id=bid, name=name, email=email, phone=phone, source="ai_booking"
             )
             if customer_id:
                 logger.info(f"Linked confirmed booking to customer {customer_id}")
@@ -507,7 +531,7 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
             external_id=external_id,
             source="ai",
             customer_id=customer_id,
-            con=con
+            con=con,
         )
 
     # Schedule reminders
@@ -517,10 +541,12 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
                 appointment_id=appt_id,
                 start_at=chosen_slot,
                 customer_email=email,
-                customer_phone=phone
+                customer_phone=phone,
             )
             if reminder_ids:
-                logger.info(f"Scheduled {len(reminder_ids)} reminders for confirmed booking {appt_id}")
+                logger.info(
+                    f"Scheduled {len(reminder_ids)} reminders for confirmed booking {appt_id}"
+                )
         except Exception as e:
             logger.warning(f"Failed to schedule reminders for booking {appt_id}: {e}")
 
@@ -531,11 +557,19 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
         confirm_msg += f" Reference: {external_id}"
 
     logger.info(f"Confirmed booking {appt_id} from pending token {token[:8]}...")
-    _emit("booking.created", bid, {
-        "appointment_id": appt_id, "service": pending.get("service_name"),
-        "start_at": chosen_slot, "customer_name": name, "phone": phone, "email": email,
-        "source": "ai",
-    })
+    _emit(
+        "booking.created",
+        bid,
+        {
+            "appointment_id": appt_id,
+            "service": pending.get("service_name"),
+            "start_at": chosen_slot,
+            "customer_name": name,
+            "phone": phone,
+            "email": email,
+            "source": "ai",
+        },
+    )
     return True, confirm_msg, appt_id
 
 
@@ -551,7 +585,9 @@ def cancel_pending_booking(token: str) -> Tuple[bool, str]:
     """
     if token in _PENDING_BOOKINGS:
         pending = _PENDING_BOOKINGS.pop(token)
-        logger.info(f"Cancelled pending booking {token[:8]}... for session {pending.get('session_id')}")
+        logger.info(
+            f"Cancelled pending booking {token[:8]}... for session {pending.get('session_id')}"
+        )
         return True, "Booking cancelled. Let me know if you'd like to book a different time."
 
     return False, "No pending booking found to cancel."
@@ -585,8 +621,11 @@ def find_upcoming_appointments(
 ) -> list:
     """Return a business's upcoming (pending/confirmed, future) appointments,
     optionally filtered by phone, session, or a specific id. Most-recent first."""
-    clauses = ["business_id = ?", "status IN ('pending','confirmed')",
-               "datetime(start_at) > datetime('now')"]
+    clauses = [
+        "business_id = ?",
+        "status IN ('pending','confirmed')",
+        "datetime(start_at) > datetime('now')",
+    ]
     params: list = [business_id]
     if appointment_id is not None:
         clauses.append("id = ?")
@@ -597,9 +636,11 @@ def find_upcoming_appointments(
     if session_id is not None and not phone and appointment_id is None:
         clauses.append("session_id = ?")
         params.append(session_id)
-    q = (f"SELECT id, customer_name, phone, service, start_at, status, customer_id "
-         f"FROM appointments WHERE {' AND '.join(clauses)} "
-         f"ORDER BY datetime(start_at) ASC LIMIT ?")
+    q = (
+        f"SELECT id, customer_name, phone, service, start_at, status, customer_id "
+        f"FROM appointments WHERE {' AND '.join(clauses)} "
+        f"ORDER BY datetime(start_at) ASC LIMIT ?"
+    )
     params.append(limit)
     with get_conn() as con:
         return [dict(r) for r in con.execute(q, tuple(params)).fetchall()]
@@ -624,8 +665,10 @@ def _resolve_target_appointment(business_id, payload, session_id):
         business_id, phone=phone, session_id=session_id, appointment_id=appt_id
     )
     if not candidates:
-        return None, ("I couldn't find an upcoming appointment to change. "
-                      "Could you confirm the phone number it was booked under?")
+        return None, (
+            "I couldn't find an upcoming appointment to change. "
+            "Could you confirm the phone number it was booked under?"
+        )
 
     # Narrow by service / date when provided.
     if len(candidates) > 1 and service:
@@ -641,8 +684,9 @@ def _resolve_target_appointment(business_id, payload, session_id):
 
     if len(candidates) > 1:
         listing = "; ".join(f"{c['service']} on {c['start_at']}" for c in candidates[:4])
-        return None, ("You have more than one upcoming appointment "
-                      f"({listing}). Which one did you mean?")
+        return None, (
+            f"You have more than one upcoming appointment ({listing}). Which one did you mean?"
+        )
     return candidates[0], None
 
 
@@ -679,10 +723,13 @@ def extract_pending_change(
     if action == "reschedule":
         new_dt = _parse_when(payload.get("new_datetime") or payload.get("new_when") or "")
         if not new_dt:
-            return (clean_text + "\n\nWhat date and time would you like to move it to?").strip(), None
+            return (
+                clean_text + "\n\nWhat date and time would you like to move it to?"
+            ).strip(), None
         new_slot = new_dt.strftime("%Y-%m-%d %H:%M")
         # Verify the new slot is free (excluding the appointment being moved).
         from core.db import check_slot_available
+
         duration = 30
         sid = _find_local_service_id(bid, appt.get("service") or "")
         if sid:
@@ -691,11 +738,13 @@ def extract_pending_change(
                 if r and r["duration_min"]:
                     duration = r["duration_min"]
         if not check_slot_available(bid, new_slot, duration, exclude_appointment_id=appt["id"]):
-            alt = get_available_slots_for_day(bid, new_dt.strftime("%Y-%m-%d"),
-                                              appt.get("service"), limit=1)
+            alt = get_available_slots_for_day(
+                bid, new_dt.strftime("%Y-%m-%d"), appt.get("service"), limit=1
+            )
             sug = f" The closest free time I can see is {alt[0]}." if alt else ""
-            return (clean_text + f"\n\nThat time isn't available.{sug} "
-                    "Would another time work?").strip(), None
+            return (
+                clean_text + f"\n\nThat time isn't available.{sug} Would another time work?"
+            ).strip(), None
 
     token = _generate_booking_token(bid, session_id or 0)
     now = time.time()
@@ -728,8 +777,9 @@ def extract_pending_change(
 
 def _cleanup_expired_changes() -> None:
     now = time.time()
-    for tok in [t for t, d in _PENDING_CHANGES.items()
-                if now - d.get("created_at", 0) > PENDING_BOOKING_TTL]:
+    for tok in [
+        t for t, d in _PENDING_CHANGES.items() if now - d.get("created_at", 0) > PENDING_BOOKING_TTL
+    ]:
         del _PENDING_CHANGES[tok]
 
 
@@ -756,6 +806,7 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
         return False, "That request has expired. Please tell me again what you'd like to change."
 
     from core.db import update_appointment_status
+
     appt_id = change["appointment_id"]
     action = change["action"]
 
@@ -766,13 +817,20 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
         if REMINDERS_AVAILABLE:
             try:
                 from core.reminders import cancel_reminders_for_appointment
+
                 cancel_reminders_for_appointment(appt_id)
             except Exception as e:
                 logger.warning(f"Failed to cancel reminders for {appt_id}: {e}")
-        _emit("appointment.cancelled", change["business_id"], {
-            "appointment_id": appt_id, "service": change.get("service"),
-            "start_at": change.get("old_slot"), "phone": change.get("phone"),
-        })
+        _emit(
+            "appointment.cancelled",
+            change["business_id"],
+            {
+                "appointment_id": appt_id,
+                "service": change.get("service"),
+                "start_at": change.get("old_slot"),
+                "phone": change.get("phone"),
+            },
+        )
         svc = change.get("service") or "your appointment"
         return True, f"Done — your {svc} on {change.get('old_slot')} has been cancelled."
 
@@ -791,14 +849,23 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
     if REMINDERS_AVAILABLE:
         try:
             from core.reminders import reschedule_reminders_for_appointment
-            reschedule_reminders_for_appointment(appt_id, new_slot, customer_phone=change.get("phone"))
+
+            reschedule_reminders_for_appointment(
+                appt_id, new_slot, customer_phone=change.get("phone")
+            )
         except Exception as e:
             logger.warning(f"Failed to reschedule reminders for {appt_id}: {e}")
-    _emit("appointment.rescheduled", change["business_id"], {
-        "appointment_id": appt_id, "service": change.get("service"),
-        "old_start_at": change.get("old_slot"), "start_at": new_slot,
-        "phone": change.get("phone"),
-    })
+    _emit(
+        "appointment.rescheduled",
+        change["business_id"],
+        {
+            "appointment_id": appt_id,
+            "service": change.get("service"),
+            "old_start_at": change.get("old_slot"),
+            "start_at": new_slot,
+            "phone": change.get("phone"),
+        },
+    )
     svc = change.get("service") or "your appointment"
     return True, f"All set — your {svc} has been moved to {new_slot}."
 
@@ -807,7 +874,8 @@ def confirm_pending_change(token: str) -> Tuple[bool, str]:
 # Legacy Auto-Commit Flow (for backward compatibility)
 # ============================================================================
 
-def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> Tuple[str,bool]:
+
+def maybe_commit_booking(text: str, business: Dict, session_id: Optional[int]) -> Tuple[str, bool]:
     """
     Scan text for <BOOKING>{...}</BOOKING>, validate via provider, insert into DB,
     and return (possibly updated_text, committed:bool).
@@ -821,12 +889,12 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
     except Exception:
         return text + "\n\n[Note: booking details detected but invalid JSON.]", False
 
-    name  = (payload.get("name")  or "").strip() or None
+    name = (payload.get("name") or "").strip() or None
     phone = (payload.get("phone") or "").strip() or None
     svc_name = (payload.get("service") or "").strip() or None
-    svc_id   = payload.get("service_id")
+    svc_id = payload.get("service_id")
     when_raw = payload.get("datetime") or payload.get("when") or ""
-    when_dt  = _parse_when(when_raw)
+    when_dt = _parse_when(when_raw)
 
     bid = int(business["id"])
     provider = get_business_provider(bid)
@@ -851,27 +919,35 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
                 nm = svc_name.strip().lower()
                 for s in services:
                     if s["name"].strip().lower().startswith(nm) or nm in s["name"].strip().lower():
-                        ext_id = s["id"]; break
+                        ext_id = s["id"]
+                        break
             svc_id = ext_id
         except Exception:
             pass
 
     # Choose an actual free slot
     # For local: pass local_service_id; for external: pass provider's service id
-    chosen_slot = _pick_slot_near(provider, local_service_id if provider.key=="local" else svc_id, when_dt or datetime.now())
+    chosen_slot = _pick_slot_near(
+        provider, local_service_id if provider.key == "local" else svc_id, when_dt or datetime.now()
+    )
     if not chosen_slot:
         return text + "\n\n[Note: booking details detected but no free slots found.]", False
 
     # Create booking on provider (optional) and save locally
     external_id = None
     try:
-        result = provider.create_booking({
-            "customer_name": name,
-            "phone": phone,
-            "service_id": local_service_id if provider.key=="local" else svc_id,
-            "service_name": svc_name,
-            "start_at": chosen_slot,
-        }) or {}
+        result = (
+            provider.create_booking(
+                {
+                    "customer_name": name,
+                    "phone": phone,
+                    "service_id": local_service_id if provider.key == "local" else svc_id,
+                    "service_name": svc_name,
+                    "start_at": chosen_slot,
+                }
+            )
+            or {}
+        )
         external_id = result.get("external_id")
     except Exception:
         external_id = None
@@ -882,13 +958,10 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
     try:
         # Import here to avoid circular imports
         from customers_bp import find_or_create_customer
+
         if name or email or phone:
             customer_id = find_or_create_customer(
-                business_id=bid,
-                name=name,
-                email=email,
-                phone=phone,
-                source="ai_booking"
+                business_id=bid, name=name, email=email, phone=phone, source="ai_booking"
             )
             if customer_id:
                 logger.info(f"Linked booking to customer {customer_id}")
@@ -911,7 +984,7 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
             external_id=external_id,
             source="ai",
             customer_id=customer_id,
-            con=con
+            con=con,
         )
 
     # Schedule reminders for the appointment
@@ -921,7 +994,7 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
                 appointment_id=appt_id,
                 start_at=chosen_slot,
                 customer_email=email,
-                customer_phone=phone
+                customer_phone=phone,
             )
             if reminder_ids:
                 logger.info(f"Scheduled {len(reminder_ids)} reminders for AI booking {appt_id}")
@@ -930,9 +1003,12 @@ def maybe_commit_booking(text:str, business:Dict, session_id:Optional[int]) -> T
 
     # Build confirmation text
     confirm = f"\n\n✅ Booking saved for **{svc_name or 'selected service'}** at **{chosen_slot}**"
-    if name: confirm += f" under **{name}**"
-    if phone: confirm += f" ({phone})"
-    if external_id: confirm += f". Ref: {external_id}"
+    if name:
+        confirm += f" under **{name}**"
+    if phone:
+        confirm += f" ({phone})"
+    if external_id:
+        confirm += f". Ref: {external_id}"
     confirm += "."
 
     # Remove the <BOOKING> tag from the visible reply (optional)

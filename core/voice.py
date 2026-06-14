@@ -1,26 +1,24 @@
 # core/voice.py — Voice call management with Retell AI integration
 # Handles inbound/outbound calls, transcripts, and voice booking confirmation
 
-import os
-import re
-import json
-import hmac
 import hashlib
+import hmac
+import json
 import logging
+import re
 import time
 from datetime import datetime
-from typing import Optional, Dict, List, Any, Tuple
 from threading import Lock
+from typing import Dict, List, Optional, Tuple
 
+from core.circuit_breaker import CircuitBreaker
 from core.settings import (
     RETELL_API_KEY,
-    RETELL_WEBHOOK_SECRET,
     RETELL_DEFAULT_AGENT_ID,
-    VOICE_TRANSFER_TIMEOUT,
-    VOICE_MAX_DURATION,
+    RETELL_WEBHOOK_SECRET,
     VOICE_RECORDING_ENABLED,
+    VOICE_TRANSFER_TIMEOUT,
 )
-from core.circuit_breaker import CircuitBreaker, CircuitState
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +31,18 @@ RETELL_API_VERSION = "v2"
 
 # Voice booking confirmation patterns
 VOICE_CONFIRM_PATTERNS = [
-    r'\b(yes|yeah|yep|yup|sure|okay|ok|confirm|book it|go ahead|sounds good|perfect|great|please do|do it)\b',
-    r'\b(that works|that\'s fine|absolutely|definitely|correct)\b',
+    r"\b(yes|yeah|yep|yup|sure|okay|ok|confirm|book it|go ahead|sounds good|perfect|great|please do|do it)\b",
+    r"\b(that works|that\'s fine|absolutely|definitely|correct)\b",
 ]
 
 VOICE_CANCEL_PATTERNS = [
-    r'\b(no|nope|cancel|nevermind|never mind|forget it|wait|hold on|stop)\b',
-    r'\b(different time|change|reschedule|not that|wrong)\b',
+    r"\b(no|nope|cancel|nevermind|never mind|forget it|wait|hold on|stop)\b",
+    r"\b(different time|change|reschedule|not that|wrong)\b",
 ]
 
 # Compile patterns for performance
-_CONFIRM_RE = re.compile('|'.join(VOICE_CONFIRM_PATTERNS), re.IGNORECASE)
-_CANCEL_RE = re.compile('|'.join(VOICE_CANCEL_PATTERNS), re.IGNORECASE)
+_CONFIRM_RE = re.compile("|".join(VOICE_CONFIRM_PATTERNS), re.IGNORECASE)
+_CANCEL_RE = re.compile("|".join(VOICE_CANCEL_PATTERNS), re.IGNORECASE)
 
 # ============================================================================
 # Circuit Breaker for Voice
@@ -65,9 +63,7 @@ def get_voice_circuit_breaker() -> CircuitBreaker:
     with _voice_breaker_lock:
         if _voice_circuit_breaker is None:
             _voice_circuit_breaker = CircuitBreaker(
-                failure_threshold=3,
-                recovery_timeout=120,
-                half_open_requests=1
+                failure_threshold=3, recovery_timeout=120, half_open_requests=1
             )
         return _voice_circuit_breaker
 
@@ -76,9 +72,13 @@ def get_voice_circuit_breaker() -> CircuitBreaker:
 # Retell API Client
 # ============================================================================
 
+
 class RetellClientError(Exception):
     """Error from Retell API."""
-    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None):
+
+    def __init__(
+        self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None
+    ):
         self.message = message
         self.status_code = status_code
         self.response = response
@@ -100,19 +100,15 @@ class RetellClient:
 
     def __init__(self, api_key: str, base_url: str = RETELL_BASE_URL):
         self.api_key = api_key
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self._breaker = get_voice_circuit_breaker()
 
     def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        data: Optional[Dict] = None,
-        params: Optional[Dict] = None
+        self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None
     ) -> Dict:
         """Make an API request with circuit breaker protection."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         # Check circuit breaker
         if self._breaker.is_open("retell:api"):
@@ -129,32 +125,25 @@ class RetellClient:
             "Content-Type": "application/json",
         }
 
-        body = json.dumps(data).encode('utf-8') if data else None
+        body = json.dumps(data).encode("utf-8") if data else None
 
         try:
-            req = urllib.request.Request(
-                url,
-                data=body,
-                headers=headers,
-                method=method.upper()
-            )
+            req = urllib.request.Request(url, data=body, headers=headers, method=method.upper())
 
             with urllib.request.urlopen(req, timeout=30) as resp:
                 self._breaker.record_success("retell:api")
-                response_body = resp.read().decode('utf-8')
+                response_body = resp.read().decode("utf-8")
                 return json.loads(response_body) if response_body else {}
 
         except urllib.error.HTTPError as e:
             self._breaker.record_failure("retell:api", str(e))
-            error_body = e.read().decode('utf-8') if e.fp else ""
+            error_body = e.read().decode("utf-8") if e.fp else ""
             try:
                 error_data = json.loads(error_body)
             except json.JSONDecodeError:
                 error_data = {"raw": error_body}
             raise RetellClientError(
-                f"Retell API error: {e.code}",
-                status_code=e.code,
-                response=error_data
+                f"Retell API error: {e.code}", status_code=e.code, response=error_data
             )
         except urllib.error.URLError as e:
             self._breaker.record_failure("retell:api", str(e))
@@ -169,7 +158,7 @@ class RetellClient:
         to_number: str,
         agent_id: str,
         metadata: Optional[Dict] = None,
-        retell_llm_dynamic_variables: Optional[Dict] = None
+        retell_llm_dynamic_variables: Optional[Dict] = None,
     ) -> Dict:
         """Create an outbound phone call.
 
@@ -199,7 +188,7 @@ class RetellClient:
         self,
         agent_id: str,
         metadata: Optional[Dict] = None,
-        retell_llm_dynamic_variables: Optional[Dict] = None
+        retell_llm_dynamic_variables: Optional[Dict] = None,
     ) -> Dict:
         """Create a web call (browser-based).
 
@@ -219,10 +208,7 @@ class RetellClient:
         return self._make_request("GET", f"get-call/{call_id}")
 
     def list_calls(
-        self,
-        agent_id: Optional[str] = None,
-        limit: int = 50,
-        sort_order: str = "descending"
+        self, agent_id: Optional[str] = None, limit: int = 50, sort_order: str = "descending"
     ) -> List[Dict]:
         """List calls, optionally filtered by agent."""
         params = {"limit": limit, "sort_order": sort_order}
@@ -265,6 +251,7 @@ def is_retell_configured() -> bool:
 # Webhook Signature Verification
 # ============================================================================
 
+
 def verify_retell_signature(payload: bytes, signature: str, secret: Optional[str] = None) -> bool:
     """Verify Retell webhook signature using HMAC-SHA256.
 
@@ -286,11 +273,7 @@ def verify_retell_signature(payload: bytes, signature: str, secret: Optional[str
         return False
 
     try:
-        expected = hmac.new(
-            secret.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
     except Exception as e:
         logger.error(f"Signature verification error: {e}")
@@ -301,11 +284,8 @@ def verify_retell_signature(payload: bytes, signature: str, secret: Optional[str
 # Voice Session Management
 # ============================================================================
 
-def get_or_create_voice_session(
-    business_id: int,
-    phone_number: str,
-    call_id: str
-) -> int:
+
+def get_or_create_voice_session(business_id: int, phone_number: str, call_id: str) -> int:
     """Get existing voice session or create new one.
 
     Reuses sessions from same phone number within 24 hours.
@@ -322,12 +302,15 @@ def get_or_create_voice_session(
 
     # Look for recent session from same number
     with get_conn() as con:
-        row = con.execute("""
+        row = con.execute(
+            """
             SELECT id FROM sessions
             WHERE business_id = ? AND phone = ? AND channel = 'voice'
               AND datetime(created_at) > datetime('now', '-24 hours')
             ORDER BY created_at DESC LIMIT 1
-        """, (business_id, phone_number)).fetchone()
+        """,
+            (business_id, phone_number),
+        ).fetchone()
 
         if row:
             logger.debug(f"Reusing voice session {row['id']} for {phone_number}")
@@ -338,7 +321,7 @@ def get_or_create_voice_session(
         cur = con.cursor()
         cur.execute(
             "INSERT INTO sessions(business_id, channel, phone) VALUES(?, 'voice', ?)",
-            (business_id, phone_number)
+            (business_id, phone_number),
         )
         session_id = cur.lastrowid
         logger.info(f"Created new voice session {session_id} for business {business_id}")
@@ -352,7 +335,7 @@ def create_voice_call_record(
     direction: str,
     from_number: str,
     to_number: str,
-    retell_agent_id: Optional[str] = None
+    retell_agent_id: Optional[str] = None,
 ) -> int:
     """Create a voice_calls record for tracking.
 
@@ -363,15 +346,23 @@ def create_voice_call_record(
 
     with transaction() as con:
         cur = con.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO voice_calls(
                 business_id, session_id, retell_call_id, retell_agent_id,
                 direction, from_number, to_number, call_status, started_at
             ) VALUES(?, ?, ?, ?, ?, ?, ?, 'ongoing', datetime('now'))
-        """, (
-            business_id, session_id, retell_call_id, retell_agent_id,
-            direction, from_number, to_number
-        ))
+        """,
+            (
+                business_id,
+                session_id,
+                retell_call_id,
+                retell_agent_id,
+                direction,
+                from_number,
+                to_number,
+            ),
+        )
         return cur.lastrowid
 
 
@@ -380,12 +371,28 @@ def update_voice_call(retell_call_id: str, **fields) -> bool:
     from core.db import transaction
 
     allowed = {
-        "call_status", "ended_at", "duration_seconds", "transcript",
-        "transcript_json", "call_summary", "sentiment", "recording_url",
-        "recording_duration_seconds", "booking_discussed", "booking_confirmed",
-        "appointment_id", "transferred", "transfer_number", "transfer_reason",
-        "cost_cents", "customer_id",
-        "call_intent", "call_outcome", "action_items", "caller_message", "containment",
+        "call_status",
+        "ended_at",
+        "duration_seconds",
+        "transcript",
+        "transcript_json",
+        "call_summary",
+        "sentiment",
+        "recording_url",
+        "recording_duration_seconds",
+        "booking_discussed",
+        "booking_confirmed",
+        "appointment_id",
+        "transferred",
+        "transfer_number",
+        "transfer_reason",
+        "cost_cents",
+        "customer_id",
+        "call_intent",
+        "call_outcome",
+        "action_items",
+        "caller_message",
+        "containment",
     }
 
     safe_fields = {k: v for k, v in fields.items() if k in allowed}
@@ -401,8 +408,7 @@ def update_voice_call(retell_call_id: str, **fields) -> bool:
     try:
         with transaction() as con:
             con.execute(
-                f"UPDATE voice_calls SET {', '.join(cols)} WHERE retell_call_id=?",
-                tuple(vals)
+                f"UPDATE voice_calls SET {', '.join(cols)} WHERE retell_call_id=?", tuple(vals)
             )
         return True
     except Exception as e:
@@ -416,8 +422,7 @@ def get_voice_call(retell_call_id: str) -> Optional[Dict]:
 
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM voice_calls WHERE retell_call_id = ?",
-            (retell_call_id,)
+            "SELECT * FROM voice_calls WHERE retell_call_id = ?", (retell_call_id,)
         ).fetchone()
         return dict(row) if row else None
 
@@ -425,6 +430,7 @@ def get_voice_call(retell_call_id: str) -> Optional[Dict]:
 # ============================================================================
 # Voice Settings
 # ============================================================================
+
 
 def get_voice_settings(business_id: int) -> Dict:
     """Get voice settings for a business, with defaults."""
@@ -454,8 +460,7 @@ def get_voice_settings(business_id: int) -> Dict:
 
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM voice_settings WHERE business_id = ?",
-            (business_id,)
+            "SELECT * FROM voice_settings WHERE business_id = ?", (business_id,)
         ).fetchone()
 
         if row:
@@ -465,9 +470,15 @@ def get_voice_settings(business_id: int) -> Dict:
                 if key not in settings or settings[key] is None:
                     settings[key] = value
             # Convert integers to bools
-            for bool_key in ["transfer_enabled", "after_hours_enabled", "after_hours_voicemail",
-                           "recording_enabled", "transcript_enabled", "booking_enabled",
-                           "booking_confirmation_required"]:
+            for bool_key in [
+                "transfer_enabled",
+                "after_hours_enabled",
+                "after_hours_voicemail",
+                "recording_enabled",
+                "transcript_enabled",
+                "booking_enabled",
+                "booking_confirmation_required",
+            ]:
                 if bool_key in settings:
                     settings[bool_key] = bool(settings[bool_key])
             return settings
@@ -480,13 +491,24 @@ def update_voice_settings(business_id: int, **fields) -> bool:
     from core.db import transaction
 
     allowed = {
-        "retell_agent_id", "retell_phone_number", "voice_id",
-        "voice_speed", "voice_pitch", "greeting_message",
-        "transfer_message", "voicemail_message", "transfer_enabled",
-        "transfer_number", "transfer_after_seconds",
-        "after_hours_enabled", "after_hours_message", "after_hours_voicemail",
-        "recording_enabled", "transcript_enabled",
-        "booking_enabled", "booking_confirmation_required"
+        "retell_agent_id",
+        "retell_phone_number",
+        "voice_id",
+        "voice_speed",
+        "voice_pitch",
+        "greeting_message",
+        "transfer_message",
+        "voicemail_message",
+        "transfer_enabled",
+        "transfer_number",
+        "transfer_after_seconds",
+        "after_hours_enabled",
+        "after_hours_message",
+        "after_hours_voicemail",
+        "recording_enabled",
+        "transcript_enabled",
+        "booking_enabled",
+        "booking_confirmation_required",
     }
 
     safe_fields = {k: v for k, v in fields.items() if k in allowed}
@@ -497,8 +519,7 @@ def update_voice_settings(business_id: int, **fields) -> bool:
         with transaction() as con:
             # Check if exists
             exists = con.execute(
-                "SELECT 1 FROM voice_settings WHERE business_id = ?",
-                (business_id,)
+                "SELECT 1 FROM voice_settings WHERE business_id = ?", (business_id,)
             ).fetchone()
 
             if exists:
@@ -507,8 +528,7 @@ def update_voice_settings(business_id: int, **fields) -> bool:
                 cols.append("updated_at=datetime('now')")
                 vals = list(safe_fields.values()) + [business_id]
                 con.execute(
-                    f"UPDATE voice_settings SET {', '.join(cols)} WHERE business_id=?",
-                    tuple(vals)
+                    f"UPDATE voice_settings SET {', '.join(cols)} WHERE business_id=?", tuple(vals)
                 )
             else:
                 # Insert
@@ -518,7 +538,7 @@ def update_voice_settings(business_id: int, **fields) -> bool:
                 vals = list(safe_fields.values())
                 con.execute(
                     f"INSERT INTO voice_settings({', '.join(cols)}) VALUES({', '.join(placeholders)})",
-                    tuple(vals)
+                    tuple(vals),
                 )
         return True
     except Exception as e:
@@ -575,14 +595,14 @@ def extract_voice_booking(ai_response: str, call_id: str) -> Tuple[str, Optional
     """
     import re
 
-    pattern = r'<VOICE_BOOKING>(.*?)</VOICE_BOOKING>'
+    pattern = r"<VOICE_BOOKING>(.*?)</VOICE_BOOKING>"
     match = re.search(pattern, ai_response, re.DOTALL)
 
     if not match:
         return ai_response, None
 
     # Remove the tag from response
-    cleaned = re.sub(pattern, '', ai_response).strip()
+    cleaned = re.sub(pattern, "", ai_response).strip()
 
     try:
         booking_json = match.group(1).strip()
@@ -610,16 +630,18 @@ def detect_booking_response(transcript: str) -> Optional[str]:
 
     # Check cancel first (more specific patterns)
     if _CANCEL_RE.search(text):
-        return 'cancel'
+        return "cancel"
 
     # Then check confirm
     if _CONFIRM_RE.search(text):
-        return 'confirm'
+        return "confirm"
 
     return None
 
 
-def confirm_voice_booking(call_id: str, business_id: int, session_id: int) -> Tuple[bool, str, Optional[int]]:
+def confirm_voice_booking(
+    call_id: str, business_id: int, session_id: int
+) -> Tuple[bool, str, Optional[int]]:
     """Confirm a pending voice booking.
 
     Args:
@@ -630,8 +652,8 @@ def confirm_voice_booking(call_id: str, business_id: int, session_id: int) -> Tu
     Returns:
         (success, message, appointment_id or None)
     """
-    from core.db import create_appointment_atomic, get_conn
     from core.booking import get_service_duration
+    from core.db import create_appointment_atomic
 
     pending = clear_voice_pending_booking(call_id)
     if not pending:
@@ -683,6 +705,7 @@ def cancel_voice_booking(call_id: str) -> Tuple[bool, str]:
 # Caller Recognition
 # ============================================================================
 
+
 def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
     """Look up caller by phone number and return enriched customer info.
 
@@ -708,7 +731,7 @@ def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
     from core.db import get_conn
 
     # Normalize phone for matching
-    normalized = ''.join(c for c in phone if c.isdigit())
+    normalized = "".join(c for c in phone if c.isdigit())
     if len(normalized) < 7:
         return None
 
@@ -718,13 +741,12 @@ def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
     with get_conn() as con:
         # Find customer by phone
         rows = con.execute(
-            "SELECT * FROM customers WHERE business_id = ? AND phone IS NOT NULL",
-            (business_id,)
+            "SELECT * FROM customers WHERE business_id = ? AND phone IS NOT NULL", (business_id,)
         ).fetchall()
 
         customer = None
         for row in rows:
-            row_phone = ''.join(c for c in (row["phone"] or "") if c.isdigit())
+            row_phone = "".join(c for c in (row["phone"] or "") if c.isdigit())
             row_last_10 = row_phone[-10:] if len(row_phone) >= 10 else row_phone
             if row_last_10 and last_10 == row_last_10:
                 customer = dict(row)
@@ -744,7 +766,7 @@ def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
                AND status IN ('completed', 'confirmed')
                ORDER BY start_at DESC
                LIMIT 1""",
-            (business_id, f"%{last_10}%", customer.get("email"))
+            (business_id, f"%{last_10}%", customer.get("email")),
         ).fetchone()
 
         if last_appt:
@@ -754,7 +776,9 @@ def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
                 dt = datetime.fromisoformat(last_appt["start_at"].replace("Z", ""))
                 customer["last_visit"] = dt.strftime("%B %d")  # e.g., "January 15"
             except:
-                customer["last_visit"] = last_appt["start_at"][:10] if last_appt["start_at"] else None
+                customer["last_visit"] = (
+                    last_appt["start_at"][:10] if last_appt["start_at"] else None
+                )
 
         # Count total completed appointments
         count_row = con.execute(
@@ -762,14 +786,18 @@ def get_caller_info(business_id: int, phone: str) -> Optional[Dict]:
                WHERE business_id = ?
                AND (phone LIKE ? OR customer_email = ?)
                AND status IN ('completed', 'confirmed')""",
-            (business_id, f"%{last_10}%", customer.get("email"))
+            (business_id, f"%{last_10}%", customer.get("email")),
         ).fetchone()
-        customer["visit_count"] = count_row["cnt"] if count_row else customer.get("total_appointments", 0)
+        customer["visit_count"] = (
+            count_row["cnt"] if count_row else customer.get("total_appointments", 0)
+        )
 
         # Get preferred staff if we track it (future enhancement)
         customer["preferred_staff"] = None  # TODO: Add staff preference tracking
 
-        logger.info(f"Caller recognized: {customer.get('name')} (ID: {customer_id}) for business {business_id}")
+        logger.info(
+            f"Caller recognized: {customer.get('name')} (ID: {customer_id}) for business {business_id}"
+        )
         return customer
 
 
@@ -804,32 +832,32 @@ def get_caller_info_by_call_id(call_id: str) -> Optional[Dict]:
 
 # Intent detection patterns
 INTENT_STATUS_PATTERNS = [
-    r'\b(when|what time).*(my|next|upcoming).*(appointment|booking|visit)\b',
-    r'\b(do i have).*(appointment|booking|scheduled)\b',
-    r'\b(check|look up|find).*(my|the|upcoming).*(appointment|booking)s?\b',
-    r'\bmy.*(next|upcoming).*(appointment|booking)\b',
-    r'\b(am i|what\'s).*(booked|scheduled)\b',
-    r'\bupcoming.*(appointment|booking)s?\b',
+    r"\b(when|what time).*(my|next|upcoming).*(appointment|booking|visit)\b",
+    r"\b(do i have).*(appointment|booking|scheduled)\b",
+    r"\b(check|look up|find).*(my|the|upcoming).*(appointment|booking)s?\b",
+    r"\bmy.*(next|upcoming).*(appointment|booking)\b",
+    r"\b(am i|what\'s).*(booked|scheduled)\b",
+    r"\bupcoming.*(appointment|booking)s?\b",
 ]
 
 INTENT_CANCEL_PATTERNS = [
-    r'\b(cancel|canceling|cancellation).*(my|the).*(appointment|booking)\b',
-    r'\b(need to|want to|like to).*(cancel)\b',
-    r'\b(can\'t make|won\'t make|won\'t be able to make|unable to make).*(appointment|booking|it)\b',
-    r'\b(remove|delete).*(my|the).*(appointment|booking)\b',
+    r"\b(cancel|canceling|cancellation).*(my|the).*(appointment|booking)\b",
+    r"\b(need to|want to|like to).*(cancel)\b",
+    r"\b(can\'t make|won\'t make|won\'t be able to make|unable to make).*(appointment|booking|it)\b",
+    r"\b(remove|delete).*(my|the).*(appointment|booking)\b",
 ]
 
 INTENT_RESCHEDULE_PATTERNS = [
-    r'\b(reschedule|move|change|push|switch).*(my|the).*(appointment|booking)\b',
-    r'\b(need to|want to|like to).*(reschedule|move|change)\b',
-    r'\b(different|another).*(time|day|date).*(appointment|booking)\b',
-    r'\b(change|move).*(the time|the date|when)\b',
+    r"\b(reschedule|move|change|push|switch).*(my|the).*(appointment|booking)\b",
+    r"\b(need to|want to|like to).*(reschedule|move|change)\b",
+    r"\b(different|another).*(time|day|date).*(appointment|booking)\b",
+    r"\b(change|move).*(the time|the date|when)\b",
 ]
 
 # Compile patterns
-_INTENT_STATUS_RE = re.compile('|'.join(INTENT_STATUS_PATTERNS), re.IGNORECASE)
-_INTENT_CANCEL_RE = re.compile('|'.join(INTENT_CANCEL_PATTERNS), re.IGNORECASE)
-_INTENT_RESCHEDULE_RE = re.compile('|'.join(INTENT_RESCHEDULE_PATTERNS), re.IGNORECASE)
+_INTENT_STATUS_RE = re.compile("|".join(INTENT_STATUS_PATTERNS), re.IGNORECASE)
+_INTENT_CANCEL_RE = re.compile("|".join(INTENT_CANCEL_PATTERNS), re.IGNORECASE)
+_INTENT_RESCHEDULE_RE = re.compile("|".join(INTENT_RESCHEDULE_PATTERNS), re.IGNORECASE)
 
 
 def detect_appointment_intent(text: str) -> Optional[str]:
@@ -845,20 +873,16 @@ def detect_appointment_intent(text: str) -> Optional[str]:
 
     # Check in order of specificity
     if _INTENT_CANCEL_RE.search(text):
-        return 'cancel'
+        return "cancel"
     if _INTENT_RESCHEDULE_RE.search(text):
-        return 'reschedule'
+        return "reschedule"
     if _INTENT_STATUS_RE.search(text):
-        return 'status'
+        return "status"
 
     return None
 
 
-def get_caller_upcoming_appointments(
-    business_id: int,
-    phone: str,
-    limit: int = 3
-) -> List[Dict]:
+def get_caller_upcoming_appointments(business_id: int, phone: str, limit: int = 3) -> List[Dict]:
     """Get caller's upcoming appointments by phone number.
 
     Args:
@@ -875,14 +899,15 @@ def get_caller_upcoming_appointments(
     from core.db import get_conn
 
     # Normalize phone for matching
-    normalized = ''.join(c for c in phone if c.isdigit())
+    normalized = "".join(c for c in phone if c.isdigit())
     if len(normalized) < 7:
         return []
     last_10 = normalized[-10:] if len(normalized) >= 10 else normalized
 
     with get_conn() as con:
         # Find upcoming appointments for this phone
-        rows = con.execute("""
+        rows = con.execute(
+            """
             SELECT id, service, start_at, status, customer_name
             FROM appointments
             WHERE business_id = ?
@@ -891,7 +916,9 @@ def get_caller_upcoming_appointments(
               AND datetime(start_at) > datetime('now')
             ORDER BY start_at ASC
             LIMIT ?
-        """, (business_id, f"%{last_10}%", limit)).fetchall()
+        """,
+            (business_id, f"%{last_10}%", limit),
+        ).fetchall()
 
         return [dict(row) for row in rows]
 
@@ -932,10 +959,7 @@ def format_appointments_for_voice(appointments: List[Dict]) -> str:
         return "; ".join(lines)
 
 
-def get_caller_appointments_context(
-    business_id: int,
-    phone: str
-) -> Optional[str]:
+def get_caller_appointments_context(business_id: int, phone: str) -> Optional[str]:
     """Get a voice-friendly context string about caller's appointments.
 
     Used to inject into AI prompt for appointment management.
@@ -952,9 +976,7 @@ def get_caller_appointments_context(
 
 
 def cancel_caller_appointment(
-    business_id: int,
-    phone: str,
-    appointment_id: Optional[int] = None
+    business_id: int, phone: str, appointment_id: Optional[int] = None
 ) -> Tuple[bool, str, Optional[Dict]]:
     """Cancel a caller's appointment.
 
@@ -968,7 +990,7 @@ def cancel_caller_appointment(
     Returns:
         (success, message, cancelled_appointment or None)
     """
-    from core.db import get_conn, update_appointment_status
+    from core.db import update_appointment_status
     from core.reminders import cancel_reminders_for_appointment
 
     # Find the appointment
@@ -1010,7 +1032,7 @@ def reschedule_caller_appointment(
     phone: str,
     new_datetime: str,
     appointment_id: Optional[int] = None,
-    session_id: Optional[int] = None
+    session_id: Optional[int] = None,
 ) -> Tuple[bool, str, Optional[Dict]]:
     """Reschedule a caller's appointment to a new time.
 
@@ -1024,7 +1046,7 @@ def reschedule_caller_appointment(
     Returns:
         (success, message, updated_appointment or None)
     """
-    from core.db import get_conn, transaction, check_slot_available
+    from core.db import check_slot_available, get_conn, transaction
     from core.reminders import reschedule_reminders_for_appointment
 
     # Find the appointment
@@ -1047,21 +1069,22 @@ def reschedule_caller_appointment(
     with get_conn() as con:
         row = con.execute(
             "SELECT duration_min FROM services WHERE business_id = ? AND name = ?",
-            (business_id, service)
+            (business_id, service),
         ).fetchone()
         if row:
             duration = row["duration_min"]
 
     # Check if new slot is available
-    if not check_slot_available(business_id, new_datetime, duration, exclude_appointment_id=appt_id):
+    if not check_slot_available(
+        business_id, new_datetime, duration, exclude_appointment_id=appt_id
+    ):
         return False, "That time slot isn't available. Would you like to try another time?", None
 
     # Update the appointment
     try:
         with transaction() as con:
             con.execute(
-                "UPDATE appointments SET start_at = ? WHERE id = ?",
-                (new_datetime, appt_id)
+                "UPDATE appointments SET start_at = ? WHERE id = ?", (new_datetime, appt_id)
             )
 
         # Reschedule reminders
@@ -1070,7 +1093,7 @@ def reschedule_caller_appointment(
                 appt_id,
                 new_datetime,
                 customer_email=None,  # Will use existing
-                customer_phone=phone
+                customer_phone=phone,
             )
         except Exception as e:
             logger.warning(f"Could not reschedule reminders for appointment {appt_id}: {e}")
@@ -1130,7 +1153,9 @@ def clear_voice_pending_change(call_id: str) -> Optional[Dict]:
         return _VOICE_PENDING_CHANGES.pop(call_id, None)
 
 
-def confirm_voice_change(call_id: str, business_id: int, phone: str, session_id: Optional[int] = None) -> Tuple[bool, str]:
+def confirm_voice_change(
+    call_id: str, business_id: int, phone: str, session_id: Optional[int] = None
+) -> Tuple[bool, str]:
     """Confirm a pending appointment change (cancel or reschedule).
 
     Args:
@@ -1175,13 +1200,17 @@ def cancel_voice_change(call_id: str) -> Tuple[bool, str]:
     if pending:
         change_type = pending.get("type", "change")
         logger.info(f"Voice {change_type} cancelled for call {call_id}")
-        return True, f"No problem, I won't {change_type} anything. Is there something else I can help with?"
+        return (
+            True,
+            f"No problem, I won't {change_type} anything. Is there something else I can help with?",
+        )
     return False, "No pending changes to cancel."
 
 
 # ============================================================================
 # Voice Call Lifecycle
 # ============================================================================
+
 
 def handle_call_started(data: Dict) -> Dict:
     """Handle call_started webhook event.
@@ -1221,7 +1250,7 @@ def handle_call_started(data: Dict) -> Dict:
         direction=direction,
         from_number=from_number,
         to_number=to_number,
-        retell_agent_id=agent_id
+        retell_agent_id=agent_id,
     )
 
     logger.info(f"Call started: {call_id}, direction={direction}, business={business_id}")
@@ -1245,7 +1274,9 @@ def handle_call_ended(data: Dict) -> Dict:
 
     # Get transcript
     transcript = call.get("transcript") or ""
-    transcript_json = json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
+    transcript_json = (
+        json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
+    )
 
     # Get recording URL
     recording_url = call.get("recording_url")
@@ -1255,7 +1286,9 @@ def handle_call_ended(data: Dict) -> Dict:
     cost_cents = cost_data.get("total_cost_cents") if cost_data else None
 
     # Detect missed calls (< 8s with no real transcript)
-    is_missed = (duration_seconds is not None and duration_seconds < 8 and len(transcript.strip()) < 20)
+    is_missed = (
+        duration_seconds is not None and duration_seconds < 8 and len(transcript.strip()) < 20
+    )
 
     # Update call record
     update_voice_call(
@@ -1301,7 +1334,8 @@ def _trigger_missed_call_sms(caller_phone: str, business_id: int) -> None:
     def _send():
         try:
             from core.db import get_business_by_id
-            from core.sms import send_sms, TWILIO_CONFIGURED
+            from core.sms import TWILIO_CONFIGURED, send_sms
+
             if not TWILIO_CONFIGURED:
                 return
             biz = get_business_by_id(business_id)
@@ -1347,34 +1381,38 @@ def _get_business_by_phone(phone: str) -> Optional[int]:
         return None
 
     # Normalize phone (last 10 digits)
-    digits = re.sub(r'\D', '', phone)
+    digits = re.sub(r"\D", "", phone)
     last_10 = digits[-10:] if len(digits) >= 10 else digits
 
     with get_conn() as con:
         # Try voice settings first
-        row = con.execute("""
+        row = con.execute(
+            """
             SELECT business_id FROM voice_settings
             WHERE retell_phone_number LIKE ?
             LIMIT 1
-        """, (f"%{last_10}%",)).fetchone()
+        """,
+            (f"%{last_10}%",),
+        ).fetchone()
 
         if row:
             return row["business_id"]
 
         # Try escalation_phone
-        row = con.execute("""
+        row = con.execute(
+            """
             SELECT id FROM businesses
             WHERE escalation_phone LIKE ? AND archived = 0
             LIMIT 1
-        """, (f"%{last_10}%",)).fetchone()
+        """,
+            (f"%{last_10}%",),
+        ).fetchone()
 
         if row:
             return row["id"]
 
         # Fallback to first active business
-        row = con.execute(
-            "SELECT id FROM businesses WHERE archived = 0 LIMIT 1"
-        ).fetchone()
+        row = con.execute("SELECT id FROM businesses WHERE archived = 0 LIMIT 1").fetchone()
 
         return row["id"] if row else None
 
@@ -1383,11 +1421,9 @@ def _get_business_by_phone(phone: str) -> Optional[int]:
 # Outbound Call Support
 # ============================================================================
 
+
 def create_outbound_call(
-    business_id: int,
-    to_number: str,
-    purpose: str = "outreach",
-    metadata: Optional[Dict] = None
+    business_id: int, to_number: str, purpose: str = "outreach", metadata: Optional[Dict] = None
 ) -> Tuple[bool, str, Optional[Dict]]:
     """Create an outbound voice call.
 
@@ -1411,11 +1447,7 @@ def create_outbound_call(
     try:
         client = get_retell_client()
 
-        call_metadata = {
-            "business_id": business_id,
-            "purpose": purpose,
-            **(metadata or {})
-        }
+        call_metadata = {"business_id": business_id, "purpose": purpose, **(metadata or {})}
 
         result = client.create_phone_call(
             from_number=settings["retell_phone_number"],
@@ -1436,6 +1468,7 @@ def create_outbound_call(
 # Retell Call Sync — pull recent calls from Retell API into local DB
 # ============================================================================
 
+
 def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str]:
     """Fetch recent calls from Retell API and store any missing ones in the DB.
 
@@ -1449,10 +1482,11 @@ def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str
     Returns:
         (success, message)
     """
-    import urllib.request
     import urllib.error
-    from core.settings import RETELL_API_KEY
+    import urllib.request
+
     from core.db import get_conn, transaction
+    from core.settings import RETELL_API_KEY
 
     if not RETELL_API_KEY:
         return False, "RETELL_API_KEY is not configured."
@@ -1476,7 +1510,7 @@ def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str
         return False, f"Failed to fetch calls: {e}"
 
     if not isinstance(calls, list):
-        return False, f"Unexpected response format from Retell."
+        return False, "Unexpected response format from Retell."
 
     # ── 2. Get existing call IDs so we don't duplicate ────────────────────────
     with get_conn() as con:
@@ -1501,7 +1535,9 @@ def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str
         duration_ms = call.get("duration_ms") or call.get("call_duration_ms")
         duration_seconds = int(duration_ms / 1000) if duration_ms else None
         transcript = call.get("transcript", "")
-        transcript_json = json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
+        transcript_json = (
+            json.dumps(call.get("transcript_object")) if call.get("transcript_object") else None
+        )
         recording_url = call.get("recording_url")
         cost_data = call.get("call_cost", {})
         cost_cents = cost_data.get("total_cost_cents") if cost_data else None
@@ -1522,32 +1558,53 @@ def sync_calls_from_retell(business_id: int, limit: int = 50) -> Tuple[bool, str
 
         try:
             with transaction() as con:
-                con.execute("""
+                con.execute(
+                    """
                     INSERT INTO voice_calls(
                         business_id, session_id, retell_call_id, retell_agent_id,
                         direction, from_number, to_number, call_status,
                         started_at, ended_at, duration_seconds,
                         transcript, transcript_json, recording_url, cost_cents, created_at
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """, (
-                    business_id, session_id, call_id, agent_id,
-                    direction, from_number, to_number, status,
-                    started_at, ended_at, duration_seconds,
-                    transcript, transcript_json, recording_url, cost_cents, created_at
-                ))
+                """,
+                    (
+                        business_id,
+                        session_id,
+                        call_id,
+                        agent_id,
+                        direction,
+                        from_number,
+                        to_number,
+                        status,
+                        started_at,
+                        ended_at,
+                        duration_seconds,
+                        transcript,
+                        transcript_json,
+                        recording_url,
+                        cost_cents,
+                        created_at,
+                    ),
+                )
             inserted += 1
         except Exception as e:
             logger.warning(f"Could not insert call {call_id}: {e}")
 
     logger.info(f"Synced {inserted} new calls from Retell for business {business_id}")
-    return True, f"Synced {inserted} new call(s) from Retell ({len(calls) - inserted} already up to date)."
+    return (
+        True,
+        f"Synced {inserted} new call(s) from Retell ({len(calls) - inserted} already up to date).",
+    )
 
 
 # ============================================================================
 # Retell Prompt Sync — push live KB/services/hours to the native Retell LLM
 # ============================================================================
 
-def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None) -> Tuple[bool, str]:
+
+def sync_retell_prompt(
+    business_id: int, webhook_base_url: Optional[str] = None
+) -> Tuple[bool, str]:
     """Build a context-rich system prompt from the DB and push it to the Retell LLM.
 
     This keeps the native Retell LLM (zero-latency) while giving it real
@@ -1559,10 +1616,11 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
     Returns:
         (success, message)
     """
-    import urllib.request
     import urllib.error
-    from core.settings import RETELL_API_KEY, RETELL_LLM_ID, RETELL_DEFAULT_AGENT_ID
-    from core.db import get_conn, get_business_by_id
+    import urllib.request
+
+    from core.db import get_business_by_id, get_conn
+    from core.settings import RETELL_API_KEY, RETELL_DEFAULT_AGENT_ID, RETELL_LLM_ID
 
     if not RETELL_API_KEY:
         return False, "RETELL_API_KEY is not configured."
@@ -1589,11 +1647,14 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
     services_lines = []
     try:
         with get_conn() as con:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT name, duration_min, price FROM services
                 WHERE business_id = ? AND active = 1
                 ORDER BY name
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             for r in rows:
                 line = f"- {r['name']}"
                 if r["duration_min"]:
@@ -1608,11 +1669,14 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
     kb_lines = []
     try:
         with get_conn() as con:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT question, answer FROM kb_entries
                 WHERE business_id = ? AND active = 1
                 ORDER BY id DESC LIMIT 30
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             for r in rows:
                 if r["question"] and r["answer"]:
                     kb_lines.append(f"Q: {r['question']}\nA: {r['answer']}")
@@ -1625,25 +1689,32 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
         today = datetime.now()
         with get_conn() as con:
             # Get booked slots for next 7 days
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT start_at, service FROM appointments
                 WHERE business_id = ?
                   AND status IN ('pending','confirmed')
                   AND date(start_at) BETWEEN date('now') AND date('now', '+7 days')
                 ORDER BY start_at
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             if rows:
-                availability_lines.append("The following slots are already booked in the next 7 days:")
+                availability_lines.append(
+                    "The following slots are already booked in the next 7 days:"
+                )
                 for r in rows:
                     try:
-                        dt = datetime.fromisoformat(r["start_at"].replace("Z",""))
+                        dt = datetime.fromisoformat(r["start_at"].replace("Z", ""))
                         availability_lines.append(
                             f"- {dt.strftime('%A %d %b at %I:%M %p')} ({r['service']})"
                         )
                     except Exception:
                         pass
             else:
-                availability_lines.append("No appointments are currently booked in the next 7 days.")
+                availability_lines.append(
+                    "No appointments are currently booked in the next 7 days."
+                )
     except Exception as e:
         logger.warning(f"Could not fetch availability for prompt sync: {e}")
 
@@ -1652,7 +1723,7 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
 
     prompt_parts = [
         f"You are the AI phone receptionist for {biz_name}.",
-        f"If anyone asks what company this is, always say \"{biz_name}\" — never say anything else.",
+        f'If anyone asks what company this is, always say "{biz_name}" — never say anything else.',
         f"Today is {now_str}. Use this when discussing dates and availability.",
         f"Be {biz_tone} — warm, natural, and genuinely helpful.",
         "You are speaking on the phone so keep every response to 1-2 sentences.",
@@ -1661,7 +1732,7 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
         "",
         "## Call Opening (MANDATORY)",
         "Every call MUST begin with this exact opening — no exceptions:",
-        f"\"Hello, thanks for calling {biz_name}. Just to let you know, this call may be recorded for quality purposes. How can I help you today?\"",
+        f'"Hello, thanks for calling {biz_name}. Just to let you know, this call may be recorded for quality purposes. How can I help you today?"',
         "If caller_known is 'true', personalise after the recording notice: 'Hi {{caller_name}}! Just to let you know this call may be recorded — how can I help you today?'",
         "Never skip the recording notice. It must always be the first thing said.",
         "",
@@ -1712,12 +1783,12 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
             "Tell the caller we're currently closed and when we'll next be open.",
             "Offer to: (1) take a message so we can call them back, or (2) help them book in advance.",
             "If they want to leave a message, ask for their name, number, and what it's about.",
-            "Then say exactly: <VOICE_MESSAGE>{{\"name\":\"NAME\",\"phone\":\"PHONE\",\"message\":\"MESSAGE\"}}</VOICE_MESSAGE>",
+            'Then say exactly: <VOICE_MESSAGE>{{"name":"NAME","phone":"PHONE","message":"MESSAGE"}}</VOICE_MESSAGE>',
             "",
         ]
     else:
         prompt_parts += [
-            f"## Current Status",
+            "## Current Status",
             f"{hours_msg}",
             "",
         ]
@@ -1725,19 +1796,19 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
     prompt_parts += [
         "## Booking Instructions",
         "When a caller wants to book, ask for: (1) which service, (2) preferred date and time, (3) their name and phone number.",
-        "Once you have all details, read them back clearly: \"So that's a [service] on [day] at [time] for [name] — shall I book that in?\"",
+        'Once you have all details, read them back clearly: "So that\'s a [service] on [day] at [time] for [name] — shall I book that in?"',
         "Wait for the caller to confirm before finalising.",
-        "When booking is confirmed by the caller, say: \"Perfect, I've got that booked for you!\"",
+        'When booking is confirmed by the caller, say: "Perfect, I\'ve got that booked for you!"',
         "",
         "## If a Caller Wants to Speak to a Human",
-        "Say: \"Of course, let me get someone for you — just a moment.\"",
+        'Say: "Of course, let me get someone for you — just a moment."',
         "Then transfer the call.",
         "",
         "## Taking Messages",
         "If a caller wants to leave a message or have someone call them back:",
         "Ask: their name, their number, and what it's about.",
-        "Then say exactly (hidden from caller): <VOICE_MESSAGE>{\"name\":\"NAME\",\"phone\":\"PHONE\",\"message\":\"MESSAGE\"}</VOICE_MESSAGE>",
-        "Then say: \"Got it, I'll pass that on and someone will be in touch shortly.\"",
+        'Then say exactly (hidden from caller): <VOICE_MESSAGE>{"name":"NAME","phone":"PHONE","message":"MESSAGE"}</VOICE_MESSAGE>',
+        'Then say: "Got it, I\'ll pass that on and someone will be in touch shortly."',
         "",
         "## What NEVER to do",
         "- Never say 'as an AI' or mention you're artificial",
@@ -1780,9 +1851,13 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
     if webhook_base_url and agent_id:
         call_setup_url = webhook_base_url.rstrip("/") + "/api/voice/call-setup"
         agent_url = f"https://api.retellai.com/update-agent/{agent_id}"
-        agent_payload = json.dumps({"inbound_dynamic_variables_webhook_url": call_setup_url}).encode("utf-8")
+        agent_payload = json.dumps(
+            {"inbound_dynamic_variables_webhook_url": call_setup_url}
+        ).encode("utf-8")
         try:
-            req2 = urllib.request.Request(agent_url, data=agent_payload, headers=headers, method="PATCH")
+            req2 = urllib.request.Request(
+                agent_url, data=agent_payload, headers=headers, method="PATCH"
+            )
             with urllib.request.urlopen(req2, timeout=15) as resp2:
                 resp2.read()
             logger.info(f"Retell agent caller-recognition webhook set to {call_setup_url}")
@@ -1801,6 +1876,7 @@ def sync_retell_prompt(business_id: int, webhook_base_url: Optional[str] = None)
 # Post-Call AI Intelligence — intent, outcome, action items, voicemail
 # ============================================================================
 
+
 def analyse_call_transcript(retell_call_id: str, transcript: str, business_id: int) -> None:
     """Use OpenAI to classify a call's intent, outcome, and extract action items.
 
@@ -1808,6 +1884,7 @@ def analyse_call_transcript(retell_call_id: str, transcript: str, business_id: i
     Updates the voice_calls record with the results.
     """
     from core.settings import OPENAI_API_KEY, OPENAI_MODEL
+
     if not OPENAI_API_KEY or not transcript or len(transcript.strip()) < 30:
         return
 
@@ -1828,13 +1905,15 @@ Transcript:
 
 Respond with valid JSON only, no commentary."""
 
-        payload = json.dumps({
-            "model": OPENAI_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"},
-            "max_tokens": 400,
-            "temperature": 0,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": OPENAI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "max_tokens": 400,
+                "temperature": 0,
+            }
+        ).encode("utf-8")
 
         request = _req.Request(
             "https://api.openai.com/v1/chat/completions",
@@ -1869,20 +1948,23 @@ Respond with valid JSON only, no commentary."""
             if caller_phone and business_id:
                 try:
                     from core.db import transaction
-                    normalized = ''.join(c for c in caller_phone if c.isdigit())
+
+                    normalized = "".join(c for c in caller_phone if c.isdigit())
                     last_10 = normalized[-10:] if len(normalized) >= 10 else normalized
                     with transaction() as con:
                         con.execute(
                             """UPDATE customers
                                SET total_sessions = total_sessions + 1
                                WHERE business_id = ? AND phone LIKE ?""",
-                            (business_id, f"%{last_10}%")
+                            (business_id, f"%{last_10}%"),
                         )
                 except Exception as e:
                     logger.warning(f"Could not update customer record after call: {e}")
 
-        logger.info(f"Post-call analysis complete for {retell_call_id}: "
-                    f"intent={data.get('call_intent')} outcome={data.get('call_outcome')}")
+        logger.info(
+            f"Post-call analysis complete for {retell_call_id}: "
+            f"intent={data.get('call_intent')} outcome={data.get('call_outcome')}"
+        )
 
     except Exception as e:
         logger.warning(f"Post-call analysis failed for {retell_call_id}: {e}")
@@ -1891,6 +1973,7 @@ Respond with valid JSON only, no commentary."""
 def trigger_post_call_analysis(retell_call_id: str, transcript: str, business_id: int) -> None:
     """Fire post-call analysis in a background thread."""
     import threading
+
     t = threading.Thread(
         target=analyse_call_transcript,
         args=(retell_call_id, transcript, business_id),
@@ -1902,6 +1985,7 @@ def trigger_post_call_analysis(retell_call_id: str, transcript: str, business_id
 # ============================================================================
 # After-Hours Detection
 # ============================================================================
+
 
 def is_business_open(business_id: int) -> Tuple[bool, str]:
     """Check if the business is currently open based on DB hours.
@@ -1919,7 +2003,7 @@ def is_business_open(business_id: int) -> Tuple[bool, str]:
         # Check closures first
         closure = con.execute(
             "SELECT reason FROM closures WHERE business_id = ? AND date = date('now')",
-            (business_id,)
+            (business_id,),
         ).fetchone()
         if closure:
             reason = closure["reason"] or "closed today"
@@ -1928,7 +2012,7 @@ def is_business_open(business_id: int) -> Tuple[bool, str]:
         # Check business hours
         row = con.execute(
             "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
-            (business_id, weekday)
+            (business_id, weekday),
         ).fetchone()
 
         if not row or row["closed"]:
@@ -1937,11 +2021,22 @@ def is_business_open(business_id: int) -> Tuple[bool, str]:
                 next_day = (weekday + offset) % 7
                 next_row = con.execute(
                     "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
-                    (business_id, next_day)
+                    (business_id, next_day),
                 ).fetchone()
                 if next_row and not next_row["closed"]:
-                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                    return False, f"We're closed today. We're next open on {day_names[next_day]} from {next_row['open_time']}."
+                    day_names = [
+                        "Monday",
+                        "Tuesday",
+                        "Wednesday",
+                        "Thursday",
+                        "Friday",
+                        "Saturday",
+                        "Sunday",
+                    ]
+                    return (
+                        False,
+                        f"We're closed today. We're next open on {day_names[next_day]} from {next_row['open_time']}.",
+                    )
             return False, "We're currently closed."
 
         open_t = row["open_time"] or "09:00"
@@ -1955,12 +2050,23 @@ def is_business_open(business_id: int) -> Tuple[bool, str]:
                 next_day = (weekday + offset) % 7
                 next_row = con.execute(
                     "SELECT open_time, close_time, closed FROM business_hours WHERE business_id = ? AND weekday = ?",
-                    (business_id, next_day)
+                    (business_id, next_day),
                 ).fetchone()
                 if next_row and not next_row["closed"]:
-                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    day_names = [
+                        "Monday",
+                        "Tuesday",
+                        "Wednesday",
+                        "Thursday",
+                        "Friday",
+                        "Saturday",
+                        "Sunday",
+                    ]
                     label = "tomorrow" if offset == 1 else day_names[next_day]
-                    return False, f"We've closed for today. We're back open {label} at {next_row['open_time']}."
+                    return (
+                        False,
+                        f"We've closed for today. We're back open {label} at {next_row['open_time']}.",
+                    )
             return False, "We're currently closed."
 
         return True, f"We're open until {close_t} today."
@@ -1969,6 +2075,7 @@ def is_business_open(business_id: int) -> Tuple[bool, str]:
 # ============================================================================
 # Warm Transfer Briefing
 # ============================================================================
+
 
 def generate_transfer_briefing(transcript: str, caller_name: Optional[str] = None) -> str:
     """Generate a brief for the human agent receiving a warm transfer.
@@ -1979,6 +2086,7 @@ def generate_transfer_briefing(transcript: str, caller_name: Optional[str] = Non
         Short briefing string (2-3 sentences max)
     """
     from core.settings import OPENAI_API_KEY, OPENAI_MODEL
+
     if not OPENAI_API_KEY or not transcript:
         name = caller_name or "a caller"
         return f"Transferring {name}. Please assist them."
@@ -1995,12 +2103,14 @@ Transcript:
 
 Write only the briefing, nothing else."""
 
-        payload = json.dumps({
-            "model": OPENAI_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 100,
-            "temperature": 0,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": OPENAI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 100,
+                "temperature": 0,
+            }
+        ).encode("utf-8")
 
         request = _req.Request(
             "https://api.openai.com/v1/chat/completions",

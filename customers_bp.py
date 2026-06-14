@@ -2,16 +2,13 @@
 # Production-grade with full CRUD, search, and customer insights
 
 import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
-from core.db import get_conn, list_businesses, transaction
 from core.authz import user_can_access_business
-from core.validators import (
-    safe_int, validate_email, validate_phone, validate_name
-)
+from core.db import get_conn, list_businesses, transaction
+from core.validators import safe_int, validate_email, validate_name, validate_phone
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +18,7 @@ bp = Blueprint("customers", __name__)
 # ============================================================================
 # Authentication & Authorization Helpers
 # ============================================================================
+
 
 def _user() -> Optional[dict]:
     """Get the current user from session."""
@@ -41,13 +39,11 @@ def _can_access(bid: int) -> bool:
 # Customer Database Operations
 # ============================================================================
 
+
 def get_customer_by_id(customer_id: int) -> Optional[Dict[str, Any]]:
     """Get a customer by ID."""
     with get_conn() as con:
-        row = con.execute(
-            "SELECT * FROM customers WHERE id = ?",
-            (customer_id,)
-        ).fetchone()
+        row = con.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
         return dict(row) if row else None
 
 
@@ -58,7 +54,7 @@ def get_customer_by_email(business_id: int, email: str) -> Optional[Dict[str, An
     with get_conn() as con:
         row = con.execute(
             "SELECT * FROM customers WHERE business_id = ? AND email = ? COLLATE NOCASE",
-            (business_id, email.strip().lower())
+            (business_id, email.strip().lower()),
         ).fetchone()
         return dict(row) if row else None
 
@@ -68,20 +64,23 @@ def get_customer_by_phone(business_id: int, phone: str) -> Optional[Dict[str, An
     if not phone:
         return None
     # Normalize phone: remove non-digits for comparison
-    normalized = ''.join(c for c in phone if c.isdigit())
+    normalized = "".join(c for c in phone if c.isdigit())
     if len(normalized) < 7:
         return None
 
     with get_conn() as con:
         # Search for phone containing the digits
         rows = con.execute(
-            "SELECT * FROM customers WHERE business_id = ? AND phone IS NOT NULL",
-            (business_id,)
+            "SELECT * FROM customers WHERE business_id = ? AND phone IS NOT NULL", (business_id,)
         ).fetchall()
 
         for row in rows:
-            row_phone = ''.join(c for c in (row["phone"] or "") if c.isdigit())
-            if row_phone and (normalized in row_phone or row_phone in normalized or normalized[-10:] == row_phone[-10:]):
+            row_phone = "".join(c for c in (row["phone"] or "") if c.isdigit())
+            if row_phone and (
+                normalized in row_phone
+                or row_phone in normalized
+                or normalized[-10:] == row_phone[-10:]
+            ):
                 return dict(row)
 
         return None
@@ -92,7 +91,7 @@ def find_or_create_customer(
     name: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
-    source: str = "booking"
+    source: str = "booking",
 ) -> Optional[int]:
     """Find existing customer by email/phone or create new one. Returns customer ID."""
 
@@ -130,7 +129,7 @@ def find_or_create_customer(
         name=name or "Unknown",
         email=email,
         phone=phone,
-        notes=f"Auto-created from {source}"
+        notes=f"Auto-created from {source}",
     )
 
 
@@ -140,25 +139,28 @@ def create_customer(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     notes: Optional[str] = None,
-    tags: Optional[str] = None
+    tags: Optional[str] = None,
 ) -> Optional[int]:
     """Create a new customer. Returns customer ID or None on failure."""
     try:
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO customers (
                     business_id, name, email, phone, notes, tags,
                     first_seen_at, last_seen_at
                 ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            """, (
-                business_id,
-                name or "Unknown",
-                email.strip().lower() if email else None,
-                phone.strip() if phone else None,
-                notes,
-                tags
-            ))
+            """,
+                (
+                    business_id,
+                    name or "Unknown",
+                    email.strip().lower() if email else None,
+                    phone.strip() if phone else None,
+                    notes,
+                    tags,
+                ),
+            )
             customer_id = cur.lastrowid
             logger.info(f"Created customer {customer_id} for business {business_id}")
             return customer_id
@@ -187,7 +189,7 @@ def update_customer(customer_id: int, **fields) -> bool:
         with transaction() as con:
             con.execute(
                 f"UPDATE customers SET {', '.join(cols)}, updated_at = datetime('now') WHERE id = ?",
-                tuple(vals)
+                tuple(vals),
             )
         return True
     except Exception as e:
@@ -200,8 +202,7 @@ def _touch_customer(customer_id: int) -> None:
     try:
         with get_conn() as con:
             con.execute(
-                "UPDATE customers SET last_seen_at = datetime('now') WHERE id = ?",
-                (customer_id,)
+                "UPDATE customers SET last_seen_at = datetime('now') WHERE id = ?", (customer_id,)
             )
             con.commit()
     except Exception as e:
@@ -213,8 +214,12 @@ def delete_customer(customer_id: int) -> bool:
     try:
         with transaction() as con:
             # First unlink appointments and sessions
-            con.execute("UPDATE appointments SET customer_id = NULL WHERE customer_id = ?", (customer_id,))
-            con.execute("UPDATE sessions SET customer_id = NULL WHERE customer_id = ?", (customer_id,))
+            con.execute(
+                "UPDATE appointments SET customer_id = NULL WHERE customer_id = ?", (customer_id,)
+            )
+            con.execute(
+                "UPDATE sessions SET customer_id = NULL WHERE customer_id = ?", (customer_id,)
+            )
             # Then delete customer
             con.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
         logger.info(f"Deleted customer {customer_id}")
@@ -225,10 +230,7 @@ def delete_customer(customer_id: int) -> bool:
 
 
 def search_customers(
-    business_id: int,
-    query: str = "",
-    limit: int = 50,
-    offset: int = 0
+    business_id: int, query: str = "", limit: int = 50, offset: int = 0
 ) -> Tuple[List[Dict], int]:
     """Search customers by name, email, or phone. Returns (results, total_count)."""
     with get_conn() as con:
@@ -255,7 +257,7 @@ def search_customers(
             f"""SELECT * {base_query}
                 ORDER BY last_seen_at DESC, name ASC
                 LIMIT ? OFFSET ?""",
-            params + [limit, offset]
+            params + [limit, offset],
         ).fetchall()
 
         return [dict(r) for r in rows], total
@@ -265,7 +267,8 @@ def get_customer_stats(customer_id: int) -> Dict[str, Any]:
     """Get statistics for a customer."""
     with get_conn() as con:
         # Appointment counts
-        appt_row = con.execute("""
+        appt_row = con.execute(
+            """
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
@@ -273,20 +276,24 @@ def get_customer_stats(customer_id: int) -> Dict[str, Any]:
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed
             FROM appointments WHERE customer_id = ?
-        """, (customer_id,)).fetchone()
+        """,
+            (customer_id,),
+        ).fetchone()
 
         # Session count
         session_row = con.execute(
-            "SELECT COUNT(*) as cnt FROM sessions WHERE customer_id = ?",
-            (customer_id,)
+            "SELECT COUNT(*) as cnt FROM sessions WHERE customer_id = ?", (customer_id,)
         ).fetchone()
 
         # Last appointment
-        last_appt = con.execute("""
+        last_appt = con.execute(
+            """
             SELECT start_at, service, status FROM appointments
             WHERE customer_id = ?
             ORDER BY start_at DESC LIMIT 1
-        """, (customer_id,)).fetchone()
+        """,
+            (customer_id,),
+        ).fetchone()
 
         return {
             "total_appointments": appt_row["total"] if appt_row else 0,
@@ -302,19 +309,23 @@ def get_customer_stats(customer_id: int) -> Dict[str, Any]:
 def get_customer_appointments(customer_id: int, limit: int = 20) -> List[Dict]:
     """Get appointments for a customer."""
     with get_conn() as con:
-        rows = con.execute("""
+        rows = con.execute(
+            """
             SELECT * FROM appointments
             WHERE customer_id = ?
             ORDER BY COALESCE(start_at, created_at) DESC
             LIMIT ?
-        """, (customer_id, limit)).fetchall()
+        """,
+            (customer_id, limit),
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
 def get_customer_sessions(customer_id: int, limit: int = 10) -> List[Dict]:
     """Get chat sessions for a customer with message counts."""
     with get_conn() as con:
-        rows = con.execute("""
+        rows = con.execute(
+            """
             SELECT s.*,
                    (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as message_count,
                    (SELECT text FROM messages WHERE session_id = s.id ORDER BY id DESC LIMIT 1) as last_message
@@ -322,7 +333,9 @@ def get_customer_sessions(customer_id: int, limit: int = 10) -> List[Dict]:
             WHERE s.customer_id = ?
             ORDER BY s.created_at DESC
             LIMIT ?
-        """, (customer_id, limit)).fetchall()
+        """,
+            (customer_id, limit),
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -332,7 +345,9 @@ def merge_customers(primary_id: int, secondary_id: int) -> bool:
         with transaction() as con:
             # Get both customers
             primary = con.execute("SELECT * FROM customers WHERE id = ?", (primary_id,)).fetchone()
-            secondary = con.execute("SELECT * FROM customers WHERE id = ?", (secondary_id,)).fetchone()
+            secondary = con.execute(
+                "SELECT * FROM customers WHERE id = ?", (secondary_id,)
+            ).fetchone()
 
             if not primary or not secondary:
                 return False
@@ -350,7 +365,11 @@ def merge_customers(primary_id: int, secondary_id: int) -> bool:
             if not primary["phone"] and secondary["phone"]:
                 updates.append("phone = ?")
                 params.append(secondary["phone"])
-            if (not primary["name"] or primary["name"] == "Unknown") and secondary["name"] and secondary["name"] != "Unknown":
+            if (
+                (not primary["name"] or primary["name"] == "Unknown")
+                and secondary["name"]
+                and secondary["name"] != "Unknown"
+            ):
                 updates.append("name = ?")
                 params.append(secondary["name"])
 
@@ -370,13 +389,22 @@ def merge_customers(primary_id: int, secondary_id: int) -> bool:
 
             if updates:
                 params.append(primary_id)
-                con.execute(f"UPDATE customers SET {', '.join(updates)}, updated_at = datetime('now') WHERE id = ?", params)
+                con.execute(
+                    f"UPDATE customers SET {', '.join(updates)}, updated_at = datetime('now') WHERE id = ?",
+                    params,
+                )
 
             # Move appointments
-            con.execute("UPDATE appointments SET customer_id = ? WHERE customer_id = ?", (primary_id, secondary_id))
+            con.execute(
+                "UPDATE appointments SET customer_id = ? WHERE customer_id = ?",
+                (primary_id, secondary_id),
+            )
 
             # Move sessions
-            con.execute("UPDATE sessions SET customer_id = ? WHERE customer_id = ?", (primary_id, secondary_id))
+            con.execute(
+                "UPDATE sessions SET customer_id = ? WHERE customer_id = ?",
+                (primary_id, secondary_id),
+            )
 
             # Delete secondary
             con.execute("DELETE FROM customers WHERE id = ?", (secondary_id,))
@@ -392,6 +420,7 @@ def merge_customers(primary_id: int, secondary_id: int) -> bool:
 # ============================================================================
 # Routes - Customer List
 # ============================================================================
+
 
 @bp.route("/customers")
 def customers_index():
@@ -414,10 +443,7 @@ def customers_index():
             return redirect(url_for("customers.customers_index"))
 
         customers, total = search_customers(
-            business_id=bid,
-            query=query,
-            limit=per_page,
-            offset=(page - 1) * per_page
+            business_id=bid, query=query, limit=per_page, offset=(page - 1) * per_page
         )
 
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
@@ -430,13 +456,14 @@ def customers_index():
         query=query,
         page=page,
         total_pages=total_pages,
-        total=total
+        total=total,
     )
 
 
 # ============================================================================
 # Routes - Customer Detail
 # ============================================================================
+
 
 @bp.route("/customers/<int:customer_id>")
 def customer_detail(customer_id: int):
@@ -462,16 +489,20 @@ def customer_detail(customer_id: int):
     if customer.get("phone"):
         try:
             from core.db import get_conn as _get_conn
-            phone_digits = ''.join(c for c in customer["phone"] if c.isdigit())
+
+            phone_digits = "".join(c for c in customer["phone"] if c.isdigit())
             last_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
             with _get_conn() as con:
-                rows = con.execute("""
+                rows = con.execute(
+                    """
                     SELECT retell_call_id, direction, started_at, duration_seconds,
                            call_intent, call_outcome, call_summary, sentiment, recording_url
                     FROM voice_calls
                     WHERE business_id = ? AND from_number LIKE ?
                     ORDER BY started_at DESC LIMIT 10
-                """, (customer["business_id"], f"%{last_10}%")).fetchall()
+                """,
+                    (customer["business_id"], f"%{last_10}%"),
+                ).fetchall()
                 voice_calls = [dict(r) for r in rows]
         except Exception:
             pass
@@ -489,6 +520,7 @@ def customer_detail(customer_id: int):
 # ============================================================================
 # Routes - Create Customer
 # ============================================================================
+
 
 @bp.route("/customers/new", methods=["GET", "POST"])
 def customer_new():
@@ -545,13 +577,13 @@ def customer_new():
         if email:
             existing = get_customer_by_email(bid, email)
             if existing:
-                flash(f"A customer with this email already exists.", "err")
+                flash("A customer with this email already exists.", "err")
                 return redirect(url_for("customers.customer_detail", customer_id=existing["id"]))
 
         if phone:
             existing = get_customer_by_phone(bid, phone)
             if existing:
-                flash(f"A customer with this phone already exists.", "err")
+                flash("A customer with this phone already exists.", "err")
                 return redirect(url_for("customers.customer_detail", customer_id=existing["id"]))
 
         customer_id = create_customer(
@@ -560,7 +592,7 @@ def customer_new():
             email=email or None,
             phone=phone or None,
             notes=notes or None,
-            tags=tags or None
+            tags=tags or None,
         )
 
         if customer_id:
@@ -577,6 +609,7 @@ def customer_new():
 # ============================================================================
 # Routes - Edit Customer
 # ============================================================================
+
 
 @bp.route("/customers/<int:customer_id>/edit", methods=["GET", "POST"])
 def customer_edit(customer_id: int):
@@ -639,7 +672,7 @@ def customer_edit(customer_id: int):
             email=email or None,
             phone=phone or None,
             notes=notes,
-            tags=tags
+            tags=tags,
         )
 
         flash("Customer updated.", "ok")
@@ -651,6 +684,7 @@ def customer_edit(customer_id: int):
 # ============================================================================
 # Routes - Delete Customer
 # ============================================================================
+
 
 @bp.route("/customers/<int:customer_id>/delete", methods=["POST"])
 def customer_delete(customer_id: int):
@@ -680,6 +714,7 @@ def customer_delete(customer_id: int):
 # Routes - Merge Customers
 # ============================================================================
 
+
 @bp.route("/customers/<int:customer_id>/merge", methods=["POST"])
 def customer_merge(customer_id: int):
     """Merge another customer into this one."""
@@ -706,7 +741,7 @@ def customer_merge(customer_id: int):
         return redirect(url_for("customers.customer_detail", customer_id=customer_id))
 
     if merge_customers(customer_id, secondary_id):
-        flash(f"Successfully merged customer records.", "ok")
+        flash("Successfully merged customer records.", "ok")
     else:
         flash("Failed to merge customers.", "err")
 
@@ -716,6 +751,7 @@ def customer_merge(customer_id: int):
 # ============================================================================
 # API Routes (for AJAX)
 # ============================================================================
+
 
 @bp.route("/api/customers/search")
 def api_customer_search():
@@ -731,14 +767,11 @@ def api_customer_search():
 
     customers, _ = search_customers(business_id=bid, query=query, limit=10)
 
-    return jsonify({
-        "customers": [
-            {
-                "id": c["id"],
-                "name": c["name"],
-                "email": c["email"],
-                "phone": c["phone"]
-            }
-            for c in customers
-        ]
-    })
+    return jsonify(
+        {
+            "customers": [
+                {"id": c["id"], "name": c["name"], "email": c["email"], "phone": c["phone"]}
+                for c in customers
+            ]
+        }
+    )

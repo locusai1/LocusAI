@@ -3,8 +3,8 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.db import get_conn, transaction
 
@@ -14,21 +14,25 @@ logger = logging.getLogger(__name__)
 # Reminder Types
 # ============================================================================
 
+
 class ReminderType(Enum):
     """Types of appointment reminders."""
+
     TWENTY_FOUR_HOURS = "24h"  # 24 hours before
-    ONE_HOUR = "1h"           # 1 hour before
-    FIFTEEN_MINUTES = "15m"   # 15 minutes before
+    ONE_HOUR = "1h"  # 1 hour before
+    FIFTEEN_MINUTES = "15m"  # 15 minutes before
 
 
 class ReminderChannel(Enum):
     """Channels for sending reminders."""
+
     EMAIL = "email"
     SMS = "sms"
 
 
 class ReminderStatus(Enum):
     """Status of a reminder."""
+
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
@@ -57,12 +61,13 @@ REMINDER_DELTAS = {
 # Reminder Scheduling
 # ============================================================================
 
+
 def schedule_reminders_for_appointment(
     appointment_id: int,
     start_at: str,
     customer_email: Optional[str] = None,
     customer_phone: Optional[str] = None,
-    reminder_schedule: Optional[List[Tuple[ReminderType, ReminderChannel]]] = None
+    reminder_schedule: Optional[List[Tuple[ReminderType, ReminderChannel]]] = None,
 ) -> List[int]:
     """Schedule reminders for a new appointment.
 
@@ -112,7 +117,7 @@ def schedule_reminders_for_appointment(
                 """SELECT id FROM reminders
                    WHERE appointment_id = ? AND type = ? AND channel = ?
                    AND status NOT IN ('cancelled')""",
-                (appointment_id, reminder_type.value, channel.value)
+                (appointment_id, reminder_type.value, channel.value),
             ).fetchone()
 
             if existing:
@@ -132,8 +137,8 @@ def schedule_reminders_for_appointment(
                     reminder_type.value,
                     channel.value,
                     scheduled_for.isoformat(),
-                    ReminderStatus.PENDING.value
-                )
+                    ReminderStatus.PENDING.value,
+                ),
             )
             reminder_id = cur.lastrowid
             created_ids.append(reminder_id)
@@ -158,7 +163,7 @@ def cancel_reminders_for_appointment(appointment_id: int) -> int:
     with transaction() as con:
         cur = con.execute(
             """UPDATE reminders SET status = ? WHERE appointment_id = ? AND status = ?""",
-            (ReminderStatus.CANCELLED.value, appointment_id, ReminderStatus.PENDING.value)
+            (ReminderStatus.CANCELLED.value, appointment_id, ReminderStatus.PENDING.value),
         )
         count = cur.rowcount
 
@@ -172,7 +177,7 @@ def reschedule_reminders_for_appointment(
     appointment_id: int,
     new_start_at: str,
     customer_email: Optional[str] = None,
-    customer_phone: Optional[str] = None
+    customer_phone: Optional[str] = None,
 ) -> List[int]:
     """Reschedule reminders when appointment time changes.
 
@@ -195,13 +200,14 @@ def reschedule_reminders_for_appointment(
         appointment_id=appointment_id,
         start_at=new_start_at,
         customer_email=customer_email,
-        customer_phone=customer_phone
+        customer_phone=customer_phone,
     )
 
 
 # ============================================================================
 # Reminder Processing
 # ============================================================================
+
 
 def get_due_reminders(limit: int = 100) -> List[Dict[str, Any]]:
     """Get reminders that are due to be sent.
@@ -239,7 +245,7 @@ def get_due_reminders(limit: int = 100) -> List[Dict[str, Any]]:
                  AND a.status NOT IN ('cancelled', 'completed')
                ORDER BY r.scheduled_for ASC
                LIMIT ?""",
-            (ReminderStatus.PENDING.value, now, limit)
+            (ReminderStatus.PENDING.value, now, limit),
         ).fetchall()
 
         return [dict(r) for r in rows]
@@ -258,7 +264,7 @@ def mark_reminder_sent(reminder_id: int) -> bool:
         with transaction() as con:
             con.execute(
                 """UPDATE reminders SET status = ?, sent_at = ? WHERE id = ?""",
-                (ReminderStatus.SENT.value, datetime.now().isoformat(), reminder_id)
+                (ReminderStatus.SENT.value, datetime.now().isoformat(), reminder_id),
             )
         return True
     except Exception as e:
@@ -280,7 +286,7 @@ def mark_reminder_failed(reminder_id: int, error_message: str) -> bool:
         with transaction() as con:
             con.execute(
                 """UPDATE reminders SET status = ?, error_message = ? WHERE id = ?""",
-                (ReminderStatus.FAILED.value, error_message[:500], reminder_id)
+                (ReminderStatus.FAILED.value, error_message[:500], reminder_id),
             )
         return True
     except Exception as e:
@@ -291,6 +297,7 @@ def mark_reminder_failed(reminder_id: int, error_message: str) -> bool:
 # ============================================================================
 # Reminder Content Generation
 # ============================================================================
+
 
 def generate_email_reminder(reminder: Dict[str, Any]) -> Dict[str, str]:
     """Generate email reminder content.
@@ -388,6 +395,7 @@ def generate_sms_reminder(reminder: Dict[str, Any]) -> str:
 # Reminder Sending (requires sms.py and mailer.py)
 # ============================================================================
 
+
 def send_reminder(reminder: Dict[str, Any]) -> Tuple[bool, str]:
     """Send a reminder via the appropriate channel.
 
@@ -421,11 +429,8 @@ def _send_email_reminder(reminder: Dict[str, Any]) -> Tuple[bool, str]:
 
     try:
         from core.mailer import send_email
-        send_email(
-            to=customer_email,
-            subject=content["subject"],
-            body=content["body"]
-        )
+
+        send_email(to=customer_email, subject=content["subject"], body=content["body"])
         logger.info(f"Sent email reminder to {customer_email}")
         return True, ""
     except ImportError:
@@ -446,10 +451,8 @@ def _send_sms_reminder(reminder: Dict[str, Any]) -> Tuple[bool, str]:
 
     try:
         from core.sms import send_sms
-        send_sms(
-            to=customer_phone,
-            message=message
-        )
+
+        send_sms(to=customer_phone, message=message)
         logger.info(f"Sent SMS reminder to {customer_phone}")
         return True, ""
     except ImportError:
@@ -463,6 +466,7 @@ def _send_sms_reminder(reminder: Dict[str, Any]) -> Tuple[bool, str]:
 # ============================================================================
 # Reminder Processing Loop (called by worker)
 # ============================================================================
+
 
 def process_due_reminders(batch_size: int = 50) -> Dict[str, int]:
     """Process all due reminders.
@@ -494,8 +498,7 @@ def process_due_reminders(batch_size: int = 50) -> Dict[str, int]:
 
     if stats["total"] > 0:
         logger.info(
-            f"Processed {stats['total']} reminders: "
-            f"{stats['sent']} sent, {stats['failed']} failed"
+            f"Processed {stats['total']} reminders: {stats['sent']} sent, {stats['failed']} failed"
         )
 
     return stats
@@ -504,6 +507,7 @@ def process_due_reminders(batch_size: int = 50) -> Dict[str, int]:
 # ============================================================================
 # Reminder Statistics
 # ============================================================================
+
 
 def get_reminder_stats(business_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
     """Get reminder statistics.
@@ -526,7 +530,7 @@ def get_reminder_stats(business_id: Optional[int] = None, days: int = 30) -> Dic
                    WHERE a.business_id = ?
                      AND r.created_at >= ?
                    GROUP BY r.status, r.channel""",
-                (business_id, cutoff)
+                (business_id, cutoff),
             ).fetchall()
         else:
             rows = con.execute(
@@ -534,14 +538,10 @@ def get_reminder_stats(business_id: Optional[int] = None, days: int = 30) -> Dic
                    FROM reminders
                    WHERE created_at >= ?
                    GROUP BY status, channel""",
-                (cutoff,)
+                (cutoff,),
             ).fetchall()
 
-    stats = {
-        "by_status": {},
-        "by_channel": {},
-        "total": 0
-    }
+    stats = {"by_status": {}, "by_channel": {}, "total": 0}
 
     for row in rows:
         status = row["status"]

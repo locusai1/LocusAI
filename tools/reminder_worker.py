@@ -25,20 +25,19 @@ Environment Variables:
     REMINDER_BATCH_SIZE: Max reminders per batch (default: 50)
 """
 
+import argparse
+import logging
 import os
+import signal
 import sys
 import time
-import signal
-import logging
-import argparse
-from datetime import datetime
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from core.db import init_db
-from core.reminders import process_due_reminders, get_reminder_stats
+from core.reminders import get_reminder_stats, process_due_reminders
 
 # ============================================================================
 # Logging Configuration
@@ -46,11 +45,11 @@ from core.reminders import process_due_reminders, get_reminder_stats
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.join(PROJECT_ROOT, "logs", "reminder_worker.log"))
-    ]
+        logging.FileHandler(os.path.join(PROJECT_ROOT, "logs", "reminder_worker.log")),
+    ],
 )
 logger = logging.getLogger("reminder_worker")
 
@@ -83,6 +82,7 @@ signal.signal(signal.SIGINT, _signal_handler)
 # Worker Functions
 # ============================================================================
 
+
 def run_once(batch_size: int = DEFAULT_BATCH_SIZE, dry_run: bool = False) -> dict:
     """Process due reminders once.
 
@@ -97,6 +97,7 @@ def run_once(batch_size: int = DEFAULT_BATCH_SIZE, dry_run: bool = False) -> dic
 
     if dry_run:
         from core.reminders import get_due_reminders
+
         reminders = get_due_reminders(limit=batch_size)
         logger.info(f"DRY RUN: Would process {len(reminders)} reminders")
         for r in reminders:
@@ -111,17 +112,14 @@ def run_once(batch_size: int = DEFAULT_BATCH_SIZE, dry_run: bool = False) -> dic
 
     if stats["total"] > 0:
         logger.info(
-            f"Processed {stats['total']} reminders: "
-            f"{stats['sent']} sent, {stats['failed']} failed"
+            f"Processed {stats['total']} reminders: {stats['sent']} sent, {stats['failed']} failed"
         )
 
     return stats
 
 
 def run_daemon(
-    interval: int = DEFAULT_INTERVAL,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    dry_run: bool = False
+    interval: int = DEFAULT_INTERVAL, batch_size: int = DEFAULT_BATCH_SIZE, dry_run: bool = False
 ):
     """Run as a continuous daemon.
 
@@ -153,8 +151,7 @@ def run_daemon(
             # Log periodic summary
             if runs % 60 == 0:  # Every 60 runs (e.g., hourly at 1min interval)
                 logger.info(
-                    f"Worker summary: {runs} runs, "
-                    f"{total_sent} sent, {total_failed} failed"
+                    f"Worker summary: {runs} runs, {total_sent} sent, {total_failed} failed"
                 )
 
         except Exception as e:
@@ -196,50 +193,37 @@ def show_stats():
 # Main Entry Point
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="LocusAI Reminder Worker - Process and send appointment reminders"
     )
 
     mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument(
-        "--daemon", "-d",
-        action="store_true",
-        help="Run as continuous daemon"
-    )
-    mode_group.add_argument(
-        "--once", "-o",
-        action="store_true",
-        help="Run once and exit"
-    )
-    mode_group.add_argument(
-        "--stats", "-s",
-        action="store_true",
-        help="Show reminder statistics"
-    )
+    mode_group.add_argument("--daemon", "-d", action="store_true", help="Run as continuous daemon")
+    mode_group.add_argument("--once", "-o", action="store_true", help="Run once and exit")
+    mode_group.add_argument("--stats", "-s", action="store_true", help="Show reminder statistics")
 
     parser.add_argument(
-        "--interval", "-i",
+        "--interval",
+        "-i",
         type=int,
         default=DEFAULT_INTERVAL,
-        help=f"Seconds between checks (daemon mode, default: {DEFAULT_INTERVAL})"
+        help=f"Seconds between checks (daemon mode, default: {DEFAULT_INTERVAL})",
     )
     parser.add_argument(
-        "--batch-size", "-b",
+        "--batch-size",
+        "-b",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help=f"Max reminders per batch (default: {DEFAULT_BATCH_SIZE})"
+        help=f"Max reminders per batch (default: {DEFAULT_BATCH_SIZE})",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Don't actually send reminders, just log what would be sent"
+        help="Don't actually send reminders, just log what would be sent",
     )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable debug logging"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
 
@@ -252,11 +236,7 @@ def main():
     if args.stats:
         show_stats()
     elif args.daemon:
-        run_daemon(
-            interval=args.interval,
-            batch_size=args.batch_size,
-            dry_run=args.dry_run
-        )
+        run_daemon(interval=args.interval, batch_size=args.batch_size, dry_run=args.dry_run)
     elif args.once:
         init_db()
         stats = run_once(batch_size=args.batch_size, dry_run=args.dry_run)

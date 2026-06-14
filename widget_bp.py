@@ -5,26 +5,28 @@ import json
 import logging
 import time
 from functools import wraps
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from flask import Blueprint, request, jsonify, render_template, g
+from flask import Blueprint, g, jsonify, render_template, request
 
-from core.db import (
-    get_conn, get_business_by_id, create_session,
-    log_message, get_session_messages, transaction
-)
 from core.ai import process_message
 from core.booking import (
-    extract_pending_booking,
-    confirm_pending_booking,
     cancel_pending_booking,
-    maybe_commit_booking,  # Keep for backward compatibility
-    extract_pending_change,
-    confirm_pending_change,
     cancel_pending_change,
+    confirm_pending_booking,
+    confirm_pending_change,
+    extract_pending_booking,
+    extract_pending_change,  # Keep for backward compatibility
 )
-from core.sentiment import analyze_sentiment
+from core.db import (
+    create_session,
+    get_conn,
+    get_session_messages,
+    log_message,
+    transaction,
+)
 from core.escalation import handle_escalation
+from core.sentiment import analyze_sentiment
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +42,14 @@ RATE_LIMIT_WINDOW = 60  # seconds
 # Helpers
 # ============================================================================
 
+
 def _get_business_by_tenant_key(tenant_key: str) -> Optional[Dict[str, Any]]:
     """Look up a business by its tenant key."""
     if not tenant_key:
         return None
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM businesses WHERE tenant_key = ? AND archived = 0",
-            (tenant_key,)
+            "SELECT * FROM businesses WHERE tenant_key = ? AND archived = 0", (tenant_key,)
         ).fetchone()
         return dict(row) if row else None
 
@@ -67,8 +69,7 @@ def _get_widget_settings(business_id: int) -> Dict[str, Any]:
 
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM widget_settings WHERE business_id = ?",
-            (business_id,)
+            "SELECT * FROM widget_settings WHERE business_id = ?", (business_id,)
         ).fetchone()
 
         if row:
@@ -109,6 +110,7 @@ def _check_origin(settings: Dict, origin: str) -> bool:
 
         # Extract hostname from origin
         from urllib.parse import urlparse
+
         parsed = urlparse(origin)
         hostname = parsed.netloc.split(":")[0]  # Remove port
 
@@ -165,6 +167,7 @@ def cors_headers(f):
     Only reflects Origin if it passes validation against allowed_domains.
     Falls back to not setting CORS headers if origin is invalid.
     """
+
     @wraps(f)
     def decorated(*args, **kwargs):
         # Get origin and tenant key from request
@@ -181,7 +184,9 @@ def cors_headers(f):
                 response.headers["Access-Control-Allow-Origin"] = validated_origin
                 response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Tenant-Key, X-Session-ID"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, X-Tenant-Key, X-Session-ID"
+            )
             response.headers["Access-Control-Max-Age"] = "86400"
             return response
 
@@ -200,6 +205,7 @@ def cors_headers(f):
 
 def require_tenant(f):
     """Decorator to require and validate tenant key."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         tenant_key = request.headers.get("X-Tenant-Key") or request.args.get("tenant_key")
@@ -238,6 +244,7 @@ def require_tenant(f):
 # Widget Configuration Endpoint
 # ============================================================================
 
+
 @bp.route("/config", methods=["GET", "OPTIONS"])
 @cors_headers
 @require_tenant
@@ -246,24 +253,29 @@ def widget_config():
     business = g.business
     settings = g.widget_settings
 
-    return jsonify({
-        "business": {
-            "name": business.get("name"),
-            "accent_color": business.get("accent_color") or settings.get("primary_color") or "#2f6fec",
-        },
-        "widget": {
-            "position": settings.get("position", "bottom-right"),
-            "welcome_message": settings.get("welcome_message"),
-            "placeholder_text": settings.get("placeholder_text"),
-            "show_branding": bool(settings.get("show_branding", 1)),
-            "auto_open_delay": settings.get("auto_open_delay"),
+    return jsonify(
+        {
+            "business": {
+                "name": business.get("name"),
+                "accent_color": business.get("accent_color")
+                or settings.get("primary_color")
+                or "#2f6fec",
+            },
+            "widget": {
+                "position": settings.get("position", "bottom-right"),
+                "welcome_message": settings.get("welcome_message"),
+                "placeholder_text": settings.get("placeholder_text"),
+                "show_branding": bool(settings.get("show_branding", 1)),
+                "auto_open_delay": settings.get("auto_open_delay"),
+            },
         }
-    })
+    )
 
 
 # ============================================================================
 # Chat Session Endpoints
 # ============================================================================
+
 
 @bp.route("/session", methods=["POST", "OPTIONS"])
 @cors_headers
@@ -276,11 +288,14 @@ def create_widget_session():
     # (Ungated for trial / no-subscription businesses.)
     try:
         from core.limits import can_start_conversation, upgrade_message
+
         if not can_start_conversation(business["id"]):
-            return jsonify({
-                "error": "conversation_limit_reached",
-                "message": upgrade_message(business["id"]),
-            }), 402  # Payment Required
+            return jsonify(
+                {
+                    "error": "conversation_limit_reached",
+                    "message": upgrade_message(business["id"]),
+                }
+            ), 402  # Payment Required
     except Exception as e:
         logger.warning(f"Conversation quota check failed (allowing): {e}")
 
@@ -294,10 +309,7 @@ def create_widget_session():
     if welcome:
         log_message(session_id, "bot", welcome)
 
-    return jsonify({
-        "session_id": session_id,
-        "welcome_message": welcome
-    })
+    return jsonify({"session_id": session_id, "welcome_message": welcome})
 
 
 @bp.route("/chat", methods=["POST", "OPTIONS"])
@@ -331,10 +343,7 @@ def widget_chat():
 
     # Verify session belongs to this business
     with get_conn() as con:
-        row = con.execute(
-            "SELECT business_id FROM sessions WHERE id = ?",
-            (session_id,)
-        ).fetchone()
+        row = con.execute("SELECT business_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
 
         if not row or row["business_id"] != business["id"]:
             return jsonify({"error": "Invalid session"}), 403
@@ -398,7 +407,9 @@ def widget_chat():
                     conversation_history=history,
                 )
                 escalation_triggered = True
-                logger.info(f"Escalation triggered for session {session_id}: {sentiment.escalation_reason}")
+                logger.info(
+                    f"Escalation triggered for session {session_id}: {sentiment.escalation_reason}"
+                )
     except Exception as e:
         logger.error(f"Sentiment/escalation error: {e}")
 
@@ -415,7 +426,9 @@ def widget_chat():
     # Include a pending reschedule/cancel for the widget to confirm
     if pending_change:
         response["pending_change"] = pending_change
-        logger.info(f"Pending {pending_change.get('action')} returned to widget for session {session_id}")
+        logger.info(
+            f"Pending {pending_change.get('action')} returned to widget for session {session_id}"
+        )
 
     if escalation_triggered:
         response["escalated"] = True
@@ -426,6 +439,7 @@ def widget_chat():
 # ============================================================================
 # Booking Confirmation Endpoints
 # ============================================================================
+
 
 @bp.route("/booking/confirm", methods=["POST", "OPTIONS"])
 @cors_headers
@@ -454,10 +468,7 @@ def confirm_booking():
     token = (data.get("token") or "").strip()
 
     if not token:
-        return jsonify({
-            "success": False,
-            "message": "Missing booking token"
-        }), 400
+        return jsonify({"success": False, "message": "Missing booking token"}), 400
 
     # Confirm the booking
     success, message, appointment_id = confirm_pending_booking(token)
@@ -471,17 +482,10 @@ def confirm_booking():
                 pass
 
         logger.info(f"Booking confirmed via widget: appointment {appointment_id}")
-        return jsonify({
-            "success": True,
-            "message": message,
-            "appointment_id": appointment_id
-        })
+        return jsonify({"success": True, "message": message, "appointment_id": appointment_id})
     else:
         logger.warning(f"Booking confirmation failed: {message}")
-        return jsonify({
-            "success": False,
-            "message": message
-        }), 400
+        return jsonify({"success": False, "message": message}), 400
 
 
 @bp.route("/booking/cancel", methods=["POST", "OPTIONS"])
@@ -510,10 +514,7 @@ def cancel_booking():
     token = (data.get("token") or "").strip()
 
     if not token:
-        return jsonify({
-            "success": False,
-            "message": "Missing booking token"
-        }), 400
+        return jsonify({"success": False, "message": "Missing booking token"}), 400
 
     # Cancel the pending booking
     success, message = cancel_pending_booking(token)
@@ -526,12 +527,9 @@ def cancel_booking():
             except (ValueError, TypeError):
                 pass
 
-        logger.info(f"Pending booking cancelled via widget")
+        logger.info("Pending booking cancelled via widget")
 
-    return jsonify({
-        "success": success,
-        "message": message
-    })
+    return jsonify({"success": success, "message": message})
 
 
 @bp.route("/change/confirm", methods=["POST", "OPTIONS"])
@@ -596,10 +594,7 @@ def widget_history():
 
     # Verify session
     with get_conn() as con:
-        row = con.execute(
-            "SELECT business_id FROM sessions WHERE id = ?",
-            (session_id,)
-        ).fetchone()
+        row = con.execute("SELECT business_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
 
         if not row or row["business_id"] != business["id"]:
             return jsonify({"error": "Invalid session"}), 403
@@ -610,7 +605,7 @@ def widget_history():
         {
             "role": "assistant" if r["sender"] == "bot" else "user",
             "text": r["text"],
-            "timestamp": r["timestamp"]
+            "timestamp": r["timestamp"],
         }
         for r in reversed(rows)  # Oldest first
     ]
@@ -621,6 +616,7 @@ def widget_history():
 # ============================================================================
 # Widget Frame (for iframe embedding)
 # ============================================================================
+
 
 @bp.route("/frame")
 def widget_frame():
@@ -639,16 +635,14 @@ def widget_frame():
         return "Widget disabled", 403
 
     return render_template(
-        "widget_frame.html",
-        business=business,
-        settings=settings,
-        tenant_key=tenant_key
+        "widget_frame.html", business=business, settings=settings, tenant_key=tenant_key
     )
 
 
 # ============================================================================
 # Widget Settings Management (Dashboard)
 # ============================================================================
+
 
 def get_or_create_widget_settings(business_id: int) -> Dict[str, Any]:
     """Get or create widget settings for a business."""
@@ -657,23 +651,33 @@ def get_or_create_widget_settings(business_id: int) -> Dict[str, Any]:
     # Ensure record exists in DB
     with transaction() as con:
         existing = con.execute(
-            "SELECT 1 FROM widget_settings WHERE business_id = ?",
-            (business_id,)
+            "SELECT 1 FROM widget_settings WHERE business_id = ?", (business_id,)
         ).fetchone()
 
         if not existing:
-            con.execute("""
+            con.execute(
+                """
                 INSERT INTO widget_settings (business_id, enabled, position, welcome_message, placeholder_text, show_branding)
                 VALUES (?, 1, 'bottom-right', 'Hi! How can I help you today?', 'Type a message...', 1)
-            """, (business_id,))
+            """,
+                (business_id,),
+            )
 
     return settings
 
 
 def update_widget_settings(business_id: int, **fields) -> bool:
     """Update widget settings for a business."""
-    allowed = {"enabled", "position", "primary_color", "welcome_message",
-               "placeholder_text", "allowed_domains", "show_branding", "auto_open_delay"}
+    allowed = {
+        "enabled",
+        "position",
+        "primary_color",
+        "welcome_message",
+        "placeholder_text",
+        "allowed_domains",
+        "show_branding",
+        "auto_open_delay",
+    }
 
     safe_fields = {k: v for k, v in fields.items() if k in allowed}
     if not safe_fields:
@@ -689,7 +693,7 @@ def update_widget_settings(business_id: int, **fields) -> bool:
         with transaction() as con:
             con.execute(
                 f"UPDATE widget_settings SET {', '.join(cols)}, updated_at = datetime('now') WHERE business_id = ?",
-                tuple(vals)
+                tuple(vals),
             )
         return True
     except Exception as e:

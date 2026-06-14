@@ -7,7 +7,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from core import billing
 from core.db import get_conn
@@ -51,9 +51,11 @@ def _limits(business_id: int) -> Optional[Dict[str, Any]]:
 def conversations_this_month(business_id: int) -> int:
     """Count conversations (sessions) created for this business in the current
     UTC calendar month."""
-    start = datetime.now(timezone.utc).replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).strftime("%Y-%m-%d %H:%M:%S")
+    start = (
+        datetime.now(timezone.utc)
+        .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        .strftime("%Y-%m-%d %H:%M:%S")
+    )
     with get_conn() as con:
         row = con.execute(
             "SELECT COUNT(*) c FROM sessions WHERE business_id = ? AND created_at >= ?",
@@ -72,8 +74,13 @@ def quota_status(business_id: int) -> Dict[str, Any]:
     if limit < 0:
         return {"gated": True, "limit": -1, "used": used, "remaining": -1, "over": False}
     remaining = max(0, limit - used)
-    return {"gated": True, "limit": limit, "used": used,
-            "remaining": remaining, "over": used >= limit}
+    return {
+        "gated": True,
+        "limit": limit,
+        "used": used,
+        "remaining": remaining,
+        "over": used >= limit,
+    }
 
 
 def can_start_conversation(business_id: int) -> bool:
@@ -109,5 +116,7 @@ def upgrade_message(business_id: int, what: str = "conversations") -> str:
     """Friendly limit-reached copy for surfacing to end-users/owners."""
     pk = effective_plan_key(business_id)
     name = billing.plan(pk)["name"] if pk and billing.plan(pk) else "your"
-    return (f"You've reached your {name} plan's monthly {what} limit. "
-            "Please upgrade your plan to continue.")
+    return (
+        f"You've reached your {name} plan's monthly {what} limit. "
+        "Please upgrade your plan to continue."
+    )

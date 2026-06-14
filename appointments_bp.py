@@ -5,23 +5,26 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response
+from flask import Blueprint, Response, flash, redirect, render_template, request, session, url_for
 
-from core.db import get_conn, list_businesses, create_appointment, create_appointment_atomic
-from core.integrations import get_business_provider
+from core.db import create_appointment_atomic, get_conn, list_businesses
 from core.ics import make_ics
+from core.integrations import get_business_provider
 from core.mailer import send_email
 from core.validators import (
-    safe_int, validate_email, validate_phone, validate_name,
-    validate_datetime, format_datetime, csv_escape, build_csv_row
+    build_csv_row,
+    format_datetime,
+    safe_int,
+    validate_datetime,
+    validate_email,
+    validate_name,
+    validate_phone,
 )
 
 # Import reminders module (optional - graceful fallback if not available)
 try:
-    from core.reminders import (
-        schedule_reminders_for_appointment,
-        cancel_reminders_for_appointment
-    )
+    from core.reminders import cancel_reminders_for_appointment, schedule_reminders_for_appointment
+
     REMINDERS_AVAILABLE = True
 except ImportError:
     REMINDERS_AVAILABLE = False
@@ -34,6 +37,7 @@ bp = Blueprint("appointments", __name__)
 # ============================================================================
 # Authentication & Authorization Helpers
 # ============================================================================
+
 
 def _user() -> Optional[dict]:
     """Get the current user from session."""
@@ -56,7 +60,7 @@ def _owner_can_access(business_id: int) -> bool:
     with get_conn() as con:
         row = con.execute(
             "SELECT 1 FROM business_users WHERE user_id=? AND business_id=?",
-            (user["id"], business_id)
+            (user["id"], business_id),
         ).fetchone()
     return bool(row)
 
@@ -64,6 +68,7 @@ def _owner_can_access(business_id: int) -> bool:
 # ============================================================================
 # Routes
 # ============================================================================
+
 
 @bp.route("/appointments")
 def appointments_index():
@@ -75,7 +80,9 @@ def appointments_index():
     status = (request.args.get("status") or "").strip().lower()
 
     businesses = list_businesses(limit=500)
-    business = next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    business = (
+        next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    )
     appts = []
 
     if business:
@@ -85,26 +92,28 @@ def appointments_index():
 
         with get_conn() as con:
             if status and status in ("pending", "confirmed", "cancelled", "completed"):
-                appts = con.execute("""
+                appts = con.execute(
+                    """
                     SELECT * FROM appointments
                     WHERE business_id=? AND status=?
                     ORDER BY COALESCE(start_at, created_at) DESC
                     LIMIT 500
-                """, (business_id, status)).fetchall()
+                """,
+                    (business_id, status),
+                ).fetchall()
             else:
-                appts = con.execute("""
+                appts = con.execute(
+                    """
                     SELECT * FROM appointments
                     WHERE business_id=?
                     ORDER BY COALESCE(start_at, created_at) DESC
                     LIMIT 500
-                """, (business_id,)).fetchall()
+                """,
+                    (business_id,),
+                ).fetchall()
 
     return render_template(
-        "appointments.html",
-        businesses=businesses,
-        business=business,
-        appts=appts,
-        status=status
+        "appointments.html", businesses=businesses, business=business, appts=appts, status=status
     )
 
 
@@ -116,6 +125,7 @@ def appointments_calendar():
 
     import calendar as _cal
     from datetime import date, timedelta
+
     from flask import g
 
     business_id = safe_int(request.args.get("business_id")) or getattr(g, "active_business_id", 0)
@@ -124,7 +134,9 @@ def appointments_calendar():
         view = "month"
 
     businesses = list_businesses(limit=500)
-    business = next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    business = (
+        next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    )
     if business and not _owner_can_access(business_id):
         flash("Access denied.", "err")
         return redirect(url_for("appointments.appointments_index"))
@@ -153,7 +165,7 @@ def appointments_calendar():
         target_month = month
         weeks = _cal.Calendar(firstweekday=0).monthdatescalendar(year, month)
         title = date(year, month, 1).strftime("%B %Y")
-        pm = (date(year, month, 1) - timedelta(days=1))
+        pm = date(year, month, 1) - timedelta(days=1)
         nm = (date(year, month, 28) + timedelta(days=10)).replace(day=1)
         prev_param = {"view": "month", "year": pm.year, "month": pm.month}
         next_param = {"view": "month", "year": nm.year, "month": nm.month}
@@ -165,33 +177,43 @@ def appointments_calendar():
     by_date: dict = {}
     if business:
         with get_conn() as con:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT id, customer_name, service, start_at, status
                 FROM appointments
                 WHERE business_id=? AND start_at IS NOT NULL
                   AND start_at >= ? AND start_at < ?
                 ORDER BY start_at ASC
-            """, (business_id, grid_start, grid_end)).fetchall()
+            """,
+                (business_id, grid_start, grid_end),
+            ).fetchall()
         for r in rows:
             day = (r["start_at"] or "")[:10]
             t = (r["start_at"] or "")[11:16]
-            by_date.setdefault(day, []).append({
-                "id": r["id"], "time": t, "service": r["service"],
-                "customer_name": r["customer_name"], "status": r["status"],
-            })
+            by_date.setdefault(day, []).append(
+                {
+                    "id": r["id"],
+                    "time": t,
+                    "service": r["service"],
+                    "customer_name": r["customer_name"],
+                    "status": r["status"],
+                }
+            )
 
     # Shape weeks into cells the template can render.
     grid = []
     for wk in weeks:
         cells = []
         for d in wk:
-            cells.append({
-                "iso": d.isoformat(),
-                "day": d.day,
-                "in_month": target_month is None or d.month == target_month,
-                "is_today": d == today,
-                "appts": by_date.get(d.isoformat(), []),
-            })
+            cells.append(
+                {
+                    "iso": d.isoformat(),
+                    "day": d.day,
+                    "in_month": target_month is None or d.month == target_month,
+                    "is_today": d == today,
+                    "appts": by_date.get(d.isoformat(), []),
+                }
+            )
         grid.append(cells)
 
     def _cal_url(**extra):
@@ -200,8 +222,12 @@ def appointments_calendar():
 
     return render_template(
         "appointments_calendar.html",
-        businesses=businesses, business=business, business_id=business_id,
-        view=view, title=title, grid=grid,
+        businesses=businesses,
+        business=business,
+        business_id=business_id,
+        view=view,
+        title=title,
+        grid=grid,
         prev_url=_cal_url(**prev_param),
         next_url=_cal_url(**next_param),
         today_url=_cal_url(view=view),
@@ -252,11 +278,16 @@ def appointments_set_status(appt_id: int):
     # Sync calendar changes in background
     try:
         import threading
+
         if new_status == "cancelled":
             from core.google_calendar import delete_appointment_from_gcal
-            threading.Thread(target=delete_appointment_from_gcal, args=(appt_id,), daemon=True).start()
+
+            threading.Thread(
+                target=delete_appointment_from_gcal, args=(appt_id,), daemon=True
+            ).start()
         elif new_status == "confirmed":
             from core.google_calendar import sync_appointment_to_gcal
+
             threading.Thread(target=sync_appointment_to_gcal, args=(appt_id,), daemon=True).start()
     except Exception:
         pass
@@ -280,26 +311,41 @@ def appointments_export_csv():
 
     with get_conn() as con:
         if status and status in ("pending", "confirmed", "cancelled", "completed"):
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT id, customer_name, phone, service, start_at, status,
                        session_id, created_at, customer_email
                 FROM appointments
                 WHERE business_id=? AND status=?
                 ORDER BY COALESCE(start_at, created_at) DESC
-            """, (business_id, status)).fetchall()
+            """,
+                (business_id, status),
+            ).fetchall()
         else:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT id, customer_name, phone, service, start_at, status,
                        session_id, created_at, customer_email
                 FROM appointments
                 WHERE business_id=?
                 ORDER BY COALESCE(start_at, created_at) DESC
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
 
     def generate_csv():
         # Header row
-        cols = ["id", "customer_name", "phone", "customer_email", "service",
-                "start_at", "status", "session_id", "created_at"]
+        cols = [
+            "id",
+            "customer_name",
+            "phone",
+            "customer_email",
+            "service",
+            "start_at",
+            "status",
+            "session_id",
+            "created_at",
+        ]
         yield build_csv_row(cols)
 
         # Data rows with proper escaping
@@ -311,7 +357,7 @@ def appointments_export_csv():
     return Response(
         generate_csv(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -334,12 +380,12 @@ def appointments_new():
 
     # Load services depending on provider
     services = []
-    local_mode = (provider.key == "local")
+    local_mode = provider.key == "local"
     if local_mode:
         with get_conn() as con:
             services = con.execute(
                 "SELECT id, name, duration_min, price FROM services WHERE business_id=? AND active=1 ORDER BY name",
-                (bid,)
+                (bid,),
             ).fetchall()
     else:
         try:
@@ -417,7 +463,7 @@ def appointments_new():
                 slots=slots,
                 date=date_str,
                 service_id=sid,
-                values=request.form
+                values=request.form,
             )
 
         # Get service details
@@ -427,7 +473,7 @@ def appointments_new():
             with get_conn() as con:
                 row = con.execute(
                     "SELECT name, duration_min FROM services WHERE id=? AND business_id=?",
-                    (sid, bid)
+                    (sid, bid),
                 ).fetchone()
             if row:
                 svc_name = row["name"]
@@ -442,14 +488,19 @@ def appointments_new():
         # Create external booking if applicable
         ext_id = None
         try:
-            res = provider.create_booking({
-                "customer_name": name,
-                "phone": phone,
-                "email": email,
-                "service_id": sid,
-                "service_name": svc_name,
-                "start_at": slot,
-            }) or {}
+            res = (
+                provider.create_booking(
+                    {
+                        "customer_name": name,
+                        "phone": phone,
+                        "email": email,
+                        "service_id": sid,
+                        "service_name": svc_name,
+                        "start_at": slot,
+                    }
+                )
+                or {}
+            )
             ext_id = res.get("external_id")
         except Exception as e:
             logger.warning(f"External booking creation failed (continuing): {e}")
@@ -469,7 +520,7 @@ def appointments_new():
             external_id=ext_id,
             source="owner",
             notes=notes,
-            customer_email=email
+            customer_email=email,
         )
 
         if error or not appt_id:
@@ -479,7 +530,9 @@ def appointments_new():
             except Exception:
                 valid_slots = []
 
-            flash(error or "Failed to create appointment. The slot may no longer be available.", "err")
+            flash(
+                error or "Failed to create appointment. The slot may no longer be available.", "err"
+            )
             return render_template(
                 "appointments_new.html",
                 business_id=bid,
@@ -488,7 +541,7 @@ def appointments_new():
                 slots=valid_slots,
                 date=date_str,
                 service_id=sid,
-                values=request.form
+                values=request.form,
             )
 
         # Generate ICS and send email
@@ -504,7 +557,7 @@ def appointments_new():
                     description=f"Service: {svc_name}\nCustomer: {name}\nPhone: {phone}",
                     start=start_dt,
                     duration_min=duration_min,
-                    location=address
+                    location=address,
                 )
 
                 # Send confirmation email if address provided
@@ -513,7 +566,7 @@ def appointments_new():
                         to_email=email,
                         subject=f"Appointment confirmed — {svc_name}",
                         body=f"Hi {name},\n\nYour appointment for {svc_name} is booked at {format_datetime(start_dt)}.\n\nThanks,\n{business_name}",
-                        attachments=[("appointment.ics", "text/calendar", ics)]
+                        attachments=[("appointment.ics", "text/calendar", ics)],
                     )
         except Exception as e:
             logger.error(f"Failed to generate ICS or send email: {e}")
@@ -526,10 +579,12 @@ def appointments_new():
                     appointment_id=appt_id,
                     start_at=slot,
                     customer_email=email,
-                    customer_phone=phone
+                    customer_phone=phone,
                 )
                 if reminder_ids:
-                    logger.info(f"Scheduled {len(reminder_ids)} reminders for appointment {appt_id}")
+                    logger.info(
+                        f"Scheduled {len(reminder_ids)} reminders for appointment {appt_id}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to schedule reminders for appointment {appt_id}: {e}")
                 # Don't fail the appointment creation
@@ -540,11 +595,11 @@ def appointments_new():
         if appt_id:
             try:
                 import threading
+
                 from core.google_calendar import sync_appointment_to_gcal
+
                 threading.Thread(
-                    target=sync_appointment_to_gcal,
-                    args=(appt_id,),
-                    daemon=True
+                    target=sync_appointment_to_gcal, args=(appt_id,), daemon=True
                 ).start()
             except Exception:
                 pass  # GCal sync is optional
@@ -561,7 +616,7 @@ def appointments_new():
         slots=slots,
         date=date_str,
         service_id=safe_int(chosen_service_id),
-        values={}
+        values={},
     )
 
 
@@ -586,8 +641,7 @@ def appointments_ics(appt_id: int):
     svc_name = appt["service"] or "Appointment"
     with get_conn() as con:
         row = con.execute(
-            "SELECT duration_min FROM services WHERE business_id=? AND name=?",
-            (bid, svc_name)
+            "SELECT duration_min FROM services WHERE business_id=? AND name=?", (bid, svc_name)
         ).fetchone()
         if row:
             duration = safe_int(row["duration_min"], 60, min_val=5, max_val=480)
@@ -607,12 +661,12 @@ def appointments_ics(appt_id: int):
         description=f"Service: {svc_name}\nCustomer: {appt['customer_name']}\nPhone: {appt['phone']}",
         start=start_dt,
         duration_min=min(duration, 480),
-        location=address
+        location=address,
     )
 
     filename = f"appointment_{appt_id}.ics"
     return Response(
         ics,
         mimetype="text/calendar",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

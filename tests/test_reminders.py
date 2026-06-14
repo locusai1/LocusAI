@@ -1,8 +1,9 @@
 # tests/test_reminders.py — Tests for core/reminders.py (Appointment Reminders)
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestReminderTypes:
@@ -11,6 +12,7 @@ class TestReminderTypes:
     def test_reminder_type_values(self):
         """Should have correct reminder type values."""
         from core.reminders import ReminderType
+
         assert ReminderType.TWENTY_FOUR_HOURS.value == "24h"
         assert ReminderType.ONE_HOUR.value == "1h"
         assert ReminderType.FIFTEEN_MINUTES.value == "15m"
@@ -18,12 +20,14 @@ class TestReminderTypes:
     def test_reminder_channel_values(self):
         """Should have correct channel values."""
         from core.reminders import ReminderChannel
+
         assert ReminderChannel.EMAIL.value == "email"
         assert ReminderChannel.SMS.value == "sms"
 
     def test_reminder_status_values(self):
         """Should have correct status values."""
         from core.reminders import ReminderStatus
+
         assert ReminderStatus.PENDING.value == "pending"
         assert ReminderStatus.SENT.value == "sent"
         assert ReminderStatus.FAILED.value == "failed"
@@ -36,6 +40,7 @@ class TestReminderConfiguration:
     def test_default_schedule_defined(self):
         """Should have default reminder schedule."""
         from core.reminders import DEFAULT_REMINDER_SCHEDULE
+
         assert len(DEFAULT_REMINDER_SCHEDULE) >= 1
         # Each item should be (ReminderType, ReminderChannel) tuple
         for item in DEFAULT_REMINDER_SCHEDULE:
@@ -44,6 +49,7 @@ class TestReminderConfiguration:
     def test_reminder_deltas_defined(self):
         """Should have time deltas for each type."""
         from core.reminders import REMINDER_DELTAS, ReminderType
+
         assert ReminderType.TWENTY_FOUR_HOURS in REMINDER_DELTAS
         assert ReminderType.ONE_HOUR in REMINDER_DELTAS
         assert ReminderType.FIFTEEN_MINUTES in REMINDER_DELTAS
@@ -51,6 +57,7 @@ class TestReminderConfiguration:
     def test_reminder_deltas_correct(self):
         """Should have correct time deltas."""
         from core.reminders import REMINDER_DELTAS, ReminderType
+
         assert REMINDER_DELTAS[ReminderType.TWENTY_FOUR_HOURS] == timedelta(hours=24)
         assert REMINDER_DELTAS[ReminderType.ONE_HOUR] == timedelta(hours=1)
         assert REMINDER_DELTAS[ReminderType.FIFTEEN_MINUTES] == timedelta(minutes=15)
@@ -61,39 +68,45 @@ class TestScheduleReminders:
 
     def test_schedule_reminders_creates_records(self, sample_business):
         """Should create reminder records."""
-        from core.reminders import schedule_reminders_for_appointment
         from core.db import transaction
+        from core.reminders import schedule_reminders_for_appointment
 
         # Create a test appointment
         future = datetime.now() + timedelta(days=2)
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test Customer", future.isoformat()))
+            """,
+                (sample_business["id"], "Test Customer", future.isoformat()),
+            )
             appt_id = cur.lastrowid
 
         reminder_ids = schedule_reminders_for_appointment(
             appointment_id=appt_id,
             start_at=future.isoformat(),
             customer_email="test@example.com",
-            customer_phone="555-1234"
+            customer_phone="555-1234",
         )
         assert len(reminder_ids) >= 1
 
     def test_schedule_reminders_skips_email_without_address(self, sample_business):
         """Should skip email reminders if no email provided."""
-        from core.reminders import schedule_reminders_for_appointment, ReminderType, ReminderChannel
-        from core.db import transaction, get_conn
+        from core.db import get_conn, transaction
+        from core.reminders import ReminderChannel, ReminderType, schedule_reminders_for_appointment
 
         future = datetime.now() + timedelta(days=2)
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test", future.isoformat()))
+            """,
+                (sample_business["id"], "Test", future.isoformat()),
+            )
             appt_id = cur.lastrowid
 
         # Only provide phone, not email
@@ -102,30 +115,33 @@ class TestScheduleReminders:
             start_at=future.isoformat(),
             customer_email=None,
             customer_phone="555-1234",
-            reminder_schedule=[(ReminderType.TWENTY_FOUR_HOURS, ReminderChannel.EMAIL)]
+            reminder_schedule=[(ReminderType.TWENTY_FOUR_HOURS, ReminderChannel.EMAIL)],
         )
         assert len(reminder_ids) == 0
 
     def test_schedule_reminders_skips_past_times(self, sample_business):
         """Should skip reminders scheduled in the past."""
-        from core.reminders import schedule_reminders_for_appointment, ReminderType, ReminderChannel
         from core.db import transaction
+        from core.reminders import ReminderChannel, ReminderType, schedule_reminders_for_appointment
 
         # Appointment in 30 minutes - 24h reminder would be in the past
         soon = datetime.now() + timedelta(minutes=30)
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test", soon.isoformat()))
+            """,
+                (sample_business["id"], "Test", soon.isoformat()),
+            )
             appt_id = cur.lastrowid
 
         reminder_ids = schedule_reminders_for_appointment(
             appointment_id=appt_id,
             start_at=soon.isoformat(),
             customer_email="test@example.com",
-            reminder_schedule=[(ReminderType.TWENTY_FOUR_HOURS, ReminderChannel.EMAIL)]
+            reminder_schedule=[(ReminderType.TWENTY_FOUR_HOURS, ReminderChannel.EMAIL)],
         )
         assert len(reminder_ids) == 0
 
@@ -134,9 +150,7 @@ class TestScheduleReminders:
         from core.reminders import schedule_reminders_for_appointment
 
         result = schedule_reminders_for_appointment(
-            appointment_id=999,
-            start_at="invalid-datetime",
-            customer_email="test@example.com"
+            appointment_id=999, start_at="invalid-datetime", customer_email="test@example.com"
         )
         assert result == []
 
@@ -146,23 +160,29 @@ class TestCancelReminders:
 
     def test_cancel_reminders(self, sample_business):
         """Should cancel all reminders for appointment."""
-        from core.reminders import schedule_reminders_for_appointment, cancel_reminders_for_appointment
-        from core.db import transaction, get_conn
+        from core.db import get_conn, transaction
+        from core.reminders import (
+            cancel_reminders_for_appointment,
+            schedule_reminders_for_appointment,
+        )
 
         future = datetime.now() + timedelta(days=2)
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test", future.isoformat()))
+            """,
+                (sample_business["id"], "Test", future.isoformat()),
+            )
             appt_id = cur.lastrowid
 
         schedule_reminders_for_appointment(
             appointment_id=appt_id,
             start_at=future.isoformat(),
             customer_email="test@example.com",
-            customer_phone="555-1234"
+            customer_phone="555-1234",
         )
 
         cancelled_count = cancel_reminders_for_appointment(appt_id)
@@ -171,8 +191,7 @@ class TestCancelReminders:
         # Verify status changed
         with get_conn() as con:
             rows = con.execute(
-                "SELECT status FROM reminders WHERE appointment_id = ?",
-                (appt_id,)
+                "SELECT status FROM reminders WHERE appointment_id = ?", (appt_id,)
             ).fetchall()
             for row in rows:
                 assert row["status"] == "cancelled"
@@ -183,22 +202,26 @@ class TestRescheduleReminders:
 
     def test_reschedule_reminders(self, sample_business):
         """Should cancel old and create new reminders."""
-        from core.reminders import schedule_reminders_for_appointment, reschedule_reminders_for_appointment
         from core.db import transaction
+        from core.reminders import (
+            reschedule_reminders_for_appointment,
+            schedule_reminders_for_appointment,
+        )
 
         future = datetime.now() + timedelta(days=2)
         with transaction() as con:
             cur = con.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test", future.isoformat()))
+            """,
+                (sample_business["id"], "Test", future.isoformat()),
+            )
             appt_id = cur.lastrowid
 
         schedule_reminders_for_appointment(
-            appointment_id=appt_id,
-            start_at=future.isoformat(),
-            customer_email="test@example.com"
+            appointment_id=appt_id, start_at=future.isoformat(), customer_email="test@example.com"
         )
 
         # Reschedule to a different time
@@ -206,7 +229,7 @@ class TestRescheduleReminders:
         new_ids = reschedule_reminders_for_appointment(
             appointment_id=appt_id,
             new_start_at=new_time.isoformat(),
-            customer_email="test@example.com"
+            customer_email="test@example.com",
         )
         assert len(new_ids) >= 1
 
@@ -216,9 +239,10 @@ class TestGetDueReminders:
 
     def test_get_due_reminders_empty(self):
         """Should return empty list when none due."""
-        from core.reminders import get_due_reminders
         # Clear any existing due reminders
         from core.db import get_conn
+        from core.reminders import get_due_reminders
+
         with get_conn() as con:
             con.execute("DELETE FROM reminders WHERE status = 'pending'")
             con.commit()
@@ -228,25 +252,31 @@ class TestGetDueReminders:
 
     def test_get_due_reminders_returns_pending(self, sample_business):
         """Should return reminders scheduled for now or past."""
-        from core.reminders import get_due_reminders
         from core.db import transaction
+        from core.reminders import get_due_reminders
 
         # Create a reminder scheduled in the past
         past = datetime.now() - timedelta(minutes=5)
         with transaction() as con:
             cur = con.cursor()
             # First create appointment
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO appointments (business_id, customer_name, start_at, status)
                 VALUES (?, ?, ?, 'confirmed')
-            """, (sample_business["id"], "Test", (past + timedelta(hours=1)).isoformat()))
+            """,
+                (sample_business["id"], "Test", (past + timedelta(hours=1)).isoformat()),
+            )
             appt_id = cur.lastrowid
 
             # Create due reminder
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO reminders (appointment_id, type, channel, scheduled_for, status)
                 VALUES (?, '24h', 'email', ?, 'pending')
-            """, (appt_id, past.isoformat()))
+            """,
+                (appt_id, past.isoformat()),
+            )
 
         due = get_due_reminders()
         assert len(due) >= 1
@@ -265,7 +295,7 @@ class TestGenerateReminderContent:
             "customer_name": "John Doe",
             "service": "Haircut",
             "start_at": (datetime.now() + timedelta(days=1)).isoformat(),
-            "business_name": "Test Salon"
+            "business_name": "Test Salon",
         }
 
         result = generate_email_reminder(reminder)
@@ -283,7 +313,7 @@ class TestGenerateReminderContent:
             "customer_name": "John Doe",
             "service": "Haircut",
             "start_at": (datetime.now() + timedelta(hours=1)).isoformat(),
-            "business_name": "Test Salon"
+            "business_name": "Test Salon",
         }
 
         result = generate_sms_reminder(reminder)
@@ -307,7 +337,7 @@ class TestSendReminder:
             "customer_name": "John",
             "service": "Haircut",
             "start_at": datetime.now().isoformat(),
-            "business_name": "Test"
+            "business_name": "Test",
         }
 
         # Will return success or failure based on email config
@@ -329,7 +359,7 @@ class TestSendReminder:
             "customer_name": "John",
             "service": "Haircut",
             "start_at": datetime.now().isoformat(),
-            "business_name": "Test"
+            "business_name": "Test",
         }
 
         success, error = send_reminder(reminder)

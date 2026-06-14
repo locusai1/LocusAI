@@ -1,31 +1,31 @@
 # voice_bp.py — Voice webhook handlers for LocusAI
 # Handles incoming voice calls via Retell AI and routes to AI conversation flow
 
-import os
-import json
 import logging
-from flask import Blueprint, request, Response, jsonify, g, session
+import os
 
-from core.db import get_conn, log_message, get_business_by_id
-from core.security import log_security_event, SecurityEvent
+from flask import Blueprint, Response, g, jsonify, request, session
+
+from core.db import get_business_by_id, get_conn, log_message
+from core.security import SecurityEvent, log_security_event
 from core.voice import (
-    verify_retell_signature,
-    handle_call_started,
-    handle_call_ended,
-    handle_call_analyzed,
-    get_voice_call,
-    update_voice_call,
-    get_voice_settings,
-    create_outbound_call,
-    is_retell_configured,
-    extract_voice_booking,
-    detect_booking_response,
-    confirm_voice_booking,
-    cancel_voice_booking,
-    get_voice_pending_booking,
-    get_caller_info,
-    _get_business_by_phone,
     RetellClientError,
+    _get_business_by_phone,
+    cancel_voice_booking,
+    confirm_voice_booking,
+    create_outbound_call,
+    detect_booking_response,
+    extract_voice_booking,
+    get_caller_info,
+    get_voice_call,
+    get_voice_pending_booking,
+    get_voice_settings,
+    handle_call_analyzed,
+    handle_call_ended,
+    handle_call_started,
+    is_retell_configured,
+    update_voice_call,
+    verify_retell_signature,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ bp = Blueprint("voice", __name__, url_prefix="/api/voice")
 # ============================================================================
 # Webhook Signature Verification
 # ============================================================================
+
 
 def _verify_retell_request() -> bool:
     """Verify that the request is actually from Retell."""
@@ -50,7 +51,7 @@ def _verify_retell_request() -> bool:
     if not verify_retell_signature(payload, signature):
         log_security_event(
             SecurityEvent.WEBHOOK_VERIFICATION_FAILED,
-            details={"source": "retell", "path": request.path}
+            details={"source": "retell", "path": request.path},
         )
         return False
 
@@ -60,6 +61,7 @@ def _verify_retell_request() -> bool:
 # ============================================================================
 # Inbound Dynamic Variables — Caller Recognition (fires before call is answered)
 # ============================================================================
+
 
 @bp.route("/call-setup", methods=["POST"])
 def call_setup():
@@ -107,6 +109,7 @@ def call_setup():
 # ============================================================================
 # Main Webhook Endpoint
 # ============================================================================
+
 
 @bp.route("/webhook", methods=["POST"])
 def voice_webhook():
@@ -162,6 +165,7 @@ def voice_webhook():
 # LLM Response Webhook (Real-time conversation)
 # ============================================================================
 
+
 @bp.route("/webhook/response", methods=["POST"])
 def voice_response_webhook():
     """Handle LLM response requests from Retell.
@@ -216,9 +220,13 @@ def voice_response_webhook():
         if response_type == "confirm":
             success, message, appt_id = confirm_voice_booking(call_id, business_id, session_id)
             if success:
-                response = "Your booking has been confirmed! You'll receive a confirmation text shortly."
+                response = (
+                    "Your booking has been confirmed! You'll receive a confirmation text shortly."
+                )
             else:
-                response = f"I couldn't complete the booking: {message}. Would you like to try again?"
+                response = (
+                    f"I couldn't complete the booking: {message}. Would you like to try again?"
+                )
             log_message(session_id, "bot", response)
             return jsonify({"response": response})
         elif response_type == "cancel":
@@ -243,9 +251,7 @@ def voice_response_webhook():
 
         # Get AI response with voice-optimized prompt
         ai_response = process_message_for_voice(
-            user_input=last_utterance,
-            business_data=business_data,
-            state=state
+            user_input=last_utterance, business_data=business_data, state=state
         )
 
         # Check for booking in response
@@ -269,6 +275,7 @@ def voice_response_webhook():
 # ============================================================================
 # Outbound Call Endpoint
 # ============================================================================
+
 
 @bp.route("/outbound", methods=["POST"])
 def create_outbound():
@@ -306,28 +313,19 @@ def create_outbound():
     metadata = data.get("metadata", {})
 
     success, message, call_data = create_outbound_call(
-        business_id=business_id,
-        to_number=to_number,
-        purpose=purpose,
-        metadata=metadata
+        business_id=business_id, to_number=to_number, purpose=purpose, metadata=metadata
     )
 
     if success:
-        return jsonify({
-            "success": True,
-            "message": message,
-            "call": call_data
-        })
+        return jsonify({"success": True, "message": message, "call": call_data})
     else:
-        return jsonify({
-            "success": False,
-            "error": message
-        }), 400
+        return jsonify({"success": False, "error": message}), 400
 
 
 # ============================================================================
 # Call Management Endpoints
 # ============================================================================
+
 
 @bp.route("/calls", methods=["GET"])
 def list_calls():
@@ -350,22 +348,25 @@ def list_calls():
 
     with get_conn() as con:
         if status:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT * FROM voice_calls
                 WHERE business_id = ? AND call_status = ?
                 ORDER BY created_at DESC LIMIT ?
-            """, (business_id, status, limit)).fetchall()
+            """,
+                (business_id, status, limit),
+            ).fetchall()
         else:
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT * FROM voice_calls
                 WHERE business_id = ?
                 ORDER BY created_at DESC LIMIT ?
-            """, (business_id, limit)).fetchall()
+            """,
+                (business_id, limit),
+            ).fetchall()
 
-    return jsonify({
-        "calls": [dict(r) for r in rows],
-        "count": len(rows)
-    })
+    return jsonify({"calls": [dict(r) for r in rows], "count": len(rows)})
 
 
 @bp.route("/calls/<call_id>", methods=["GET"])
@@ -390,11 +391,14 @@ def get_call_details(call_id: str):
     # Get associated messages
     if call["session_id"]:
         with get_conn() as con:
-            messages = con.execute("""
+            messages = con.execute(
+                """
                 SELECT sender, text, timestamp FROM messages
                 WHERE session_id = ?
                 ORDER BY id
-            """, (call["session_id"],)).fetchall()
+            """,
+                (call["session_id"],),
+            ).fetchall()
             call["messages"] = [dict(m) for m in messages]
     else:
         call["messages"] = []
@@ -441,6 +445,7 @@ def transfer_call(call_id: str):
 
     try:
         from core.voice import get_retell_client
+
         client = get_retell_client()
 
         # Request transfer via Retell API
@@ -448,19 +453,14 @@ def transfer_call(call_id: str):
 
         # Update call record
         update_voice_call(
-            call_id,
-            transferred=1,
-            transfer_number=transfer_number,
-            transfer_reason=reason
+            call_id, transferred=1, transfer_number=transfer_number, transfer_reason=reason
         )
 
         logger.info(f"Call {call_id} transferred to {transfer_number}")
 
-        return jsonify({
-            "success": True,
-            "message": "Call transferred",
-            "transfer_number": transfer_number
-        })
+        return jsonify(
+            {"success": True, "message": "Call transferred", "transfer_number": transfer_number}
+        )
 
     except RetellClientError as e:
         logger.error(f"Failed to transfer call: {e}")
@@ -470,6 +470,7 @@ def transfer_call(call_id: str):
 # ============================================================================
 # Voice Settings Endpoints
 # ============================================================================
+
 
 @bp.route("/settings", methods=["GET"])
 def get_settings():
@@ -514,6 +515,7 @@ def update_settings():
 # Health & Configuration Check
 # ============================================================================
 
+
 @bp.route("/status", methods=["GET"])
 def voice_status():
     """Check voice configuration status.
@@ -548,6 +550,7 @@ def voice_status():
 # Prompt Sync — push live KB/services/hours to Retell native LLM
 # ============================================================================
 
+
 @bp.route("/sync-calls", methods=["POST"])
 def sync_calls():
     """Pull recent calls from Retell API and store them in the local DB.
@@ -564,6 +567,7 @@ def sync_calls():
         return jsonify({"error": "No business selected"}), 400
 
     from core.voice import sync_calls_from_retell
+
     success, message = sync_calls_from_retell(business_id)
 
     if success:
@@ -588,6 +592,7 @@ def sync_prompt():
         return jsonify({"error": "No business selected"}), 400
 
     from core.voice import sync_retell_prompt
+
     # Pass the current server URL so caller-recognition webhook can be auto-configured
     webhook_base_url = request.url_root.rstrip("/")
     success, message = sync_retell_prompt(business_id, webhook_base_url=webhook_base_url)
@@ -602,6 +607,7 @@ def sync_prompt():
 # Test Endpoint (Development Only)
 # ============================================================================
 
+
 @bp.route("/test", methods=["GET"])
 def voice_test():
     """Test endpoint to verify voice configuration.
@@ -611,8 +617,10 @@ def voice_test():
     if os.getenv("APP_ENV", "dev").lower() in ("prod", "production"):
         return Response("Not available in production", status=404)
 
-    return jsonify({
-        "retell_configured": is_retell_configured(),
-        "webhook_url": request.url_root.rstrip("/") + "/api/voice/webhook",
-        "response_url": request.url_root.rstrip("/") + "/api/voice/webhook/response",
-    })
+    return jsonify(
+        {
+            "retell_configured": is_retell_configured(),
+            "webhook_url": request.url_root.rstrip("/") + "/api/voice/webhook",
+            "response_url": request.url_root.rstrip("/") + "/api/voice/webhook/response",
+        }
+    )

@@ -2,6 +2,7 @@ import os
 
 LOG_DIR = "logs"
 
+
 def list_logs():
     """List all businesses that have logs."""
     if not os.path.exists(LOG_DIR):
@@ -10,6 +11,7 @@ def list_logs():
     files = os.listdir(LOG_DIR)
     businesses = [f.replace(".txt", "").replace("_", " ") for f in files if f.endswith(".txt")]
     return businesses
+
 
 def view_log(business_name):
     """Show log content for a specific business."""
@@ -24,6 +26,7 @@ def view_log(business_name):
         print(f.read())
     print("\n--- End of Log ---\n")
 
+
 def run():
     businesses = list_logs()
     if not businesses:
@@ -36,6 +39,6 @@ def run():
     choice = input("\nWhich business log do you want to view? ").strip()
     view_log(choice)
 
+
 if __name__ == "__main__":
     run()
-

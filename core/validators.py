@@ -1,10 +1,10 @@
 # core/validators.py — Input validation utilities for LocusAI
 # Provides consistent, secure validation across the application
 
-import re
 import logging
+import re
 from datetime import datetime
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -77,8 +77,10 @@ def validate_phone(phone: Optional[str]) -> Tuple[bool, str]:
 # Name Validation
 # ============================================================================
 
-def validate_name(name: Optional[str], field_name: str = "Name",
-                  min_length: int = 1, max_length: int = 200) -> Tuple[bool, str]:
+
+def validate_name(
+    name: Optional[str], field_name: str = "Name", min_length: int = 1, max_length: int = 200
+) -> Tuple[bool, str]:
     """Validate a person/business name.
 
     Returns:
@@ -187,11 +189,30 @@ def format_date(dt: datetime) -> str:
 # ============================================================================
 
 SLUG_REGEX = re.compile(r"^[a-z0-9][a-z0-9\-_]*[a-z0-9]$|^[a-z0-9]$")
-RESERVED_SLUGS = frozenset({
-    "admin", "api", "auth", "login", "logout", "dashboard", "health",
-    "appointments", "services", "chat", "kb", "integrations", "search",
-    "static", "assets", "brand", "business", "new", "edit", "delete",
-})
+RESERVED_SLUGS = frozenset(
+    {
+        "admin",
+        "api",
+        "auth",
+        "login",
+        "logout",
+        "dashboard",
+        "health",
+        "appointments",
+        "services",
+        "chat",
+        "kb",
+        "integrations",
+        "search",
+        "static",
+        "assets",
+        "brand",
+        "business",
+        "new",
+        "edit",
+        "delete",
+    }
+)
 
 
 def validate_slug(slug: Optional[str], max_length: int = 50) -> Tuple[bool, str]:
@@ -289,9 +310,13 @@ def validate_redirect_url(url: Optional[str], default: str = "/dashboard") -> st
 # Integer Validation
 # ============================================================================
 
-def safe_int(value: Optional[str], default: int = 0,
-             min_val: Optional[int] = None,
-             max_val: Optional[int] = None) -> int:
+
+def safe_int(
+    value: Optional[str],
+    default: int = 0,
+    min_val: Optional[int] = None,
+    max_val: Optional[int] = None,
+) -> int:
     """Safely parse an integer with optional bounds.
 
     Returns:
@@ -317,6 +342,7 @@ def safe_int(value: Optional[str], default: int = 0,
 # ============================================================================
 # CSV Escaping
 # ============================================================================
+
 
 def csv_escape(value) -> str:
     """Escape a value for safe CSV output.
@@ -348,6 +374,7 @@ def build_csv_row(values: List) -> str:
 # Password Validation
 # ============================================================================
 
+
 def validate_password(password: Optional[str]) -> Tuple[bool, str]:
     """Validate password strength.
 
@@ -377,8 +404,10 @@ def validate_password(password: Optional[str]) -> Tuple[bool, str]:
 # JSON Config Validation
 # ============================================================================
 
-def validate_json_config(json_str: Optional[str],
-                        required_keys: Optional[List[str]] = None) -> Tuple[bool, dict, str]:
+
+def validate_json_config(
+    json_str: Optional[str], required_keys: Optional[List[str]] = None
+) -> Tuple[bool, dict, str]:
     """Validate a JSON configuration string.
 
     Returns:

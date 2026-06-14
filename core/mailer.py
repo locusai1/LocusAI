@@ -1,10 +1,17 @@
-import smtplib, ssl, os
+import smtplib
+import ssl
 from email.message import EmailMessage
-from typing import Optional, List, Tuple
-from core.settings import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_TLS
+from typing import List, Optional, Tuple
 
-def send_email(to_email: str, subject: str, body: str,
-               attachments: Optional[List[Tuple[str,str,bytes]]] = None) -> bool:
+from core.settings import SMTP_FROM, SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_TLS, SMTP_USER
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachments: Optional[List[Tuple[str, str, bytes]]] = None,
+) -> bool:
     """
     attachments: list of (filename, mime_type, content_bytes)
     Returns True if sent (or logged when SMTP not configured).
@@ -27,7 +34,7 @@ def send_email(to_email: str, subject: str, body: str,
     msg["Subject"] = subject
     msg.set_content(body)
 
-    for fn, mt, content in (attachments or []):
+    for fn, mt, content in attachments or []:
         maintype, subtype = (mt.split("/", 1) + ["octet-stream"])[:2]
         msg.add_attachment(content, maintype=maintype, subtype=subtype, filename=fn)
 

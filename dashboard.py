@@ -1,15 +1,24 @@
 # dashboard.py — LocusAI admin (tenant isolation + branding + pro UI)
 # Production-grade Flask application with proper security and error handling
 
+import json
+import logging
 import os
 import uuid
-import logging
-import json
 from datetime import datetime, timedelta
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+from logging.handlers import RotatingFileHandler
+
 from flask import (
-    Flask, render_template, request, redirect, url_for,
-    session, flash, g, abort, Response
+    Flask,
+    Response,
+    abort,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 
 from core.settings import FLASK_SECRET_KEY, SENTRY_DSN
@@ -29,18 +38,20 @@ if SENTRY_DSN:
         )
         logging.getLogger(__name__).info("Sentry error monitoring enabled")
     except ImportError:
-        logging.getLogger(__name__).warning(
-            "SENTRY_DSN set but sentry-sdk not installed; skipping"
-        )
-from core.db import (
-    init_db, list_businesses, get_business_by_id, update_business,
-    get_conn, ensure_tenant_key
-)
+        logging.getLogger(__name__).warning("SENTRY_DSN set but sentry-sdk not installed; skipping")
 from core import billing
-from core.validators import slugify, validate_redirect_url, safe_int
-from core.tenantfs import write_meta_from_db
-from core.csrf import register_csrf
 from core.authz import get_allowed_business_ids_for_user, user_can_access_business
+from core.csrf import register_csrf
+from core.db import (
+    ensure_tenant_key,
+    get_business_by_id,
+    get_conn,
+    init_db,
+    list_businesses,
+    update_business,
+)
+from core.tenantfs import write_meta_from_db
+from core.validators import safe_int, slugify, validate_redirect_url
 
 # ============================================================================
 # Application Setup
@@ -71,7 +82,7 @@ app.config.update(
 
 # Maximum request body size: 16MB (adjust as needed)
 # This prevents denial-of-service attacks via large uploads
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB
 
 # Note: For file upload endpoints that need larger limits,
 # use @app.route decorators with specific limits or validate in the route
@@ -80,8 +91,9 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 # Provider Registration
 # ============================================================================
 
-import providers.local_provider  # noqa: F401
 import providers.dummy_provider  # noqa: F401
+import providers.local_provider  # noqa: F401
+
 try:
     import providers.retell_provider  # noqa: F401
 except ImportError:
@@ -91,25 +103,26 @@ except ImportError:
 # Blueprint Registration
 # ============================================================================
 
-from auth_bp import bp as auth_bp
+from analytics_bp import analytics_bp
 from appointments_bp import bp as appointments_bp
+from auth_bp import bp as auth_bp
+from billing_bp import bp as billing_bp
 from chat_bp import bp as chat_bp
-from onboard_bp import bp as onboard_bp
-from kb_bp import bp as kb_bp
-from services_bp import bp as services_bp
-from integrations_bp import bp as integrations_bp
-from search_bp import bp as search_bp
-from widget_bp import bp as widget_bp
 from customers_bp import bp as customers_bp
 from escalations_bp import escalations_bp
-from analytics_bp import analytics_bp
-from billing_bp import bp as billing_bp
+from integrations_bp import bp as integrations_bp
+from kb_bp import bp as kb_bp
+from onboard_bp import bp as onboard_bp
 from public_booking_bp import bp as public_booking_bp
+from search_bp import bp as search_bp
+from services_bp import bp as services_bp
 from webhooks_bp import bp as webhooks_bp
+from widget_bp import bp as widget_bp
 
 # SMS Blueprint (optional, requires Twilio or alternative provider)
 try:
     from sms_bp import bp as sms_bp
+
     SMS_AVAILABLE = True
 except ImportError:
     SMS_AVAILABLE = False
@@ -117,6 +130,7 @@ except ImportError:
 # Voice Blueprint (optional, requires Retell AI)
 try:
     from voice_bp import bp as voice_bp
+
     VOICE_AVAILABLE = True
 except ImportError:
     VOICE_AVAILABLE = False
@@ -149,17 +163,18 @@ if VOICE_AVAILABLE:
 # Background Call Sync — keeps the dashboard current without manual clicks
 # ============================================================================
 
+
 def _call_sync_tick():
     """One iteration: pull recent calls from Retell into the local DB."""
     if not VOICE_AVAILABLE:
         return
     from core.voice import sync_calls_from_retell
+
     with app.app_context():
         from core.db import get_conn
+
         with get_conn() as con:
-            row = con.execute(
-                "SELECT id FROM businesses WHERE archived = 0 LIMIT 1"
-            ).fetchone()
+            row = con.execute("SELECT id FROM businesses WHERE archived = 0 LIMIT 1").fetchone()
         if row:
             success, msg = sync_calls_from_retell(row["id"])
             if success:
@@ -170,10 +185,12 @@ def _call_sync_tick():
 # Background Reminder Worker — dispatches due SMS/email reminders every minute
 # ============================================================================
 
+
 def _reminder_tick():
     """One iteration: dispatch any due SMS/email reminders."""
     with app.app_context():
         from core.reminders import process_due_reminders
+
         stats = process_due_reminders()
         if stats["total"] > 0:
             app.logger.info(
@@ -186,6 +203,7 @@ def _reminder_tick():
 # Background Appointment Automation — no-show follow-ups & review requests
 # ============================================================================
 
+
 def _appointment_automation_tick():
     """One iteration: no-show follow-ups + review requests."""
     with app.app_context():
@@ -194,7 +212,8 @@ def _appointment_automation_tick():
 
 def _run_appointment_automations():
     """Execute no-show and review request automations."""
-    from core.sms import send_sms, TELNYX_CONFIGURED
+    from core.sms import TELNYX_CONFIGURED, send_sms
+
     if not TELNYX_CONFIGURED:
         return
 
@@ -224,8 +243,7 @@ def _run_appointment_automations():
                 result = send_sms(to=appt["phone"], message=msg)
                 if result.get("status") != "error":
                     con.execute(
-                        "UPDATE appointments SET no_show_sms_sent=1 WHERE id=?",
-                        (appt["id"],)
+                        "UPDATE appointments SET no_show_sms_sent=1 WHERE id=?", (appt["id"],)
                     )
                     con.connection.commit()
                     app.logger.info(f"No-show SMS sent for appointment {appt['id']}")
@@ -258,8 +276,7 @@ def _run_appointment_automations():
                 result = send_sms(to=appt["phone"], message=msg)
                 if result.get("status") != "error":
                     con.execute(
-                        "UPDATE appointments SET review_request_sent=1 WHERE id=?",
-                        (appt["id"],)
+                        "UPDATE appointments SET review_request_sent=1 WHERE id=?", (appt["id"],)
                     )
                     con.connection.commit()
                     app.logger.info(f"Review request SMS sent for appointment {appt['id']}")
@@ -269,11 +286,13 @@ def _run_appointment_automations():
 
 # Start all three workers under supervision (auto-restart + heartbeat + backoff).
 # Skipped under pytest so the suite doesn't spawn live background threads.
-from core.workers import start_worker, heartbeat_snapshot
+from core.workers import heartbeat_snapshot, start_worker
+
 
 def _webhook_dispatch_tick():
     """One iteration: deliver due outbound webhook events."""
     from core.webhooks import dispatch_pending
+
     with app.app_context():
         dispatch_pending()
 
@@ -281,6 +300,7 @@ def _webhook_dispatch_tick():
 def _digest_tick():
     """One iteration: send weekly performance digests (deduped per week)."""
     from core.digest import send_weekly_digests
+
     with app.app_context():
         sent = send_weekly_digests()
         if sent:
@@ -293,6 +313,7 @@ def _digest_tick():
 if not os.getenv("PYTEST_CURRENT_TEST"):
     try:
         from core.bootstrap import ensure_admin
+
         ensure_admin()
     except Exception:
         app.logger.exception("ensure_admin at startup failed")
@@ -300,8 +321,9 @@ if not os.getenv("PYTEST_CURRENT_TEST"):
 if not os.getenv("PYTEST_CURRENT_TEST"):
     start_worker("call_sync", _call_sync_tick, interval=180, initial_delay=10)
     start_worker("reminders", _reminder_tick, interval=60, initial_delay=20)
-    start_worker("appointment_automation", _appointment_automation_tick,
-                 interval=600, initial_delay=30)
+    start_worker(
+        "appointment_automation", _appointment_automation_tick, interval=600, initial_delay=30
+    )
     start_worker("webhook_dispatch", _webhook_dispatch_tick, interval=15, initial_delay=15)
     start_worker("weekly_digest", _digest_tick, interval=21600, initial_delay=120)  # ~6h
 
@@ -311,37 +333,37 @@ if not os.getenv("PYTEST_CURRENT_TEST"):
 
 os.makedirs("logs", exist_ok=True)
 
+
 # Structured log format with request ID correlation
 class RequestFormatter(logging.Formatter):
     def format(self, record):
-        record.request_id = getattr(g, 'request_id', 'no-request')
-        record.user_id = 'anonymous'
+        record.request_id = getattr(g, "request_id", "no-request")
+        record.user_id = "anonymous"
         user = session.get("user") if session else None
         if user:
             record.user_id = user.get("id", "unknown")
         return super().format(record)
 
+
 # File handler with rotation by size
 file_handler = RotatingFileHandler(
     "logs/app.log",
     maxBytes=10_000_000,  # 10MB
-    backupCount=10
+    backupCount=10,
 )
 file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(RequestFormatter(
-    '%(asctime)s [%(request_id)s] [user:%(user_id)s] %(levelname)s %(name)s: %(message)s'
-))
+file_handler.setFormatter(
+    RequestFormatter(
+        "%(asctime)s [%(request_id)s] [user:%(user_id)s] %(levelname)s %(name)s: %(message)s"
+    )
+)
 
 # Security event log (separate file for audit)
-security_handler = RotatingFileHandler(
-    "logs/security.log",
-    maxBytes=10_000_000,
-    backupCount=20
-)
+security_handler = RotatingFileHandler("logs/security.log", maxBytes=10_000_000, backupCount=20)
 security_handler.setLevel(logging.WARNING)
-security_handler.setFormatter(RequestFormatter(
-    '%(asctime)s [%(request_id)s] [user:%(user_id)s] SECURITY %(message)s'
-))
+security_handler.setFormatter(
+    RequestFormatter("%(asctime)s [%(request_id)s] [user:%(user_id)s] SECURITY %(message)s")
+)
 
 # Configure app logger
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
@@ -350,13 +372,14 @@ if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
 app.logger.setLevel(logging.INFO if IS_PROD else logging.DEBUG)
 
 # Create a security logger for audit events
-security_logger = logging.getLogger('security')
+security_logger = logging.getLogger("security")
 security_logger.addHandler(security_handler)
 security_logger.setLevel(logging.INFO)
 
 # ============================================================================
 # Request Lifecycle
 # ============================================================================
+
 
 @app.before_request
 def _req_start():
@@ -431,9 +454,20 @@ def _extract_business_id() -> int:
 # Paths a logged-in user can still reach after their trial expires (so they can
 # pay, log out, read legal pages, and the app's APIs/webhooks keep working).
 _TRIAL_EXPIRED_ALLOWED = (
-    "/billing", "/logout", "/login", "/signup", "/verify-email",
-    "/forgot-password", "/reset-password", "/privacy", "/terms",
-    "/health", "/static/", "/api/", "/brand/set", "/book/",
+    "/billing",
+    "/logout",
+    "/login",
+    "/signup",
+    "/verify-email",
+    "/forgot-password",
+    "/reset-password",
+    "/privacy",
+    "/terms",
+    "/health",
+    "/static/",
+    "/api/",
+    "/brand/set",
+    "/book/",
 )
 
 
@@ -467,8 +501,9 @@ def _enforce_trial():
         return
     user = session.get("user")
     if user and _trial_expired(user):
-        flash("Your free trial has ended. Choose a plan to keep your "
-              "AI receptionist running.", "err")
+        flash(
+            "Your free trial has ended. Choose a plan to keep your AI receptionist running.", "err"
+        )
         return redirect(url_for("billing.billing_home"))
 
 
@@ -523,7 +558,7 @@ def _set_headers(resp: Response) -> Response:
         resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
 
     # Log slow requests
-    if hasattr(g, 'request_start'):
+    if hasattr(g, "request_start"):
         duration = (datetime.now() - g.request_start).total_seconds()
         if duration > 1.0:
             app.logger.warning(f"Slow request: {request.path} took {duration:.2f}s")
@@ -535,6 +570,7 @@ def _set_headers(resp: Response) -> Response:
 # Error Handlers
 # ============================================================================
 
+
 @app.errorhandler(400)
 def bad_request(e):
     """Handle 400 Bad Request errors."""
@@ -545,11 +581,10 @@ def bad_request(e):
 @app.errorhandler(413)
 def request_entity_too_large(e):
     """Handle 413 Request Entity Too Large errors."""
-    max_size_mb = app.config.get('MAX_CONTENT_LENGTH', 0) // (1024 * 1024)
+    max_size_mb = app.config.get("MAX_CONTENT_LENGTH", 0) // (1024 * 1024)
     app.logger.warning(f"Request too large: {request.path}")
     return render_template(
-        "error_400.html",
-        error=f"File too large. Maximum upload size is {max_size_mb}MB."
+        "error_400.html", error=f"File too large. Maximum upload size is {max_size_mb}MB."
     ), 413
 
 
@@ -558,8 +593,7 @@ def too_many_requests(e):
     """Handle 429 Too Many Requests errors (rate limiting)."""
     app.logger.warning(f"Rate limit exceeded: {request.path} from {request.remote_addr}")
     return render_template(
-        "error_400.html",
-        error="Too many requests. Please wait a moment and try again."
+        "error_400.html", error="Too many requests. Please wait a moment and try again."
     ), 429
 
 
@@ -597,6 +631,7 @@ def handle_exception(e):
 # ============================================================================
 # Branding Context Processor
 # ============================================================================
+
 
 @app.context_processor
 def _inject_branding():
@@ -681,6 +716,7 @@ def _inject_branding():
 # Routes
 # ============================================================================
 
+
 @app.route("/")
 def home():
     """Marketing homepage — redirect to dashboard if already logged in."""
@@ -707,10 +743,7 @@ def set_brand():
         )
 
     # Validate redirect URL to prevent open redirect
-    return_to = validate_redirect_url(
-        request.form.get("return_to"),
-        default=url_for("dashboard")
-    )
+    return_to = validate_redirect_url(request.form.get("return_to"), default=url_for("dashboard"))
     return redirect(return_to)
 
 
@@ -741,7 +774,13 @@ def dashboard():
     series_values = []
 
     # Extended metrics for new dashboard
-    ai_stats = {"calls_today": 0, "chats_today": 0, "bookings_today": 0, "calls_week": 0, "chats_week": 0}
+    ai_stats = {
+        "calls_today": 0,
+        "chats_today": 0,
+        "bookings_today": 0,
+        "calls_week": 0,
+        "chats_week": 0,
+    }
     upcoming_appointments = []
     recent_activity = []
     escalation_count = 0
@@ -762,46 +801,58 @@ def dashboard():
             # Total appointments
             row = con.execute(
                 f"SELECT COUNT(*) c FROM appointments WHERE business_id IN ({placeholders})",
-                tuple(ids)
+                tuple(ids),
             ).fetchone()
             kpis["total"] = row["c"] if row else 0
 
             # Today's appointments
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM appointments
                 WHERE business_id IN ({placeholders})
                   AND date(COALESCE(start_at, created_at)) = date('now', 'localtime')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             kpis["today"] = row["c"] if row else 0
 
             # Status counts
-            rows = con.execute(f"""
+            rows = con.execute(
+                f"""
                 SELECT status, COUNT(*) c FROM appointments
                 WHERE business_id IN ({placeholders})
                 GROUP BY status
-            """, tuple(ids)).fetchall()
+            """,
+                tuple(ids),
+            ).fetchall()
             for r in rows or []:
                 if r["status"] in ("pending", "confirmed"):
                     kpis[r["status"]] = r["c"]
 
             # Per-business today counts
             for b in businesses:
-                row = con.execute("""
+                row = con.execute(
+                    """
                     SELECT COUNT(*) c FROM appointments
                     WHERE business_id = ?
                       AND date(COALESCE(start_at, created_at)) = date('now', 'localtime')
-                """, (b["id"],)).fetchone()
+                """,
+                    (b["id"],),
+                ).fetchone()
                 appt_counts[b["id"]] = row["c"] if row else 0
 
             # 7-day series for chart
             start = (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d")
-            rows = con.execute(f"""
+            rows = con.execute(
+                f"""
                 SELECT date(COALESCE(start_at, created_at)) d, COUNT(*) c
                 FROM appointments
                 WHERE business_id IN ({placeholders})
                   AND date(COALESCE(start_at, created_at)) >= date(?)
                 GROUP BY d ORDER BY d
-            """, (*ids, start)).fetchall()
+            """,
+                (*ids, start),
+            ).fetchall()
 
             data = {r["d"]: r["c"] for r in rows or []}
             for i in range(7):
@@ -811,50 +862,66 @@ def dashboard():
 
             # === NEW: AI Activity Stats ===
             # Today's chat sessions
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM sessions
                 WHERE business_id IN ({placeholders})
                   AND date(created_at) = date('now', 'localtime')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             ai_stats["chats_today"] = row["c"] if row else 0
 
             # This week's chats
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM sessions
                 WHERE business_id IN ({placeholders})
                   AND date(created_at) >= date('now', '-7 days')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             ai_stats["chats_week"] = row["c"] if row else 0
 
             # Today's AI-booked appointments
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM appointments
                 WHERE business_id IN ({placeholders})
                   AND source = 'ai'
                   AND date(created_at) = date('now', 'localtime')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             ai_stats["bookings_today"] = row["c"] if row else 0
 
             # Voice calls (if table exists)
             try:
-                row = con.execute(f"""
+                row = con.execute(
+                    f"""
                     SELECT COUNT(*) c FROM voice_calls
                     WHERE business_id IN ({placeholders})
                       AND date(created_at) = date('now', 'localtime')
-                """, tuple(ids)).fetchone()
+                """,
+                    tuple(ids),
+                ).fetchone()
                 ai_stats["calls_today"] = row["c"] if row else 0
 
-                row = con.execute(f"""
+                row = con.execute(
+                    f"""
                     SELECT COUNT(*) c FROM voice_calls
                     WHERE business_id IN ({placeholders})
                       AND date(created_at) >= date('now', '-7 days')
-                """, tuple(ids)).fetchone()
+                """,
+                    tuple(ids),
+                ).fetchone()
                 ai_stats["calls_week"] = row["c"] if row else 0
             except Exception:
                 pass  # voice_calls table may not exist
 
             # === NEW: Upcoming Appointments ===
-            rows = con.execute(f"""
+            rows = con.execute(
+                f"""
                 SELECT id, customer_name, service, start_at, status, business_id
                 FROM appointments
                 WHERE business_id IN ({placeholders})
@@ -862,7 +929,9 @@ def dashboard():
                   AND status IN ('pending', 'confirmed')
                 ORDER BY start_at ASC
                 LIMIT 5
-            """, tuple(ids)).fetchall()
+            """,
+                tuple(ids),
+            ).fetchall()
             upcoming_appointments = [dict(r) for r in rows] if rows else []
 
             # === NEW: Recent Activity Feed ===
@@ -870,7 +939,8 @@ def dashboard():
             activity_items = []
 
             # Recent bookings
-            rows = con.execute(f"""
+            rows = con.execute(
+                f"""
                 SELECT 'booking' as type, customer_name as title, service as subtitle,
                        created_at as timestamp, id
                 FROM appointments
@@ -878,12 +948,15 @@ def dashboard():
                   AND date(created_at) >= date('now', '-1 day')
                 ORDER BY created_at DESC
                 LIMIT 5
-            """, tuple(ids)).fetchall()
+            """,
+                tuple(ids),
+            ).fetchall()
             activity_items.extend([dict(r) for r in rows] if rows else [])
 
             # Recent escalations
             try:
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT 'escalation' as type, reason as title, status as subtitle,
                            created_at as timestamp, id
                     FROM escalations
@@ -891,14 +964,17 @@ def dashboard():
                       AND date(created_at) >= date('now', '-1 day')
                     ORDER BY created_at DESC
                     LIMIT 3
-                """, tuple(ids)).fetchall()
+                """,
+                    tuple(ids),
+                ).fetchall()
                 activity_items.extend([dict(r) for r in rows] if rows else [])
             except Exception:
                 pass
 
             # Recent voice calls
             try:
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT 'call' as type,
                            COALESCE(from_number, 'Unknown') as title,
                            COALESCE(duration_seconds || 's', 'In progress') as subtitle,
@@ -908,7 +984,9 @@ def dashboard():
                       AND date(created_at) >= date('now', '-1 day')
                     ORDER BY created_at DESC
                     LIMIT 3
-                """, tuple(ids)).fetchall()
+                """,
+                    tuple(ids),
+                ).fetchall()
                 activity_items.extend([dict(r) for r in rows] if rows else [])
             except Exception:
                 pass
@@ -919,29 +997,38 @@ def dashboard():
 
             # === NEW: Pending Escalations Count ===
             try:
-                row = con.execute(f"""
+                row = con.execute(
+                    f"""
                     SELECT COUNT(*) c FROM escalations
                     WHERE business_id IN ({placeholders})
                       AND status = 'pending'
-                """, tuple(ids)).fetchone()
+                """,
+                    tuple(ids),
+                ).fetchone()
                 escalation_count = row["c"] if row else 0
             except Exception:
                 pass
 
             # === NEW: Week-over-Week Comparison ===
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM appointments
                 WHERE business_id IN ({placeholders})
                   AND date(created_at) >= date('now', '-7 days')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             week_comparison["this_week"] = row["c"] if row else 0
 
-            row = con.execute(f"""
+            row = con.execute(
+                f"""
                 SELECT COUNT(*) c FROM appointments
                 WHERE business_id IN ({placeholders})
                   AND date(created_at) >= date('now', '-14 days')
                   AND date(created_at) < date('now', '-7 days')
-            """, tuple(ids)).fetchone()
+            """,
+                tuple(ids),
+            ).fetchone()
             week_comparison["last_week"] = row["c"] if row else 0
 
             if week_comparison["last_week"] > 0:
@@ -953,13 +1040,16 @@ def dashboard():
             # Voice stats for the week
             voice_stats = {"total_week": 0, "avg_duration": 0, "booked_calls": 0}
             try:
-                row = con.execute(f"""
+                row = con.execute(
+                    f"""
                     SELECT COUNT(*) total, AVG(duration_seconds) avg_dur,
                            SUM(CASE WHEN booking_confirmed=1 THEN 1 ELSE 0 END) booked
                     FROM voice_calls
                     WHERE business_id IN ({placeholders})
                       AND date(created_at) >= date('now', '-7 days')
-                """, tuple(ids)).fetchone()
+                """,
+                    tuple(ids),
+                ).fetchone()
                 if row:
                     voice_stats["total_week"] = row["total"] or 0
                     voice_stats["avg_duration"] = round(row["avg_dur"] or 0)
@@ -970,13 +1060,16 @@ def dashboard():
             # Top services by booking count (all time)
             top_services = []
             try:
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT service, COUNT(*) cnt FROM appointments
                     WHERE business_id IN ({placeholders})
                       AND service IS NOT NULL AND service != ''
                       AND status IN ('confirmed','completed','pending')
                     GROUP BY service ORDER BY cnt DESC LIMIT 5
-                """, tuple(ids)).fetchall()
+                """,
+                    tuple(ids),
+                ).fetchall()
                 top_services = [dict(r) for r in rows] if rows else []
             except Exception:
                 pass
@@ -984,11 +1077,14 @@ def dashboard():
             # New customers this week
             new_customers_week = 0
             try:
-                row = con.execute(f"""
+                row = con.execute(
+                    f"""
                     SELECT COUNT(*) c FROM customers
                     WHERE business_id IN ({placeholders})
                       AND date(created_at) >= date('now', '-7 days')
-                """, tuple(ids)).fetchone()
+                """,
+                    tuple(ids),
+                ).fetchone()
                 new_customers_week = row["c"] if row else 0
             except Exception:
                 pass
@@ -996,7 +1092,10 @@ def dashboard():
             # Total customers
             total_customers = 0
             try:
-                row = con.execute(f"SELECT COUNT(*) c FROM customers WHERE business_id IN ({placeholders})", tuple(ids)).fetchone()
+                row = con.execute(
+                    f"SELECT COUNT(*) c FROM customers WHERE business_id IN ({placeholders})",
+                    tuple(ids),
+                ).fetchone()
                 total_customers = row["c"] if row else 0
             except Exception:
                 pass
@@ -1004,13 +1103,16 @@ def dashboard():
             # Recent calls (last 8)
             recent_calls = []
             try:
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT retell_call_id, from_number, duration_seconds, call_status,
                            transcript, created_at, sentiment, booking_confirmed
                     FROM voice_calls
                     WHERE business_id IN ({placeholders})
                     ORDER BY created_at DESC LIMIT 8
-                """, tuple(ids)).fetchall()
+                """,
+                    tuple(ids),
+                ).fetchall()
                 recent_calls = [dict(r) for r in rows] if rows else []
             except Exception:
                 pass
@@ -1018,11 +1120,14 @@ def dashboard():
             # Sentiment breakdown from calls
             sentiment_breakdown = {"positive": 0, "neutral": 0, "negative": 0}
             try:
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT sentiment, COUNT(*) c FROM voice_calls
                     WHERE business_id IN ({placeholders}) AND sentiment IS NOT NULL
                     GROUP BY sentiment
-                """, tuple(ids)).fetchall()
+                """,
+                    tuple(ids),
+                ).fetchall()
                 for r in rows:
                     s = (r["sentiment"] or "").lower()
                     if s in sentiment_breakdown:
@@ -1034,23 +1139,28 @@ def dashboard():
             voice_series_values = []
             try:
                 voice_data = {}
-                rows = con.execute(f"""
+                rows = con.execute(
+                    f"""
                     SELECT date(created_at) d, COUNT(*) c FROM voice_calls
                     WHERE business_id IN ({placeholders})
                       AND date(created_at) >= date(?)
                     GROUP BY d
-                """, (*ids, start)).fetchall()
+                """,
+                    (*ids, start),
+                ).fetchall()
                 voice_data = {r["d"]: r["c"] for r in rows} if rows else {}
                 for i in range(7):
-                    d = (datetime.now() - timedelta(days=6-i)).strftime("%Y-%m-%d")
+                    d = (datetime.now() - timedelta(days=6 - i)).strftime("%Y-%m-%d")
                     voice_series_values.append(int(voice_data.get(d, 0)))
             except Exception:
                 voice_series_values = [0] * 7
 
     from datetime import datetime as dt
+
     # Onboarding checklist for the active business (shown until complete)
     try:
         from core.onboarding import checklist_for_business
+
         onboarding = checklist_for_business(getattr(g, "active_business_id", 0) or 0)
     except Exception:
         onboarding = {"steps": [], "complete": True, "done": 0, "total": 0, "percent": 100}
@@ -1099,9 +1209,17 @@ def edit_business(business_id: int):
 
     if request.method == "POST":
         fields = {
-            k: request.form.get(k) for k in [
-                "name", "slug", "hours", "address", "services", "tone",
-                "escalation_phone", "escalation_email", "accent_color"
+            k: request.form.get(k)
+            for k in [
+                "name",
+                "slug",
+                "hours",
+                "address",
+                "services",
+                "tone",
+                "escalation_phone",
+                "escalation_email",
+                "accent_color",
             ]
         }
 
@@ -1228,11 +1346,19 @@ def voice_dashboard():
     business_id = g.get("active_business_id") or session.get("active_business_id")
 
     stats = {
-        "total_calls": 0, "calls_today": 0, "calls_week": 0,
-        "containment_rate": 0, "avg_duration": 0, "booked_calls": 0,
-        "missed_calls": 0, "messages_waiting": 0,
-        "intent_breakdown": {}, "outcome_breakdown": {}, "sentiment_breakdown": {},
-        "daily_series": [], "daily_labels": [],
+        "total_calls": 0,
+        "calls_today": 0,
+        "calls_week": 0,
+        "containment_rate": 0,
+        "avg_duration": 0,
+        "booked_calls": 0,
+        "missed_calls": 0,
+        "messages_waiting": 0,
+        "intent_breakdown": {},
+        "outcome_breakdown": {},
+        "sentiment_breakdown": {},
+        "daily_series": [],
+        "daily_labels": [],
     }
     calls = []
     messages = []
@@ -1240,7 +1366,8 @@ def voice_dashboard():
     if business_id:
         with get_conn() as con:
             # Totals
-            row = con.execute("""
+            row = con.execute(
+                """
                 SELECT
                   COUNT(*) as total,
                   SUM(CASE WHEN date(started_at) = date('now') THEN 1 ELSE 0 END) as today,
@@ -1250,7 +1377,9 @@ def voice_dashboard():
                   SUM(CASE WHEN call_outcome='missed' OR call_intent='missed' THEN 1 ELSE 0 END) as missed,
                   SUM(CASE WHEN caller_message IS NOT NULL AND caller_message != '' THEN 1 ELSE 0 END) as msgs
                 FROM voice_calls WHERE business_id = ?
-            """, (business_id,)).fetchone()
+            """,
+                (business_id,),
+            ).fetchone()
             if row:
                 stats["total_calls"] = row["total"] or 0
                 stats["calls_today"] = row["today"] or 0
@@ -1261,48 +1390,64 @@ def voice_dashboard():
                 stats["messages_waiting"] = row["msgs"] or 0
 
             # Containment rate
-            cont = con.execute("""
+            cont = con.execute(
+                """
                 SELECT
                   COUNT(*) as total,
                   SUM(CASE WHEN containment=1 THEN 1 ELSE 0 END) as handled
                 FROM voice_calls WHERE business_id = ? AND call_outcome IS NOT NULL
-            """, (business_id,)).fetchone()
+            """,
+                (business_id,),
+            ).fetchone()
             if cont and cont["total"] > 0:
                 stats["containment_rate"] = round((cont["handled"] / cont["total"]) * 100)
 
             # Intent breakdown
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT call_intent, COUNT(*) as cnt FROM voice_calls
                 WHERE business_id = ? AND call_intent IS NOT NULL
                 GROUP BY call_intent ORDER BY cnt DESC
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             stats["intent_breakdown"] = {r["call_intent"]: r["cnt"] for r in rows}
 
             # Outcome breakdown
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT call_outcome, COUNT(*) as cnt FROM voice_calls
                 WHERE business_id = ? AND call_outcome IS NOT NULL
                 GROUP BY call_outcome ORDER BY cnt DESC
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             stats["outcome_breakdown"] = {r["call_outcome"]: r["cnt"] for r in rows}
 
             # Sentiment breakdown
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT sentiment, COUNT(*) as cnt FROM voice_calls
                 WHERE business_id = ? AND sentiment IS NOT NULL
                 GROUP BY sentiment
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             stats["sentiment_breakdown"] = {r["sentiment"].lower(): r["cnt"] for r in rows}
 
             # 14-day daily series
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT date(started_at) as d, COUNT(*) as cnt
                 FROM voice_calls WHERE business_id = ?
                   AND date(started_at) >= date('now', '-13 days')
                 GROUP BY d ORDER BY d
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             day_map = {r["d"]: r["cnt"] for r in rows}
             from datetime import timedelta
+
             today = datetime.now().date()
             for i in range(13, -1, -1):
                 d = (today - timedelta(days=i)).isoformat()
@@ -1310,18 +1455,24 @@ def voice_dashboard():
                 stats["daily_series"].append(day_map.get(d, 0))
 
             # Recent calls (last 50)
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT * FROM voice_calls WHERE business_id = ?
                 ORDER BY started_at DESC LIMIT 50
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             calls = [dict(r) for r in rows]
 
             # Voicemail messages
-            rows = con.execute("""
+            rows = con.execute(
+                """
                 SELECT * FROM voice_calls
                 WHERE business_id = ? AND caller_message IS NOT NULL AND caller_message != ''
                 ORDER BY started_at DESC LIMIT 20
-            """, (business_id,)).fetchall()
+            """,
+                (business_id,),
+            ).fetchall()
             messages = [dict(r) for r in rows]
 
     # Voice settings for config panel
@@ -1329,6 +1480,7 @@ def voice_dashboard():
     if business_id:
         try:
             from core.voice import get_voice_settings
+
             voice_settings = get_voice_settings(business_id)
         except Exception:
             pass
@@ -1343,13 +1495,12 @@ def voice_dashboard():
     )
 
 
-
 @app.route("/health")
 def health():
     """Basic health check endpoint for load balancers."""
     return Response(
         json.dumps({"status": "ok", "timestamp": datetime.now().isoformat()}),
-        mimetype="application/json"
+        mimetype="application/json",
     )
 
 
@@ -1358,7 +1509,7 @@ def health_live():
     """Liveness probe - simple check that the process is alive."""
     return Response(
         json.dumps({"status": "alive", "timestamp": datetime.now().isoformat()}),
-        mimetype="application/json"
+        mimetype="application/json",
     )
 
 
@@ -1380,6 +1531,7 @@ def health_ready():
 
     # Check OpenAI API key is configured
     from core.settings import OPENAI_API_KEY
+
     if OPENAI_API_KEY and len(OPENAI_API_KEY) > 10:
         checks["openai_configured"] = "ok"
     else:
@@ -1389,8 +1541,9 @@ def health_ready():
     # Check disk space (logs directory)
     try:
         import shutil
+
         total, used, free = shutil.disk_usage(".")
-        free_gb = free / (1024 ** 3)
+        free_gb = free / (1024**3)
         if free_gb < 1:
             checks["disk_space"] = f"warning: {free_gb:.1f}GB free"
         else:
@@ -1408,20 +1561,23 @@ def health_ready():
     status = "ready" if all_healthy else "degraded"
 
     return Response(
-        json.dumps({
-            "status": status,
-            "checks": checks,
-            "timestamp": datetime.now().isoformat(),
-            "environment": APP_ENV
-        }),
+        json.dumps(
+            {
+                "status": status,
+                "checks": checks,
+                "timestamp": datetime.now().isoformat(),
+                "environment": APP_ENV,
+            }
+        ),
         mimetype="application/json",
-        status=status_code
+        status=status_code,
     )
 
 
 # ============================================================================
 # Legal Pages (Public — no login required)
 # ============================================================================
+
 
 @app.route("/privacy")
 def privacy():

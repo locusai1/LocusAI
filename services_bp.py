@@ -3,13 +3,13 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from core.db import get_conn, list_businesses
 from core.authz import user_can_access_business
-from core.validators import safe_int, validate_name, validate_date
+from core.db import get_conn, list_businesses
+from core.validators import safe_int, validate_date, validate_name
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ bp = Blueprint("services", __name__)
 # ============================================================================
 # Authentication & Authorization Helpers
 # ============================================================================
+
 
 def _user() -> Optional[dict]:
     """Get the current user from session."""
@@ -39,6 +40,7 @@ def _can_access(bid: int) -> bool:
 # Services Routes
 # ============================================================================
 
+
 @bp.route("/services", methods=["GET"])
 def services_index():
     """List services for a business."""
@@ -52,15 +54,11 @@ def services_index():
     if bid:
         with get_conn() as con:
             services = con.execute(
-                "SELECT * FROM services WHERE business_id=? ORDER BY active DESC, name",
-                (bid,)
+                "SELECT * FROM services WHERE business_id=? ORDER BY active DESC, name", (bid,)
             ).fetchall()
 
     return render_template(
-        "services.html",
-        businesses=businesses,
-        business_id=bid,
-        services=services
+        "services.html", businesses=businesses, business_id=bid, services=services
     )
 
 
@@ -91,7 +89,8 @@ def services_new():
         return redirect(url_for("services.services_index", business_id=bid))
 
     with get_conn() as con:
-        con.execute("""
+        con.execute(
+            """
             INSERT INTO services(business_id, name, duration_min, price, active, updated_at)
             VALUES(?, ?, ?, ?, ?, datetime('now', 'localtime'))
             ON CONFLICT(business_id, name) DO UPDATE SET
@@ -99,7 +98,9 @@ def services_new():
                 price=excluded.price,
                 active=excluded.active,
                 updated_at=excluded.updated_at
-        """, (bid, name, dur, price or None, active))
+        """,
+            (bid, name, dur, price or None, active),
+        )
         con.commit()
 
     logger.info(f"Service '{name}' saved for business {bid}")
@@ -136,6 +137,7 @@ def services_delete(sid: int):
 # Business Hours Routes
 # ============================================================================
 
+
 @bp.route("/hours", methods=["GET", "POST"])
 def hours_index():
     """View and update business hours."""
@@ -161,12 +163,15 @@ def hours_index():
                 if close_t and not _is_valid_time(close_t):
                     close_t = None
 
-                con.execute("""
+                con.execute(
+                    """
                     INSERT INTO business_hours(business_id, weekday, open_time, close_time, closed)
                     VALUES(?, ?, ?, ?, ?)
                     ON CONFLICT(business_id, weekday)
                     DO UPDATE SET open_time=excluded.open_time, close_time=excluded.close_time, closed=excluded.closed
-                """, (bid, weekday, open_t, close_t, closed))
+                """,
+                    (bid, weekday, open_t, close_t, closed),
+                )
             con.commit()
 
         logger.info(f"Hours updated for business {bid}")
@@ -181,7 +186,7 @@ def hours_index():
         with get_conn() as con:
             rows = con.execute(
                 "SELECT weekday, open_time, close_time, closed FROM business_hours WHERE business_id=? ORDER BY weekday",
-                (bid,)
+                (bid,),
             ).fetchall()
 
         hours_map = {r["weekday"]: r for r in rows}
@@ -209,6 +214,7 @@ def _is_valid_time(time_str: str) -> bool:
 # Closures Routes
 # ============================================================================
 
+
 @bp.route("/closures", methods=["GET", "POST"])
 def closures_index():
     """View and manage business closures."""
@@ -234,7 +240,7 @@ def closures_index():
         with get_conn() as con:
             con.execute(
                 "INSERT OR REPLACE INTO closures(business_id, date, reason) VALUES(?, ?, ?)",
-                (bid, date_str, reason or None)
+                (bid, date_str, reason or None),
             )
             con.commit()
 
@@ -250,7 +256,7 @@ def closures_index():
         with get_conn() as con:
             rows = con.execute(
                 "SELECT id, date, reason FROM closures WHERE business_id=? ORDER BY date DESC",
-                (bid,)
+                (bid,),
             ).fetchall()
 
     return render_template("closures.html", businesses=businesses, business_id=bid, closures=rows)
@@ -285,6 +291,7 @@ def closures_delete(cid: int):
 # Availability Helpers
 # ============================================================================
 
+
 def _parse_hhmm(time_str: str) -> Optional[Tuple[int, int]]:
     """Parse HH:MM string to (hour, minute) tuple."""
     try:
@@ -299,7 +306,7 @@ def _get_day_hours(con, bid: int, dt: datetime) -> Optional[Tuple[str, str]]:
     weekday = dt.weekday()
     row = con.execute(
         "SELECT open_time, close_time, closed FROM business_hours WHERE business_id=? AND weekday=?",
-        (bid, weekday)
+        (bid, weekday),
     ).fetchone()
 
     if not row or row["closed"]:
@@ -313,18 +320,23 @@ def _get_day_hours(con, bid: int, dt: datetime) -> Optional[Tuple[str, str]]:
 def _is_closure(con, bid: int, dt: datetime) -> bool:
     """Check if a date is a closure."""
     date_str = dt.strftime("%Y-%m-%d")
-    row = con.execute("SELECT 1 FROM closures WHERE business_id=? AND date=?", (bid, date_str)).fetchone()
+    row = con.execute(
+        "SELECT 1 FROM closures WHERE business_id=? AND date=?", (bid, date_str)
+    ).fetchone()
     return bool(row)
 
 
 def _get_appointments_on(con, bid: int, date_str: str) -> List:
     """Get all appointments for a date."""
-    return con.execute("""
+    return con.execute(
+        """
         SELECT id, COALESCE(start_at, created_at) AS start_at, service, session_id
         FROM appointments
         WHERE business_id=? AND date(COALESCE(start_at, created_at))=date(?)
         ORDER BY start_at
-    """, (bid, date_str)).fetchall()
+    """,
+        (bid, date_str),
+    ).fetchall()
 
 
 def _slots_overlap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
@@ -355,6 +367,7 @@ def _parse_appointment_time(time_str: str) -> Optional[datetime]:
 # Availability Route
 # ============================================================================
 
+
 @bp.route("/availability")
 def availability():
     """Show available time slots for a service on a date."""
@@ -373,14 +386,12 @@ def availability():
     if bid:
         with get_conn() as con:
             services = con.execute(
-                "SELECT * FROM services WHERE business_id=? AND active=1 ORDER BY name",
-                (bid,)
+                "SELECT * FROM services WHERE business_id=? AND active=1 ORDER BY name", (bid,)
             ).fetchall()
 
             if service_id:
                 chosen = con.execute(
-                    "SELECT * FROM services WHERE id=? AND business_id=?",
-                    (service_id, bid)
+                    "SELECT * FROM services WHERE id=? AND business_id=?", (service_id, bid)
                 ).fetchone()
 
                 if chosen:
@@ -399,7 +410,9 @@ def availability():
                             h2 = _parse_hhmm(day_hours[1])
 
                             if h1 and h2:
-                                start = day.replace(hour=h1[0], minute=h1[1], second=0, microsecond=0)
+                                start = day.replace(
+                                    hour=h1[0], minute=h1[1], second=0, microsecond=0
+                                )
                                 end = day.replace(hour=h2[0], minute=h2[1], second=0, microsecond=0)
 
                                 # Get existing appointments
@@ -416,7 +429,7 @@ def availability():
                                     if appt["service"]:
                                         row = con.execute(
                                             "SELECT duration_min FROM services WHERE business_id=? AND name=?",
-                                            (bid, appt["service"])
+                                            (bid, appt["service"]),
                                         ).fetchone()
                                         if row:
                                             dur = row["duration_min"]
@@ -452,5 +465,5 @@ def availability():
         service_id=service_id,
         date=date_str,
         chosen=chosen,
-        slots=slots
+        slots=slots,
     )

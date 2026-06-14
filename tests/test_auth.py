@@ -1,26 +1,27 @@
 # tests/test_auth.py — Tests for authentication module
 # Tests for login, logout, lockout, and user management
 
-import pytest
-from unittest.mock import patch
 from datetime import datetime, timedelta
+from unittest.mock import patch
+
+import pytest
 
 from auth_bp import (
-    check_account_lockout,
-    record_failed_attempt,
-    clear_failed_attempts,
+    LOCKOUT_DURATION_MINUTES,
+    MAX_FAILED_ATTEMPTS,
     _failed_attempts,
     _mask_email,
-    create_user,
     change_password,
-    MAX_FAILED_ATTEMPTS,
-    LOCKOUT_DURATION_MINUTES,
+    check_account_lockout,
+    clear_failed_attempts,
+    create_user,
+    record_failed_attempt,
 )
-
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture(autouse=True)
 def clear_lockout_state():
@@ -33,6 +34,7 @@ def clear_lockout_state():
 # ============================================================================
 # Email Masking Tests
 # ============================================================================
+
 
 class TestEmailMasking:
     """Tests for email masking (PII protection in logs)."""
@@ -68,6 +70,7 @@ class TestEmailMasking:
 # ============================================================================
 # Account Lockout Tests
 # ============================================================================
+
 
 class TestAccountLockout:
     """Tests for account lockout functionality."""
@@ -166,6 +169,7 @@ class TestAccountLockout:
 # Failed Attempt Counter Tests
 # ============================================================================
 
+
 class TestFailedAttemptCounter:
     """Tests for failed attempt counting."""
 
@@ -202,13 +206,15 @@ class TestFailedAttemptCounter:
 # User Creation Tests
 # ============================================================================
 
+
 class TestUserCreation:
     """Tests for user creation functionality."""
 
     def test_create_user_valid(self, test_db):
         """Should create user with valid data."""
-        with patch('core.db.DB_PATH', test_db):
+        with patch("core.db.DB_PATH", test_db):
             from core.db import init_db
+
             init_db()
 
             # Test that create_user works with valid parameters
@@ -218,7 +224,7 @@ class TestUserCreation:
                     email="newuser@example.com",
                     name="New User",
                     password="SecurePass123",
-                    role="owner"
+                    role="owner",
                 )
                 # Either created successfully or returned None
                 assert user_id is None or isinstance(user_id, int)
@@ -229,30 +235,19 @@ class TestUserCreation:
     def test_create_user_invalid_email(self):
         """Should reject invalid email."""
         user_id = create_user(
-            email="notanemail",
-            name="Test",
-            password="SecurePass123",
-            role="owner"
+            email="notanemail", name="Test", password="SecurePass123", role="owner"
         )
         assert user_id is None
 
     def test_create_user_weak_password(self):
         """Should reject weak password."""
-        user_id = create_user(
-            email="test@example.com",
-            name="Test",
-            password="weak",
-            role="owner"
-        )
+        user_id = create_user(email="test@example.com", name="Test", password="weak", role="owner")
         assert user_id is None
 
     def test_create_user_invalid_role(self):
         """Should reject invalid role."""
         user_id = create_user(
-            email="test@example.com",
-            name="Test",
-            password="SecurePass123",
-            role="invalid_role"
+            email="test@example.com", name="Test", password="SecurePass123", role="invalid_role"
         )
         assert user_id is None
 
@@ -260,6 +255,7 @@ class TestUserCreation:
 # ============================================================================
 # Password Change Tests
 # ============================================================================
+
 
 class TestPasswordChange:
     """Tests for password change functionality."""
@@ -284,6 +280,7 @@ class TestPasswordChange:
 # Login Integration Tests
 # ============================================================================
 
+
 class TestLoginIntegration:
     """Integration tests for login functionality."""
 
@@ -301,21 +298,21 @@ class TestLoginIntegration:
 
     def test_login_invalid_credentials(self, client, sample_user, test_db):
         """Login with invalid credentials should fail."""
-        with patch('core.db.DB_PATH', test_db):
-            response = client.post("/login", data={
-                "email": sample_user["email"],
-                "password": "WrongPassword123"
-            })
+        with patch("core.db.DB_PATH", test_db):
+            response = client.post(
+                "/login", data={"email": sample_user["email"], "password": "WrongPassword123"}
+            )
             # 401=Unauthorized, 403=Forbidden (CSRF/security), 429=rate limited
             assert response.status_code in (401, 403, 429)
 
     def test_login_valid_credentials(self, client, sample_user, test_db):
         """Login with valid credentials should succeed."""
-        with patch('core.db.DB_PATH', test_db):
-            response = client.post("/login", data={
-                "email": "test@example.com",
-                "password": "TestPass123"
-            }, follow_redirects=False)
+        with patch("core.db.DB_PATH", test_db):
+            response = client.post(
+                "/login",
+                data={"email": "test@example.com", "password": "TestPass123"},
+                follow_redirects=False,
+            )
             # 200=success, 302=redirect, 401=auth failed, 403=CSRF/security block
             assert response.status_code in (200, 302, 401, 403)
 
@@ -329,6 +326,7 @@ class TestLoginIntegration:
 # ============================================================================
 # Session Security Tests
 # ============================================================================
+
 
 class TestSessionSecurity:
     """Tests for session security features."""

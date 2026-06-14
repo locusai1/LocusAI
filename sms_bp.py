@@ -2,10 +2,11 @@
 # Handles incoming SMS via Telnyx and routes to AI conversation flow
 
 import logging
-from flask import Blueprint, request, Response, jsonify
 
-from core.db import get_conn, transaction, create_session, log_message
-from core.sms import parse_telnyx_webhook, TELNYX_CONFIGURED
+from flask import Blueprint, jsonify, request
+
+from core.db import get_conn, log_message, transaction
+from core.sms import parse_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ bp = Blueprint("sms", __name__, url_prefix="/api/sms")
 # Business Routing
 # ============================================================================
 
+
 def _get_business_by_phone(phone_number: str):
     """Get business associated with a Telnyx phone number."""
     with get_conn() as con:
@@ -23,7 +25,7 @@ def _get_business_by_phone(phone_number: str):
             """SELECT id, name, tone FROM businesses
                WHERE escalation_phone = ? OR escalation_phone LIKE ?
                LIMIT 1""",
-            (phone_number, f"%{phone_number[-10:]}%")
+            (phone_number, f"%{phone_number[-10:]}%"),
         ).fetchone()
 
         if row:
@@ -44,7 +46,7 @@ def _get_or_create_session(business_id: int, phone_number: str):
                WHERE business_id = ? AND phone = ? AND channel = 'sms'
                  AND datetime(created_at) > datetime('now', '-24 hours')
                ORDER BY created_at DESC LIMIT 1""",
-            (business_id, phone_number)
+            (business_id, phone_number),
         ).fetchone()
 
         if row:
@@ -54,7 +56,7 @@ def _get_or_create_session(business_id: int, phone_number: str):
         cur = con.cursor()
         cur.execute(
             "INSERT INTO sessions(business_id, channel, phone) VALUES(?, 'sms', ?)",
-            (business_id, phone_number)
+            (business_id, phone_number),
         )
         return cur.lastrowid
 
@@ -62,6 +64,7 @@ def _get_or_create_session(business_id: int, phone_number: str):
 # ============================================================================
 # SMS Webhook Endpoint
 # ============================================================================
+
 
 @bp.route("/webhook", methods=["POST"])
 def sms_webhook():
@@ -100,34 +103,47 @@ def sms_webhook():
     log_message(session_id, "user", message_body)
 
     from core.sms import (
-        classify_sms_command, record_opt_out, clear_opt_out,
-        send_sms, TELNYX_PHONE_NUMBER,
+        TELNYX_PHONE_NUMBER,
+        classify_sms_command,
+        clear_opt_out,
+        record_opt_out,
+        send_sms,
     )
 
     # ---- TCPA opt-out / opt-in (must run before any AI reply) ----
     cmd = classify_sms_command(message_body)
     if cmd == "stop":
         record_opt_out(from_number, source="sms")
-        reply = ("You've been unsubscribed and won't receive further messages. "
-                 "Reply START to opt back in.")
+        reply = (
+            "You've been unsubscribed and won't receive further messages. "
+            "Reply START to opt back in."
+        )
         log_message(session_id, "bot", reply)
         try:  # confirmation is permitted even after opt-out
-            send_sms(to=from_number, message=reply,
-                     from_number=to_number or TELNYX_PHONE_NUMBER,
-                     allow_opted_out=True)
+            send_sms(
+                to=from_number,
+                message=reply,
+                from_number=to_number or TELNYX_PHONE_NUMBER,
+                allow_opted_out=True,
+            )
         except Exception as e:
             logger.error(f"Failed to send STOP confirmation: {e}")
         return jsonify({"status": "opted_out"}), 200
 
     if cmd == "start":
         clear_opt_out(from_number)
-        reply = ("You're re-subscribed and will receive messages again. "
-                 "Reply STOP to opt out at any time.")
+        reply = (
+            "You're re-subscribed and will receive messages again. "
+            "Reply STOP to opt out at any time."
+        )
         log_message(session_id, "bot", reply)
         try:
-            send_sms(to=from_number, message=reply,
-                     from_number=to_number or TELNYX_PHONE_NUMBER,
-                     allow_opted_out=True)
+            send_sms(
+                to=from_number,
+                message=reply,
+                from_number=to_number or TELNYX_PHONE_NUMBER,
+                allow_opted_out=True,
+            )
         except Exception as e:
             logger.error(f"Failed to send START confirmation: {e}")
         return jsonify({"status": "opted_in"}), 200
@@ -152,7 +168,8 @@ def sms_webhook():
             # <CANCEL>/<RESCHEDULE> tag (after confirming verbally per its prompt),
             # apply it immediately and reply with the outcome.
             try:
-                from core.booking import extract_pending_change, confirm_pending_change
+                from core.booking import confirm_pending_change, extract_pending_change
+
                 cleaned, change = extract_pending_change(response_text, business_data, session_id)
                 if change:
                     ok, outcome = confirm_pending_change(change["token"])
@@ -167,14 +184,19 @@ def sms_webhook():
 
         except Exception as e:
             logger.error(f"Error processing SMS: {e}", exc_info=True)
-            response_text = "Sorry, I'm having trouble right now. Please try again or call us directly."
+            response_text = (
+                "Sorry, I'm having trouble right now. Please try again or call us directly."
+            )
 
     log_message(session_id, "bot", response_text)
 
     # Send reply via Telnyx API
     try:
-        from core.sms import send_sms, TELNYX_PHONE_NUMBER
-        send_sms(to=from_number, message=response_text, from_number=to_number or TELNYX_PHONE_NUMBER)
+        from core.sms import TELNYX_PHONE_NUMBER, send_sms
+
+        send_sms(
+            to=from_number, message=response_text, from_number=to_number or TELNYX_PHONE_NUMBER
+        )
     except Exception as e:
         logger.error(f"Failed to send SMS reply: {e}")
 
@@ -204,13 +226,12 @@ def _handle_special_commands(message: str, session_id: int, business_id: int):
                      AND a.status IN ('pending', 'confirmed')
                      AND datetime(a.start_at) > datetime('now')
                    ORDER BY a.start_at LIMIT 1""",
-                (session_id,)
+                (session_id,),
             ).fetchone()
 
         if row:
             return (
-                f"To cancel your {row['service']} appointment, "
-                f"please call us directly to confirm."
+                f"To cancel your {row['service']} appointment, please call us directly to confirm."
             )
         return "I don't see any upcoming appointments. How can I help you?"
 
@@ -220,6 +241,7 @@ def _handle_special_commands(message: str, session_id: int, business_id: int):
 # ============================================================================
 # Status Webhook
 # ============================================================================
+
 
 @bp.route("/status", methods=["POST"])
 def sms_status_webhook():

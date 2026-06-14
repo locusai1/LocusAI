@@ -4,18 +4,18 @@
 import pytest
 
 from core.sentiment import (
-    analyze_sentiment,
-    SentimentType,
     IntentType,
     SentimentResult,
+    SentimentType,
+    analyze_sentiment,
     get_sentiment_emoji,
     summarize_conversation,
 )
 
-
 # ============================================================================
 # Basic Sentiment Detection Tests
 # ============================================================================
+
 
 class TestBasicSentimentDetection:
     """Tests for basic sentiment type detection."""
@@ -56,6 +56,7 @@ class TestBasicSentimentDetection:
 # Frustration Detection Tests
 # ============================================================================
 
+
 class TestFrustrationDetection:
     """Tests for frustration and anger detection."""
 
@@ -69,17 +70,17 @@ class TestFrustrationDetection:
     def test_multiple_exclamation_marks(self):
         """Multiple exclamation marks should increase frustration score."""
         result = analyze_sentiment("This is unacceptable!!!")
-        assert result.details.get('frustration_score', 0) > 0.3
+        assert result.details.get("frustration_score", 0) > 0.3
 
     def test_caps_lock_frustration(self):
         """ALL CAPS should indicate frustration."""
         result = analyze_sentiment("WHY IS THIS SO DIFFICULT TO USE")
-        assert result.details['punctuation_analysis']['caps_ratio'] > 0
+        assert result.details["punctuation_analysis"]["caps_ratio"] > 0
 
     def test_waiting_frustration(self):
         """Long wait mentions should increase frustration."""
         result = analyze_sentiment("I've been waiting for hours and nobody has helped me!")
-        assert result.details.get('frustration_score', 0) > 0.2
+        assert result.details.get("frustration_score", 0) > 0.2
 
     def test_angry_threshold(self):
         """Very high frustration should result in ANGRY sentiment."""
@@ -89,12 +90,13 @@ class TestFrustrationDetection:
             "TERRIBLE, AWFUL, UNACCEPTABLE!!!"
         )
         # High frustration score should indicate angry/frustrated
-        assert result.details.get('frustration_score', 0) > 0.5
+        assert result.details.get("frustration_score", 0) > 0.5
 
 
 # ============================================================================
 # Human Request Detection Tests
 # ============================================================================
+
 
 class TestHumanRequestDetection:
     """Tests for detecting requests to speak with a human."""
@@ -134,6 +136,7 @@ class TestHumanRequestDetection:
 # ============================================================================
 # Intent Detection Tests
 # ============================================================================
+
 
 class TestIntentDetection:
     """Tests for user intent classification."""
@@ -181,6 +184,7 @@ class TestIntentDetection:
 # Escalation Trigger Tests
 # ============================================================================
 
+
 class TestEscalationTriggers:
     """Tests for automatic escalation triggers."""
 
@@ -196,7 +200,7 @@ class TestEscalationTriggers:
             "This is absolutely RIDICULOUS and UNACCEPTABLE!!! "
             "I'm SO FURIOUS right now! This is the WORST experience ever!!!"
         )
-        if result.details.get('frustration_score', 0) > 0.7:
+        if result.details.get("frustration_score", 0) > 0.7:
             assert result.triggers_escalation is True
 
     def test_complaint_with_negatives_triggers_escalation(self):
@@ -211,16 +215,15 @@ class TestEscalationTriggers:
 
     def test_failed_attempts_trigger_escalation(self):
         """Multiple failed attempts should trigger escalation."""
-        result = analyze_sentiment(
-            "I've tried three times already",
-            failed_attempts=3
-        )
+        result = analyze_sentiment("I've tried three times already", failed_attempts=3)
         assert result.triggers_escalation is True
         assert "failed attempts" in result.escalation_reason.lower()
 
     def test_emergency_triggers_escalation(self):
         """Emergency keywords should trigger escalation."""
-        result = analyze_sentiment("This is an emergency! I'm in severe pain and need help urgently!")
+        result = analyze_sentiment(
+            "This is an emergency! I'm in severe pain and need help urgently!"
+        )
         assert result.triggers_escalation is True
 
     def test_normal_message_no_escalation(self):
@@ -234,6 +237,7 @@ class TestEscalationTriggers:
 # Conversation History Tests
 # ============================================================================
 
+
 class TestConversationHistory:
     """Tests for conversation history impact on sentiment."""
 
@@ -245,18 +249,14 @@ class TestConversationHistory:
             {"role": "user", "content": "Very annoying!!"},
         ]
 
-        result_with_history = analyze_sentiment(
-            "Still not working!",
-            conversation_history=history
-        )
+        result_with_history = analyze_sentiment("Still not working!", conversation_history=history)
 
         result_without_history = analyze_sentiment("Still not working!")
 
         # With history should have higher frustration
-        assert (
-            result_with_history.details.get('frustration_score', 0) >=
-            result_without_history.details.get('frustration_score', 0)
-        )
+        assert result_with_history.details.get(
+            "frustration_score", 0
+        ) >= result_without_history.details.get("frustration_score", 0)
 
     def test_empty_history_handled(self):
         """Empty history should not cause errors."""
@@ -274,6 +274,7 @@ class TestConversationHistory:
 # SentimentResult Structure Tests
 # ============================================================================
 
+
 class TestSentimentResultStructure:
     """Tests for SentimentResult dataclass structure."""
 
@@ -281,12 +282,12 @@ class TestSentimentResultStructure:
         """Result should contain all expected fields."""
         result = analyze_sentiment("Test message")
 
-        assert hasattr(result, 'sentiment')
-        assert hasattr(result, 'confidence')
-        assert hasattr(result, 'intent')
-        assert hasattr(result, 'triggers_escalation')
-        assert hasattr(result, 'escalation_reason')
-        assert hasattr(result, 'details')
+        assert hasattr(result, "sentiment")
+        assert hasattr(result, "confidence")
+        assert hasattr(result, "intent")
+        assert hasattr(result, "triggers_escalation")
+        assert hasattr(result, "escalation_reason")
+        assert hasattr(result, "details")
 
     def test_confidence_in_valid_range(self):
         """Confidence should be between 0 and 1."""
@@ -306,15 +307,16 @@ class TestSentimentResultStructure:
         """Details should contain sub-analysis results."""
         result = analyze_sentiment("This is frustrating!")
 
-        assert 'frustration_score' in result.details
-        assert 'pattern_matches' in result.details
-        assert 'word_analysis' in result.details
-        assert 'punctuation_analysis' in result.details
+        assert "frustration_score" in result.details
+        assert "pattern_matches" in result.details
+        assert "word_analysis" in result.details
+        assert "punctuation_analysis" in result.details
 
 
 # ============================================================================
 # Helper Function Tests
 # ============================================================================
+
 
 class TestHelperFunctions:
     """Tests for sentiment helper functions."""
@@ -361,6 +363,7 @@ class TestHelperFunctions:
 # Edge Case Tests
 # ============================================================================
 
+
 class TestEdgeCases:
     """Tests for edge cases and unusual inputs."""
 
@@ -385,7 +388,7 @@ class TestEdgeCases:
         result = analyze_sentiment("!!???!!")
         assert result is not None
         # Multiple punctuation should increase frustration indicators
-        assert result.details['punctuation_analysis']['multi_punctuation'] > 0
+        assert result.details["punctuation_analysis"]["multi_punctuation"] > 0
 
     def test_numbers_only(self):
         """Should handle message with only numbers."""

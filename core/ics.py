@@ -1,15 +1,19 @@
-from datetime import datetime, timedelta
 import uuid
+from datetime import datetime, timedelta
+
 
 def _fmt(dt: datetime) -> str:
     # naive local time; many calendars accept this; for prod you may want TZ handling
     return dt.strftime("%Y%m%dT%H%M%S")
 
-def make_ics(summary: str, description: str, start: datetime, duration_min: int = 60, location: str = "") -> bytes:
+
+def make_ics(
+    summary: str, description: str, start: datetime, duration_min: int = 60, location: str = ""
+) -> bytes:
     uid = f"{uuid.uuid4()}@locusai"
     dtstamp = _fmt(datetime.utcnow())
     dtstart = _fmt(start)
-    dtend   = _fmt(start + timedelta(minutes=duration_min))
+    dtend = _fmt(start + timedelta(minutes=duration_min))
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",

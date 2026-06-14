@@ -3,17 +3,18 @@
 
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Callable
 from functools import wraps
 from threading import RLock
-from collections import defaultdict
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Metrics Collection
 # ============================================================================
+
 
 class MetricsCollector:
     """Simple in-memory metrics collector.
@@ -36,7 +37,9 @@ class MetricsCollector:
         self._histogram_window = timedelta(hours=1)
         self._histogram_timestamps: Dict[str, list] = defaultdict(list)
 
-    def inc_counter(self, name: str, labels: Optional[Dict[str, str]] = None, value: int = 1) -> None:
+    def inc_counter(
+        self, name: str, labels: Optional[Dict[str, str]] = None, value: int = 1
+    ) -> None:
         """Increment a counter metric.
 
         Args:
@@ -48,7 +51,9 @@ class MetricsCollector:
             label_key = self._labels_to_key(labels)
             self._counters[name][label_key] += value
 
-    def observe_histogram(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def observe_histogram(
+        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Record a histogram observation.
 
         Args:
@@ -84,7 +89,9 @@ class MetricsCollector:
             label_key = self._labels_to_key(labels)
             return self._counters[name].get(label_key, 0)
 
-    def get_histogram_stats(self, name: str, labels: Optional[Dict[str, str]] = None) -> Dict[str, float]:
+    def get_histogram_stats(
+        self, name: str, labels: Optional[Dict[str, str]] = None
+    ) -> Dict[str, float]:
         """Get histogram statistics.
 
         Returns:
@@ -97,8 +104,14 @@ class MetricsCollector:
             values = self._histograms.get(key, [])
             if not values:
                 return {
-                    "count": 0, "sum": 0, "avg": 0,
-                    "min": 0, "max": 0, "p50": 0, "p95": 0, "p99": 0
+                    "count": 0,
+                    "sum": 0,
+                    "avg": 0,
+                    "min": 0,
+                    "max": 0,
+                    "p50": 0,
+                    "p95": 0,
+                    "p99": 0,
                 }
 
             sorted_vals = sorted(values)
@@ -131,7 +144,7 @@ class MetricsCollector:
                     name: self.get_histogram_stats(name.split(":")[0])
                     for name in self._histograms.keys()
                 },
-                "collected_at": datetime.now().isoformat()
+                "collected_at": datetime.now().isoformat(),
             }
 
     def reset(self) -> None:
@@ -199,8 +212,10 @@ def get_metrics() -> MetricsCollector:
 # Metric Names (Constants)
 # ============================================================================
 
+
 class Metrics:
     """Standard metric names for the application."""
+
     # HTTP metrics
     HTTP_REQUESTS_TOTAL = "http_requests_total"
     HTTP_REQUEST_DURATION = "http_request_duration_seconds"
@@ -238,6 +253,7 @@ class Metrics:
 # Decorators for Automatic Instrumentation
 # ============================================================================
 
+
 def timed(metric_name: str, labels: Optional[Dict[str, str]] = None):
     """Decorator to time function execution and record to histogram.
 
@@ -246,6 +262,7 @@ def timed(metric_name: str, labels: Optional[Dict[str, str]] = None):
         def call_openai():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -256,7 +273,9 @@ def timed(metric_name: str, labels: Optional[Dict[str, str]] = None):
             finally:
                 duration = time.time() - start
                 get_metrics().observe_histogram(metric_name, duration, labels)
+
         return wrapper
+
     return decorator
 
 
@@ -268,12 +287,15 @@ def counted(metric_name: str, labels: Optional[Dict[str, str]] = None):
         def call_openai():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             get_metrics().inc_counter(metric_name, labels)
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -281,7 +303,7 @@ def instrumented(
     counter_name: str,
     histogram_name: str,
     error_counter_name: Optional[str] = None,
-    labels: Optional[Dict[str, str]] = None
+    labels: Optional[Dict[str, str]] = None,
 ):
     """Decorator for full instrumentation (count, time, errors).
 
@@ -295,6 +317,7 @@ def instrumented(
         def call_openai():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -315,12 +338,14 @@ def instrumented(
                 metrics.observe_histogram(histogram_name, duration, labels)
 
         return wrapper
+
     return decorator
 
 
 # ============================================================================
 # Request Tracking Context Manager
 # ============================================================================
+
 
 class RequestTracker:
     """Context manager for tracking request metrics.
@@ -351,11 +376,10 @@ class RequestTracker:
         self.metrics.observe_histogram(Metrics.HTTP_REQUEST_DURATION, duration, labels)
 
         if exc_type is not None:
-            self.metrics.inc_counter(Metrics.HTTP_ERRORS_TOTAL, {
-                "method": self.method,
-                "endpoint": self.endpoint,
-                "error_type": exc_type.__name__
-            })
+            self.metrics.inc_counter(
+                Metrics.HTTP_ERRORS_TOTAL,
+                {"method": self.method, "endpoint": self.endpoint, "error_type": exc_type.__name__},
+            )
 
         return False  # Don't suppress exceptions
 
@@ -368,13 +392,14 @@ class RequestTracker:
 # Structured Logging Helpers
 # ============================================================================
 
+
 def log_with_context(
     level: int,
     message: str,
     request_id: Optional[str] = None,
     user_id: Optional[int] = None,
     business_id: Optional[int] = None,
-    **extra
+    **extra,
 ) -> None:
     """Log a message with structured context.
 
@@ -391,7 +416,7 @@ def log_with_context(
         "request_id": request_id,
         "user_id": user_id,
         "business_id": business_id,
-        **extra
+        **extra,
     }
 
     # Remove None values
@@ -406,6 +431,7 @@ def log_with_context(
 # ============================================================================
 # Performance Summary
 # ============================================================================
+
 
 def get_performance_summary() -> Dict[str, Any]:
     """Get a summary of application performance metrics."""
@@ -427,5 +453,5 @@ def get_performance_summary() -> Dict[str, Any]:
             "bookings": metrics.get_counter(Metrics.BOOKINGS_TOTAL),
             "escalations": metrics.get_counter(Metrics.ESCALATIONS_TOTAL),
         },
-        "collected_at": datetime.now().isoformat()
+        "collected_at": datetime.now().isoformat(),
     }

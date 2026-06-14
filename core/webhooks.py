@@ -4,15 +4,15 @@
 # signed JSON payload with at-least-once delivery (queued in webhook_deliveries,
 # retried with backoff by a supervised dispatcher). SSRF-guarded + HMAC-signed.
 
-import json
-import hmac
 import hashlib
+import hmac
 import ipaddress
+import json
 import logging
 import secrets
 import socket
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from core.db import get_conn
@@ -61,8 +61,14 @@ def is_safe_url(url: str) -> bool:
             ip = ipaddress.ip_address(addr.split("%")[0])
         except ValueError:
             return False
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
             return False
     return True
 
@@ -82,13 +88,18 @@ def generate_secret() -> str:
 # ---------------------------------------------------------------------------
 def list_endpoints(business_id: int) -> List[Dict[str, Any]]:
     with get_conn() as con:
-        return [dict(r) for r in con.execute(
-            "SELECT * FROM webhook_endpoints WHERE business_id=? ORDER BY id DESC",
-            (business_id,)).fetchall()]
+        return [
+            dict(r)
+            for r in con.execute(
+                "SELECT * FROM webhook_endpoints WHERE business_id=? ORDER BY id DESC",
+                (business_id,),
+            ).fetchall()
+        ]
 
 
-def create_endpoint(business_id: int, url: str, events: str = "all",
-                    description: Optional[str] = None) -> Dict[str, Any]:
+def create_endpoint(
+    business_id: int, url: str, events: str = "all", description: Optional[str] = None
+) -> Dict[str, Any]:
     secret = generate_secret()
     with get_conn() as con:
         cur = con.cursor()
@@ -105,18 +116,23 @@ def create_endpoint(business_id: int, url: str, events: str = "all",
 def delete_endpoint(business_id: int, endpoint_id: int) -> bool:
     with get_conn() as con:
         cur = con.execute(
-            "DELETE FROM webhook_endpoints WHERE id=? AND business_id=?",
-            (endpoint_id, business_id))
+            "DELETE FROM webhook_endpoints WHERE id=? AND business_id=?", (endpoint_id, business_id)
+        )
         con.commit()
         return cur.rowcount > 0
 
 
 def recent_deliveries(business_id: int, limit: int = 20) -> List[Dict[str, Any]]:
     with get_conn() as con:
-        return [dict(r) for r in con.execute(
-            "SELECT id, endpoint_id, event_type, status, attempts, response_code, "
-            "last_error, created_at, delivered_at FROM webhook_deliveries "
-            "WHERE business_id=? ORDER BY id DESC LIMIT ?", (business_id, limit)).fetchall()]
+        return [
+            dict(r)
+            for r in con.execute(
+                "SELECT id, endpoint_id, event_type, status, attempts, response_code, "
+                "last_error, created_at, delivered_at FROM webhook_deliveries "
+                "WHERE business_id=? ORDER BY id DESC LIMIT ?",
+                (business_id, limit),
+            ).fetchall()
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +149,11 @@ def emit_event(business_id: int, event_type: str, data: Dict[str, Any]) -> int:
     """Queue a delivery for each matching active endpoint. Returns count queued.
     Never raises — webhook failures must not break the originating action."""
     try:
-        endpoints = [e for e in list_endpoints(business_id)
-                     if e["active"] and _endpoint_wants(e["events"], event_type)]
+        endpoints = [
+            e
+            for e in list_endpoints(business_id)
+            if e["active"] and _endpoint_wants(e["events"], event_type)
+        ]
         if not endpoints:
             return 0
         envelope = {
@@ -162,9 +181,11 @@ def emit_event(business_id: int, event_type: str, data: Dict[str, Any]) -> int:
 def _deliver_one(delivery: Dict[str, Any]) -> None:
     """Attempt a single delivery; update its row with the outcome + next retry."""
     import httpx
+
     with get_conn() as con:
-        ep = con.execute("SELECT * FROM webhook_endpoints WHERE id=?",
-                         (delivery["endpoint_id"],)).fetchone()
+        ep = con.execute(
+            "SELECT * FROM webhook_endpoints WHERE id=?", (delivery["endpoint_id"],)
+        ).fetchone()
     if not ep or not ep["active"]:
         _finalize(delivery["id"], "failed", None, "Endpoint missing or inactive")
         return
@@ -198,12 +219,14 @@ def _finalize(delivery_id, status, code, error, attempts=None):
             con.execute(
                 "UPDATE webhook_deliveries SET status=?, response_code=?, last_error=?, "
                 "attempts=?, delivered_at=? WHERE id=?",
-                (status, code, error, attempts, _now().isoformat(), delivery_id))
+                (status, code, error, attempts, _now().isoformat(), delivery_id),
+            )
         else:
             con.execute(
                 "UPDATE webhook_deliveries SET status=?, response_code=?, last_error=?, "
                 "delivered_at=? WHERE id=?",
-                (status, code, error, _now().isoformat(), delivery_id))
+                (status, code, error, _now().isoformat(), delivery_id),
+            )
         con.commit()
 
 
@@ -217,7 +240,8 @@ def _retry_or_fail(delivery_id, attempt, code, error):
         con.execute(
             "UPDATE webhook_deliveries SET status='pending', attempts=?, response_code=?, "
             "last_error=?, next_attempt_at=? WHERE id=?",
-            (attempt, code, error, next_at, delivery_id))
+            (attempt, code, error, next_at, delivery_id),
+        )
         con.commit()
 
 
@@ -226,17 +250,22 @@ def send_test_event(business_id: int, endpoint_id: int) -> bool:
     with get_conn() as con:
         ep = con.execute(
             "SELECT id FROM webhook_endpoints WHERE id=? AND business_id=?",
-            (endpoint_id, business_id)).fetchone()
+            (endpoint_id, business_id),
+        ).fetchone()
         if not ep:
             return False
-        envelope = {"event": "test.ping", "business_id": business_id,
-                    "created_at": _now().isoformat(),
-                    "data": {"message": "This is a test event from LocusAI."}}
+        envelope = {
+            "event": "test.ping",
+            "business_id": business_id,
+            "created_at": _now().isoformat(),
+            "data": {"message": "This is a test event from LocusAI."},
+        }
         con.execute(
             "INSERT INTO webhook_deliveries "
             "(endpoint_id, business_id, event_type, payload, status, next_attempt_at) "
             "VALUES (?, ?, 'test.ping', ?, 'pending', ?)",
-            (endpoint_id, business_id, json.dumps(envelope), _now().isoformat()))
+            (endpoint_id, business_id, json.dumps(envelope), _now().isoformat()),
+        )
         con.commit()
     return True
 
@@ -245,10 +274,15 @@ def dispatch_pending(limit: int = 25) -> int:
     """Deliver due pending deliveries. Returns the number attempted.
     Designed to be called repeatedly by a supervised worker."""
     with get_conn() as con:
-        rows = [dict(r) for r in con.execute(
-            "SELECT * FROM webhook_deliveries WHERE status='pending' "
-            "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
-            "ORDER BY id ASC LIMIT ?", (_now().isoformat(), limit)).fetchall()]
+        rows = [
+            dict(r)
+            for r in con.execute(
+                "SELECT * FROM webhook_deliveries WHERE status='pending' "
+                "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
+                "ORDER BY id ASC LIMIT ?",
+                (_now().isoformat(), limit),
+            ).fetchall()
+        ]
     for d in rows:
         _deliver_one(d)
     return len(rows)

@@ -1,16 +1,20 @@
 # chat_bp.py — web chat UI (RBAC-ready) with booking auto-commit
-from flask import Blueprint, render_template, request, redirect, url_for, session
-from core.db import create_session, get_session_messages, log_message, list_businesses
+from flask import Blueprint, redirect, render_template, request, session, url_for
+
 from core.ai import process_message
 from core.booking import maybe_commit_booking
+from core.db import create_session, get_session_messages, list_businesses, log_message
 
 bp = Blueprint("chat", __name__)
+
 
 def _logged_in():
     return session.get("user") is not None
 
+
 def _sid_key(bid: int) -> str:
     return f"chat_sid_{bid}"
+
 
 @bp.route("/chat")
 def chat_index():
@@ -23,7 +27,9 @@ def chat_index():
         business_id = 0
 
     businesses = list_businesses(limit=200)
-    business = next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    business = (
+        next((b for b in businesses if b["id"] == business_id), None) if business_id else None
+    )
     messages = []
 
     if business:
@@ -34,10 +40,13 @@ def chat_index():
             session[sid_key] = sid
 
         rows = get_session_messages(sid, limit=50)
-        messages = [{"role": ("assistant" if r["sender"]=="bot" else "user"), "text": r["text"]}
-                    for r in reversed(rows)]
+        messages = [
+            {"role": ("assistant" if r["sender"] == "bot" else "user"), "text": r["text"]}
+            for r in reversed(rows)
+        ]
 
     return render_template("chat.html", businesses=businesses, business=business, messages=messages)
+
 
 @bp.route("/chat/send", methods=["POST"])
 def chat_send():
@@ -65,6 +74,7 @@ def chat_send():
         log_message(sid, "bot", reply)
 
     return redirect(url_for("chat.chat_index", business_id=business_id))
+
 
 @bp.route("/chat/reset", methods=["POST"])
 def chat_reset():

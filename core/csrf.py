@@ -1,16 +1,18 @@
 import secrets
-from flask import session, request, abort
+
+from flask import abort, request, session
 
 _EXEMPT_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 # Paths that are exempt from CSRF protection (use tenant key auth instead)
 _EXEMPT_PATHS = {
-    "/api/widget/",      # Widget API uses tenant key auth
-    "/api/sms/",         # SMS webhooks use signature verification
-    "/api/whatsapp/",    # WhatsApp webhooks use signature verification
-    "/api/voice/",       # Voice webhooks use signature verification
-    "/api/billing/",     # Stripe webhooks use signature verification
+    "/api/widget/",  # Widget API uses tenant key auth
+    "/api/sms/",  # SMS webhooks use signature verification
+    "/api/whatsapp/",  # WhatsApp webhooks use signature verification
+    "/api/voice/",  # Voice webhooks use signature verification
+    "/api/billing/",  # Stripe webhooks use signature verification
 }
+
 
 def _get_token():
     tok = session.get("csrf_token")
@@ -18,6 +20,7 @@ def _get_token():
         tok = secrets.token_urlsafe(32)
         session["csrf_token"] = tok
     return tok
+
 
 def register_csrf(app):
     @app.context_processor

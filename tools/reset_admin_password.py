@@ -15,6 +15,7 @@ Usage:
 On Railway (uses the deployed env + DB):
     railway run python tools/reset_admin_password.py --email you@example.com
 """
+
 import argparse
 import os
 import secrets
@@ -25,7 +26,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from werkzeug.security import generate_password_hash  # noqa: E402
-from core.db import get_conn, init_db, DB_PATH  # noqa: E402
+
+from core.db import DB_PATH, get_conn, init_db  # noqa: E402
 
 _HASH_METHOD = "pbkdf2:sha256:260000"  # must match auth_bp.py
 
@@ -55,9 +57,13 @@ def reset_admin(email: str, password: str) -> str:
 
     with get_conn() as con:
         has_verified = _has_column(con, "users", "email_verified")
-        row = con.execute("SELECT id FROM users WHERE email = ? COLLATE NOCASE", (email,)).fetchone()
+        row = con.execute(
+            "SELECT id FROM users WHERE email = ? COLLATE NOCASE", (email,)
+        ).fetchone()
         if row:
-            con.execute("UPDATE users SET password_hash=?, role='admin' WHERE id=?", (pw_hash, row["id"]))
+            con.execute(
+                "UPDATE users SET password_hash=?, role='admin' WHERE id=?", (pw_hash, row["id"])
+            )
             if has_verified:
                 con.execute("UPDATE users SET email_verified=1 WHERE id=?", (row["id"],))
             action = "updated"
@@ -65,11 +71,15 @@ def reset_admin(email: str, password: str) -> str:
             if has_verified:
                 con.execute(
                     "INSERT INTO users (email, name, password_hash, role, email_verified) "
-                    "VALUES (?, ?, ?, 'admin', 1)", (email, "Admin", pw_hash))
+                    "VALUES (?, ?, ?, 'admin', 1)",
+                    (email, "Admin", pw_hash),
+                )
             else:
                 con.execute(
                     "INSERT INTO users (email, name, password_hash, role) "
-                    "VALUES (?, ?, ?, 'admin')", (email, "Admin", pw_hash))
+                    "VALUES (?, ?, ?, 'admin')",
+                    (email, "Admin", pw_hash),
+                )
             action = "created"
         con.commit()
     return action
@@ -78,8 +88,11 @@ def reset_admin(email: str, password: str) -> str:
 def main():
     ap = argparse.ArgumentParser(description="Reset or create the LocusAI admin login.")
     ap.add_argument("--email", default=os.getenv("ADMIN_EMAIL"), help="admin email")
-    ap.add_argument("--password", default=os.getenv("ADMIN_PASSWORD"),
-                    help="new password (auto-generated if omitted)")
+    ap.add_argument(
+        "--password",
+        default=os.getenv("ADMIN_PASSWORD"),
+        help="new password (auto-generated if omitted)",
+    )
     args = ap.parse_args()
 
     if not args.email:

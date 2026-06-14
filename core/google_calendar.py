@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5050/integrations/google/callback")
+GOOGLE_REDIRECT_URI = os.getenv(
+    "GOOGLE_REDIRECT_URI", "http://127.0.0.1:5050/integrations/google/callback"
+)
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
@@ -28,6 +30,7 @@ GOOGLE_CONFIGURED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 # ============================================================================
 # OAuth2 Flow
 # ============================================================================
+
 
 def get_oauth_flow(redirect_uri: Optional[str] = None):
     """Create a Google OAuth2 flow object.
@@ -77,6 +80,7 @@ def get_authorization_url(business_id: int, redirect_uri: Optional[str] = None) 
         return None
 
     import secrets
+
     state = f"{business_id}:{secrets.token_urlsafe(16)}"
 
     auth_url, _ = flow.authorization_url(
@@ -160,6 +164,7 @@ def refresh_credentials_if_needed(creds, token_dict: Dict) -> Tuple[Any, Dict]:
     """Refresh credentials if expired, return updated creds and token dict."""
     try:
         from google.auth.transport.requests import Request
+
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
             # Update stored tokens
@@ -174,6 +179,7 @@ def refresh_credentials_if_needed(creds, token_dict: Dict) -> Tuple[Any, Dict]:
 # ============================================================================
 # Calendar API
 # ============================================================================
+
 
 def get_calendar_service(token_dict: Dict[str, Any]):
     """Build a Google Calendar API service from stored tokens.
@@ -190,6 +196,7 @@ def get_calendar_service(token_dict: Dict[str, Any]):
 
     try:
         from googleapiclient.discovery import build
+
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
         return service, token_dict
     except Exception as e:
@@ -211,12 +218,14 @@ def list_calendars(token_dict: Dict[str, Any]) -> List[Dict]:
         result = service.calendarList().list().execute()
         calendars = []
         for item in result.get("items", []):
-            calendars.append({
-                "id": item["id"],
-                "name": item.get("summary", item["id"]),
-                "primary": item.get("primary", False),
-                "color": item.get("backgroundColor"),
-            })
+            calendars.append(
+                {
+                    "id": item["id"],
+                    "name": item.get("summary", item["id"]),
+                    "primary": item.get("primary", False),
+                    "color": item.get("backgroundColor"),
+                }
+            )
         return calendars
     except Exception as e:
         logger.error(f"Failed to list calendars: {e}")
@@ -412,6 +421,7 @@ def update_calendar_event(
 # Business-level sync helpers
 # ============================================================================
 
+
 def get_business_gcal_config(business_id: int) -> Optional[Dict]:
     """Get stored Google Calendar config for a business.
 
@@ -425,7 +435,7 @@ def get_business_gcal_config(business_id: int) -> Optional[Dict]:
             """SELECT account_json FROM integrations
                WHERE business_id = ? AND provider_key = 'google_calendar'
                AND status = 'active' LIMIT 1""",
-            (business_id,)
+            (business_id,),
         ).fetchone()
 
         if not row or not row["account_json"]:
@@ -448,7 +458,7 @@ def save_business_gcal_config(business_id: int, config: Dict) -> bool:
                    VALUES (?, 'google_calendar', 'active', ?, datetime('now'))
                    ON CONFLICT(business_id, provider_key)
                    DO UPDATE SET status='active', account_json=excluded.account_json, updated_at=excluded.updated_at""",
-                (business_id, json.dumps(config))
+                (business_id, json.dumps(config)),
             )
         return True
     except Exception as e:
@@ -465,7 +475,7 @@ def disconnect_gcal(business_id: int) -> bool:
             con.execute(
                 """UPDATE integrations SET status='inactive', updated_at=datetime('now')
                    WHERE business_id = ? AND provider_key = 'google_calendar'""",
-                (business_id,)
+                (business_id,),
             )
         return True
     except Exception as e:
@@ -489,7 +499,7 @@ def sync_appointment_to_gcal(appointment_id: int) -> Tuple[bool, str]:
                FROM appointments a
                JOIN businesses b ON a.business_id = b.id
                WHERE a.id = ?""",
-            (appointment_id,)
+            (appointment_id,),
         ).fetchone()
 
     if not appt:
@@ -508,7 +518,7 @@ def sync_appointment_to_gcal(appointment_id: int) -> Tuple[bool, str]:
     with get_conn() as con:
         svc = con.execute(
             "SELECT duration_min FROM services WHERE business_id = ? AND name = ?",
-            (appt["business_id"], appt.get("service"))
+            (appt["business_id"], appt.get("service")),
         ).fetchone()
         if svc:
             duration_min = svc["duration_min"]
@@ -528,17 +538,19 @@ def sync_appointment_to_gcal(appointment_id: int) -> Tuple[bool, str]:
         event_id = external_id[5:]
         # Update existing event
         success = update_calendar_event(
-            tokens, calendar_id, event_id,
-            appt["start_at"], duration_min, summary
+            tokens, calendar_id, event_id, appt["start_at"], duration_min, summary
         )
         if success:
-            return True, f"Google Calendar event updated"
+            return True, "Google Calendar event updated"
         return False, "Failed to update calendar event"
 
     # Create new event
     event = create_calendar_event(
-        tokens, calendar_id, summary,
-        appt["start_at"], duration_min,
+        tokens,
+        calendar_id,
+        summary,
+        appt["start_at"],
+        duration_min,
         description=description,
         location=appt.get("biz_address", ""),
         attendee_email=appt.get("customer_email"),
@@ -551,11 +563,11 @@ def sync_appointment_to_gcal(appointment_id: int) -> Tuple[bool, str]:
             with transaction() as con:
                 con.execute(
                     "UPDATE appointments SET external_id = ? WHERE id = ?",
-                    (gcal_id, appointment_id)
+                    (gcal_id, appointment_id),
                 )
         except Exception:
             pass
-        return True, f"Synced to Google Calendar"
+        return True, "Synced to Google Calendar"
 
     return False, "Failed to create calendar event"
 
@@ -565,10 +577,7 @@ def delete_appointment_from_gcal(appointment_id: int) -> Tuple[bool, str]:
     from core.db import get_conn
 
     with get_conn() as con:
-        appt = con.execute(
-            "SELECT * FROM appointments WHERE id = ?",
-            (appointment_id,)
-        ).fetchone()
+        appt = con.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,)).fetchone()
 
     if not appt:
         return False, "Appointment not found"
@@ -587,7 +596,11 @@ def delete_appointment_from_gcal(appointment_id: int) -> Tuple[bool, str]:
     tokens = config.get("tokens", {})
 
     success = delete_calendar_event(tokens, calendar_id, event_id)
-    return (True, "Removed from Google Calendar") if success else (False, "Failed to remove from Calendar")
+    return (
+        (True, "Removed from Google Calendar")
+        if success
+        else (False, "Failed to remove from Calendar")
+    )
 
 
 def is_slot_available_gcal(

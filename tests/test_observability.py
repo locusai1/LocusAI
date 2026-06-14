@@ -1,8 +1,9 @@
 # tests/test_observability.py — Tests for core/observability.py (Metrics & Monitoring)
 
-import pytest
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestMetricsCollector:
@@ -11,12 +12,14 @@ class TestMetricsCollector:
     def test_create_collector(self):
         """Should create a metrics collector instance."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         assert collector is not None
 
     def test_inc_counter_basic(self):
         """Should increment counter."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.inc_counter("test_counter")
         assert collector.get_counter("test_counter") == 1
@@ -24,6 +27,7 @@ class TestMetricsCollector:
     def test_inc_counter_multiple(self):
         """Should increment counter multiple times."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.inc_counter("test_counter")
         collector.inc_counter("test_counter")
@@ -33,6 +37,7 @@ class TestMetricsCollector:
     def test_inc_counter_with_value(self):
         """Should increment counter by specified value."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.inc_counter("test_counter", value=5)
         assert collector.get_counter("test_counter") == 5
@@ -40,6 +45,7 @@ class TestMetricsCollector:
     def test_inc_counter_with_labels(self):
         """Should track counters with different labels separately."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.inc_counter("requests", labels={"method": "GET"})
         collector.inc_counter("requests", labels={"method": "POST"})
@@ -55,6 +61,7 @@ class TestHistogram:
     def test_observe_histogram(self):
         """Should record histogram observation."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.observe_histogram("latency", 0.5)
         stats = collector.get_histogram_stats("latency")
@@ -64,6 +71,7 @@ class TestHistogram:
     def test_histogram_stats_calculation(self):
         """Should calculate correct statistics."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
 
         values = [0.1, 0.2, 0.3, 0.4, 0.5]
@@ -80,6 +88,7 @@ class TestHistogram:
     def test_histogram_percentiles(self):
         """Should calculate percentiles."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
 
         # Add 100 values
@@ -94,6 +103,7 @@ class TestHistogram:
     def test_histogram_empty(self):
         """Should return zeros for empty histogram."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         stats = collector.get_histogram_stats("nonexistent")
         assert stats["count"] == 0
@@ -106,6 +116,7 @@ class TestGauge:
     def test_set_gauge(self):
         """Should set gauge value."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.set_gauge("active_sessions", 10)
         assert collector.get_gauge("active_sessions") == 10
@@ -113,6 +124,7 @@ class TestGauge:
     def test_gauge_overwrite(self):
         """Should overwrite previous gauge value."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.set_gauge("active_sessions", 10)
         collector.set_gauge("active_sessions", 15)
@@ -121,6 +133,7 @@ class TestGauge:
     def test_gauge_with_labels(self):
         """Should track gauges with labels separately."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
         collector.set_gauge("connections", 5, labels={"type": "http"})
         collector.set_gauge("connections", 3, labels={"type": "ws"})
@@ -135,6 +148,7 @@ class TestGetAllMetrics:
     def test_get_all_metrics(self):
         """Should return all metrics."""
         from core.observability import MetricsCollector
+
         collector = MetricsCollector()
 
         collector.inc_counter("counter1")
@@ -166,7 +180,7 @@ class TestTimedDecorator:
 
     def test_timed_decorator(self):
         """Should measure function execution time."""
-        from core.observability import timed, get_metrics
+        from core.observability import get_metrics, timed
 
         @timed("test_function_duration")
         def slow_function():
@@ -240,7 +254,7 @@ class TestGetMetricsSingleton:
 
     def test_get_metrics_returns_collector(self):
         """Should return a MetricsCollector instance."""
-        from core.observability import get_metrics, MetricsCollector
+        from core.observability import MetricsCollector, get_metrics
 
         metrics = get_metrics()
         assert isinstance(metrics, MetricsCollector)
@@ -259,8 +273,9 @@ class TestThreadSafety:
 
     def test_concurrent_increments(self):
         """Should handle concurrent increments safely."""
-        from core.observability import MetricsCollector
         import threading
+
+        from core.observability import MetricsCollector
 
         collector = MetricsCollector()
         threads = []

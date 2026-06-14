@@ -1,31 +1,32 @@
 # tests/test_validators.py — Tests for core/validators.py
 # Comprehensive validation testing for input sanitization and security
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from core.validators import (
-    validate_email,
-    validate_phone,
-    validate_name,
-    validate_date,
-    validate_datetime,
-    validate_slug,
-    validate_redirect_url,
-    validate_password,
-    validate_json_config,
+    build_csv_row,
+    csv_escape,
+    format_date,
+    format_datetime,
     safe_int,
     slugify,
-    csv_escape,
-    build_csv_row,
-    format_datetime,
-    format_date,
+    validate_date,
+    validate_datetime,
+    validate_email,
+    validate_json_config,
+    validate_name,
+    validate_password,
+    validate_phone,
+    validate_redirect_url,
+    validate_slug,
 )
-
 
 # ============================================================================
 # Email Validation Tests
 # ============================================================================
+
 
 class TestValidateEmail:
     """Tests for email validation."""
@@ -92,6 +93,7 @@ class TestValidateEmail:
 # Phone Validation Tests
 # ============================================================================
 
+
 class TestValidatePhone:
     """Tests for phone number validation."""
 
@@ -146,6 +148,7 @@ class TestValidatePhone:
 # Name Validation Tests
 # ============================================================================
 
+
 class TestValidateName:
     """Tests for name validation."""
 
@@ -193,6 +196,7 @@ class TestValidateName:
 # ============================================================================
 # Date/Time Validation Tests
 # ============================================================================
+
 
 class TestValidateDate:
     """Tests for date validation."""
@@ -266,6 +270,7 @@ class TestFormatDatetime:
 # ============================================================================
 # Slug Validation Tests
 # ============================================================================
+
 
 class TestValidateSlug:
     """Tests for URL slug validation."""
@@ -349,6 +354,7 @@ class TestSlugify:
 # URL Redirect Validation Tests (Security Critical)
 # ============================================================================
 
+
 class TestValidateRedirectUrl:
     """Tests for redirect URL validation (prevents open redirect attacks)."""
 
@@ -388,6 +394,7 @@ class TestValidateRedirectUrl:
 # ============================================================================
 # Password Validation Tests
 # ============================================================================
+
 
 class TestValidatePassword:
     """Tests for password strength validation."""
@@ -437,6 +444,7 @@ class TestValidatePassword:
 # Safe Integer Tests
 # ============================================================================
 
+
 class TestSafeInt:
     """Tests for safe integer parsing."""
 
@@ -472,6 +480,7 @@ class TestSafeInt:
 # ============================================================================
 # CSV Escape Tests (Security Critical)
 # ============================================================================
+
 
 class TestCsvEscape:
     """Tests for CSV escaping (prevents formula injection)."""
@@ -535,6 +544,7 @@ class TestBuildCsvRow:
 # JSON Config Validation Tests
 # ============================================================================
 
+
 class TestValidateJsonConfig:
     """Tests for JSON configuration validation."""
 
@@ -565,17 +575,11 @@ class TestValidateJsonConfig:
         assert "object" in error
 
     def test_missing_required_keys(self):
-        is_valid, data, error = validate_json_config(
-            '{"a": 1}',
-            required_keys=["a", "b"]
-        )
+        is_valid, data, error = validate_json_config('{"a": 1}', required_keys=["a", "b"])
         assert is_valid is False
         assert "Missing required keys" in error
         assert "b" in error
 
     def test_all_required_keys_present(self):
-        is_valid, data, error = validate_json_config(
-            '{"a": 1, "b": 2}',
-            required_keys=["a", "b"]
-        )
+        is_valid, data, error = validate_json_config('{"a": 1, "b": 2}', required_keys=["a", "b"])
         assert is_valid is True

@@ -5,15 +5,15 @@
 # push off-box. On Railway, point BACKUP_DIR at a mounted volume or use S3 so the
 # snapshot survives redeploys.
 
-import os
 import glob
-import sqlite3
 import logging
+import os
+import sqlite3
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from core import settings
 import core.db as _db
+from core import settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,9 @@ def rotate_local(dest_dir: Optional[str] = None, keep: Optional[int] = None) -> 
     """Keep only the newest `keep` snapshots in dest_dir. Returns count deleted."""
     dest_dir = dest_dir or settings.BACKUP_DIR
     keep = settings.BACKUP_KEEP if keep is None else keep
-    files = sorted(glob.glob(os.path.join(dest_dir, "receptionist-*.db")),
-                   key=os.path.getmtime, reverse=True)
+    files = sorted(
+        glob.glob(os.path.join(dest_dir, "receptionist-*.db")), key=os.path.getmtime, reverse=True
+    )
     deleted = 0
     for old in files[keep:]:
         try:

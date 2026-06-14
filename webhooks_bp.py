@@ -1,12 +1,20 @@
 # webhooks_bp.py — management UI for outbound webhooks (Zapier/Make/n8n-ready)
 
 import logging
+
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, session, flash, g,
+    Blueprint,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 
-from core.db import get_conn
 from core import webhooks
+from core.db import get_conn
 from core.validators import safe_int
 
 logger = logging.getLogger(__name__)
@@ -25,9 +33,12 @@ def _can_access(business_id: int) -> bool:
     if user.get("role") == "admin":
         return True
     with get_conn() as con:
-        return bool(con.execute(
-            "SELECT 1 FROM business_users WHERE user_id=? AND business_id=?",
-            (user["id"], business_id)).fetchone())
+        return bool(
+            con.execute(
+                "SELECT 1 FROM business_users WHERE user_id=? AND business_id=?",
+                (user["id"], business_id),
+            ).fetchone()
+        )
 
 
 @bp.route("/integrations/webhooks")
@@ -64,8 +75,11 @@ def webhooks_create():
     events = "all" if (not selected or "all" in selected) else ",".join(selected)
 
     if not webhooks.is_safe_url(url):
-        flash("That URL isn't allowed. Use a public https:// endpoint "
-              "(internal/private addresses are blocked for security).", "err")
+        flash(
+            "That URL isn't allowed. Use a public https:// endpoint "
+            "(internal/private addresses are blocked for security).",
+            "err",
+        )
         return redirect(url_for("webhooks.webhooks_index", business_id=business_id))
 
     result = webhooks.create_endpoint(business_id, url, events, description)

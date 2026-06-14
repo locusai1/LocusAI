@@ -1,27 +1,28 @@
 # tests/test_booking_confirmation.py — Tests for booking confirmation flow
 # Tests for pending bookings, confirmation, and cancellation
 
-import pytest
 import json
 import time
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.booking import (
-    extract_pending_booking,
-    confirm_pending_booking,
-    cancel_pending_booking,
-    get_pending_booking,
     _PENDING_BOOKINGS,
-    _generate_booking_token,
-    _cleanup_expired_bookings,
     PENDING_BOOKING_TTL,
+    _cleanup_expired_bookings,
+    _generate_booking_token,
+    cancel_pending_booking,
+    confirm_pending_booking,
+    extract_pending_booking,
+    get_pending_booking,
 )
-
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_business():
@@ -53,7 +54,7 @@ def booking_response(future_slot):
         "phone": "555-123-4567",
         "email": "john@example.com",
         "service": "Haircut",
-        "datetime": future_slot.strftime("%Y-%m-%d %H:%M")
+        "datetime": future_slot.strftime("%Y-%m-%d %H:%M"),
     }
     return f"""I'd be happy to book that for you!
 
@@ -73,6 +74,7 @@ def cleanup_bookings():
 # ============================================================================
 # Token Generation Tests
 # ============================================================================
+
 
 class TestTokenGeneration:
     """Tests for booking token generation."""
@@ -95,25 +97,26 @@ class TestTokenGeneration:
     def test_token_is_hex(self):
         """Token should be valid hex."""
         token = _generate_booking_token(1, 1)
-        assert all(c in '0123456789abcdef' for c in token)
+        assert all(c in "0123456789abcdef" for c in token)
 
 
 # ============================================================================
 # Extract Pending Booking Tests
 # ============================================================================
 
+
 class TestExtractPendingBooking:
     """Tests for extracting pending bookings from AI responses."""
 
     def test_extract_booking_from_response(self, booking_response, sample_business):
         """Should extract booking data from AI response."""
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 10:00"]
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 clean_text, pending = extract_pending_booking(
                     booking_response, sample_business, session_id=123
                 )
@@ -127,13 +130,13 @@ class TestExtractPendingBooking:
 
     def test_booking_tag_removed_from_text(self, booking_response, sample_business):
         """Booking tag should be removed from returned text."""
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 10:00"]
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 clean_text, _ = extract_pending_booking(
                     booking_response, sample_business, session_id=123
                 )
@@ -144,9 +147,7 @@ class TestExtractPendingBooking:
     def test_no_booking_tag_returns_none(self, sample_business):
         """Text without booking tag should return None for pending."""
         clean_text, pending = extract_pending_booking(
-            "Just a normal response.",
-            sample_business,
-            session_id=123
+            "Just a normal response.", sample_business, session_id=123
         )
 
         assert pending is None
@@ -154,13 +155,13 @@ class TestExtractPendingBooking:
 
     def test_pending_booking_stored_in_memory(self, booking_response, sample_business):
         """Pending booking should be stored in memory."""
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 10:00"]
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 _, pending = extract_pending_booking(
                     booking_response, sample_business, session_id=123
                 )
@@ -169,13 +170,13 @@ class TestExtractPendingBooking:
 
     def test_expires_in_included(self, booking_response, sample_business):
         """Pending booking should include expiration info."""
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 10:00"]
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 _, pending = extract_pending_booking(
                     booking_response, sample_business, session_id=123
                 )
@@ -188,9 +189,7 @@ class TestExtractPendingBooking:
         bad_response = """Here's your booking:
 <BOOKING>{invalid json here}</BOOKING>
 """
-        clean_text, pending = extract_pending_booking(
-            bad_response, sample_business, session_id=123
-        )
+        clean_text, pending = extract_pending_booking(bad_response, sample_business, session_id=123)
 
         assert pending is None
         assert "provide your details again" in clean_text
@@ -201,17 +200,17 @@ class TestExtractPendingBooking:
             "name": "John",
             "phone": "555-1234",
             "service": "Haircut",
-            "datetime": "2026-01-27 10:00"
+            "datetime": "2026-01-27 10:00",
         }
         response = f"<BOOKING>{json.dumps(booking_data)}</BOOKING>"
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = []  # No slots
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 clean_text, pending = extract_pending_booking(
                     response, sample_business, session_id=123
                 )
@@ -223,6 +222,7 @@ class TestExtractPendingBooking:
 # ============================================================================
 # Confirm Pending Booking Tests
 # ============================================================================
+
 
 class TestConfirmPendingBooking:
     """Tests for confirming pending bookings."""
@@ -247,14 +247,14 @@ class TestConfirmPendingBooking:
             "expires_at": time.time() + PENDING_BOOKING_TTL,
         }
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.create_booking.return_value = {"external_id": None}
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking.get_business_provider_key', return_value="local"):
-                with patch('core.booking.create_appointment', return_value=1):
+            with patch("core.booking.get_business_provider_key", return_value="local"):
+                with patch("core.booking.create_appointment", return_value=1):
                     success, message, appt_id = confirm_pending_booking(token)
 
         assert success is True
@@ -303,14 +303,14 @@ class TestConfirmPendingBooking:
 
         assert token in _PENDING_BOOKINGS
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.create_booking.return_value = {}
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking.get_business_provider_key', return_value="local"):
-                with patch('core.booking.create_appointment', return_value=1):
+            with patch("core.booking.get_business_provider_key", return_value="local"):
+                with patch("core.booking.create_appointment", return_value=1):
                     confirm_pending_booking(token)
 
         assert token not in _PENDING_BOOKINGS
@@ -319,6 +319,7 @@ class TestConfirmPendingBooking:
 # ============================================================================
 # Cancel Pending Booking Tests
 # ============================================================================
+
 
 class TestCancelPendingBooking:
     """Tests for cancelling pending bookings."""
@@ -363,6 +364,7 @@ class TestCancelPendingBooking:
 # Get Pending Booking Tests
 # ============================================================================
 
+
 class TestGetPendingBooking:
     """Tests for retrieving pending booking details."""
 
@@ -391,6 +393,7 @@ class TestGetPendingBooking:
 # ============================================================================
 # Cleanup Tests
 # ============================================================================
+
 
 class TestCleanupExpiredBookings:
     """Tests for automatic cleanup of expired bookings."""
@@ -430,6 +433,7 @@ class TestCleanupExpiredBookings:
 # Integration Tests
 # ============================================================================
 
+
 class TestBookingConfirmationFlow:
     """Integration tests for the complete booking confirmation flow."""
 
@@ -440,20 +444,20 @@ class TestBookingConfirmationFlow:
             "phone": "555-9876",
             "email": "jane@example.com",
             "service": "Coloring",
-            "datetime": "2026-01-27 14:00"
+            "datetime": "2026-01-27 14:00",
         }
         response = f"<BOOKING>{json.dumps(booking_data)}</BOOKING>"
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 14:00"]
             mock_prov.create_booking.return_value = {}
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=2):
-                with patch('core.booking.get_business_provider_key', return_value="local"):
-                    with patch('core.booking.create_appointment', return_value=5):
+            with patch("core.booking._find_local_service_id", return_value=2):
+                with patch("core.booking.get_business_provider_key", return_value="local"):
+                    with patch("core.booking.create_appointment", return_value=5):
                         # Extract
                         _, pending = extract_pending_booking(
                             response, sample_business, session_id=456
@@ -474,21 +478,19 @@ class TestBookingConfirmationFlow:
             "name": "Bob Wilson",
             "phone": "555-5555",
             "service": "Haircut",
-            "datetime": "2026-01-27 11:00"
+            "datetime": "2026-01-27 11:00",
         }
         response = f"<BOOKING>{json.dumps(booking_data)}</BOOKING>"
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.fetch_slots.return_value = ["2026-01-27 11:00"]
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking._find_local_service_id', return_value=1):
+            with patch("core.booking._find_local_service_id", return_value=1):
                 # Extract
-                _, pending = extract_pending_booking(
-                    response, sample_business, session_id=789
-                )
+                _, pending = extract_pending_booking(response, sample_business, session_id=789)
 
                 assert pending is not None
                 token = pending["token"]
@@ -513,14 +515,14 @@ class TestBookingConfirmationFlow:
             "expires_at": time.time() + PENDING_BOOKING_TTL,
         }
 
-        with patch('core.booking.get_business_provider') as mock_provider:
+        with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
             mock_prov.create_booking.return_value = {}
             mock_provider.return_value = mock_prov
 
-            with patch('core.booking.get_business_provider_key', return_value="local"):
-                with patch('core.booking.create_appointment', return_value=1):
+            with patch("core.booking.get_business_provider_key", return_value="local"):
+                with patch("core.booking.create_appointment", return_value=1):
                     # First confirm
                     success1, _, _ = confirm_pending_booking(token)
                     assert success1 is True
@@ -534,13 +536,14 @@ class TestBookingConfirmationFlow:
 # Real-Time Availability Tests
 # ============================================================================
 
+
 class TestAvailabilityFunctions:
     """Tests for real-time availability checking functions."""
 
     def test_get_available_slots_for_day(self):
         """Should return formatted time slots."""
-        with patch('core.booking.get_business_provider') as mock_provider:
-            with patch('core.booking._find_local_service_id', return_value=1):
+        with patch("core.booking.get_business_provider") as mock_provider:
+            with patch("core.booking._find_local_service_id", return_value=1):
                 mock_prov = MagicMock()
                 mock_prov.fetch_slots.return_value = [
                     "2026-01-27 09:00",
@@ -550,6 +553,7 @@ class TestAvailabilityFunctions:
                 mock_provider.return_value = mock_prov
 
                 from core.booking import get_available_slots_for_day
+
                 slots = get_available_slots_for_day(1, "2026-01-27", "Haircut")
 
                 assert len(slots) == 3
@@ -559,19 +563,21 @@ class TestAvailabilityFunctions:
 
     def test_get_available_slots_no_provider(self):
         """Should return empty list if no provider."""
-        with patch('core.booking.get_business_provider', return_value=None):
+        with patch("core.booking.get_business_provider", return_value=None):
             from core.booking import get_available_slots_for_day
+
             slots = get_available_slots_for_day(999, "2026-01-27")
             assert slots == []
 
     def test_get_next_available_slots(self):
         """Should return slots across multiple days."""
-        with patch('core.booking.get_business_provider') as mock_provider:
-            with patch('core.booking._find_local_service_id', return_value=1):
-                with patch('core.booking.get_conn'):
+        with patch("core.booking.get_business_provider") as mock_provider:
+            with patch("core.booking._find_local_service_id", return_value=1):
+                with patch("core.booking.get_conn"):
                     mock_prov = MagicMock()
                     # Return slots for any date (first call gets slots, rest empty)
                     call_count = [0]
+
                     def fake_fetch_slots(service_id, date_str):
                         call_count[0] += 1
                         if call_count[0] == 1:
@@ -584,6 +590,7 @@ class TestAvailabilityFunctions:
                     mock_provider.return_value = mock_prov
 
                     from core.booking import get_next_available_slots
+
                     slots = get_next_available_slots(1, num_slots=5)
 
                     # Should have found slots
@@ -593,10 +600,11 @@ class TestAvailabilityFunctions:
 
     def test_check_time_available_true(self):
         """Should return True when slot is available."""
-        with patch('core.db.check_slot_available', return_value=True):
-            with patch('core.booking._find_local_service_id', return_value=1):
-                with patch('core.booking.get_conn'):
+        with patch("core.db.check_slot_available", return_value=True):
+            with patch("core.booking._find_local_service_id", return_value=1):
+                with patch("core.booking.get_conn"):
                     from core.booking import check_time_available
+
                     is_available, alternative = check_time_available(1, "2026-01-27", "10:00")
 
                     assert is_available is True
@@ -604,9 +612,12 @@ class TestAvailabilityFunctions:
 
     def test_check_time_available_false_with_alternative(self):
         """Should suggest alternative when slot is taken."""
-        with patch('core.db.check_slot_available', return_value=False):
-            with patch('core.booking.get_available_slots_for_day', return_value=["11:00 AM", "2:00 PM"]):
+        with patch("core.db.check_slot_available", return_value=False):
+            with patch(
+                "core.booking.get_available_slots_for_day", return_value=["11:00 AM", "2:00 PM"]
+            ):
                 from core.booking import check_time_available
+
                 is_available, alternative = check_time_available(1, "2026-01-27", "10:00")
 
                 assert is_available is False
@@ -614,13 +625,14 @@ class TestAvailabilityFunctions:
 
     def test_format_availability_for_voice(self):
         """Should format availability in a voice-friendly way."""
-        with patch('core.booking.get_next_available_slots') as mock_slots:
+        with patch("core.booking.get_next_available_slots") as mock_slots:
             mock_slots.return_value = [
                 {"day": "Today", "date": "2026-01-27", "times": ["10:00 AM", "2:30 PM"]},
                 {"day": "Tomorrow", "date": "2026-01-28", "times": ["9:00 AM"]},
             ]
 
             from core.booking import format_availability_for_voice
+
             result = format_availability_for_voice(1)
 
             assert "Available times:" in result
@@ -630,8 +642,9 @@ class TestAvailabilityFunctions:
 
     def test_format_availability_no_slots(self):
         """Should return helpful message when no slots available."""
-        with patch('core.booking.get_next_available_slots', return_value=[]):
+        with patch("core.booking.get_next_available_slots", return_value=[]):
             from core.booking import format_availability_for_voice
+
             result = format_availability_for_voice(1)
 
             assert "No availability" in result or "Ask the caller" in result

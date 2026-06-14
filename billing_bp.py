@@ -12,9 +12,16 @@
 # plans but the action buttons explain that billing isn't live yet.
 
 import logging
+
 from flask import (
-    Blueprint, render_template, request, redirect, url_for,
-    session, flash, g, jsonify,
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 
 from core import billing
@@ -61,11 +68,16 @@ def checkout(plan_key):
         return redirect(url_for("billing.billing_home"))
 
     if not billing.is_configured():
-        flash("Billing isn't live yet — Stripe keys haven't been configured. "
-              "Your trial continues in the meantime.", "err")
+        flash(
+            "Billing isn't live yet — Stripe keys haven't been configured. "
+            "Your trial continues in the meantime.",
+            "err",
+        )
         return redirect(url_for("billing.billing_home"))
 
-    success_url = APP_BASE_URL.rstrip("/") + url_for("billing.success") + "?session_id={CHECKOUT_SESSION_ID}"
+    success_url = (
+        APP_BASE_URL.rstrip("/") + url_for("billing.success") + "?session_id={CHECKOUT_SESSION_ID}"
+    )
     cancel_url = APP_BASE_URL.rstrip("/") + url_for("billing.cancel")
     checkout_url = billing.create_checkout_session(user, plan_key, success_url, cancel_url)
 
@@ -80,8 +92,10 @@ def success():
     user = _current_user()
     if not user:
         return redirect(url_for("auth.login"))
-    flash("🎉 Welcome aboard! Your subscription is active. "
-          "It may take a few seconds to appear here.", "ok")
+    flash(
+        "🎉 Welcome aboard! Your subscription is active. It may take a few seconds to appear here.",
+        "ok",
+    )
     return redirect(url_for("billing.billing_home"))
 
 

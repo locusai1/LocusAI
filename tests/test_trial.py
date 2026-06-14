@@ -10,8 +10,11 @@ def _client(app, user, *, trial_ends_at, role="owner"):
     c = app.test_client()
     with c.session_transaction() as sess:
         sess["user"] = {
-            "id": user["id"], "email": user["email"], "name": user["name"],
-            "role": role, "trial_ends_at": trial_ends_at,
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": role,
+            "trial_ends_at": trial_ends_at,
         }
     return c
 
@@ -19,6 +22,7 @@ def _client(app, user, *, trial_ends_at, role="owner"):
 def _link(test_db, user, business):
     with patch("core.db.DB_PATH", test_db):
         from core.db import get_conn
+
         with get_conn() as con:
             con.execute(
                 "INSERT OR IGNORE INTO business_users (user_id, business_id) VALUES (?, ?)",
@@ -71,11 +75,14 @@ class TestTrialEnforcement:
         self, app, sample_user, sample_business, test_db
     ):
         from core import billing
+
         _link(test_db, sample_user, sample_business)
         with patch("core.db.DB_PATH", test_db):
             billing.upsert_subscription(
-                sample_user["id"], stripe_subscription_id="sub_active",
-                plan_key="professional", status="active",
+                sample_user["id"],
+                stripe_subscription_id="sub_active",
+                plan_key="professional",
+                status="active",
             )
         c = _client(app, sample_user, trial_ends_at=PAST)
         resp = c.get("/dashboard")

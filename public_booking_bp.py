@@ -4,18 +4,20 @@
 # customer book a slot directly (race-safe), creating the appointment, customer
 # record and reminders. CSRF-protected, rate-limited, fully validated.
 
-import time
 import logging
+import time
 from collections import defaultdict
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 
-from flask import Blueprint, render_template, request, abort, jsonify, redirect, url_for
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, url_for
 
 from core.db import (
-    get_business_by_slug, get_conn, create_appointment_atomic,
+    create_appointment_atomic,
+    get_business_by_slug,
+    get_conn,
 )
 from core.integrations import get_business_provider, get_business_provider_key
-from core.validators import validate_email, validate_phone, validate_name
+from core.validators import validate_email, validate_name, validate_phone
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,8 @@ bp = Blueprint("public_booking", __name__)
 
 # Simple in-process rate limiter (per IP) — replace with Redis for multi-instance.
 _BOOK_HITS = defaultdict(list)
-_BOOK_LIMIT = 8           # bookings/slot-lookups
-_BOOK_WINDOW = 60         # seconds
+_BOOK_LIMIT = 8  # bookings/slot-lookups
+_BOOK_WINDOW = 60  # seconds
 
 
 def _rate_ok(key: str) -> bool:
@@ -37,10 +39,14 @@ def _rate_ok(key: str) -> bool:
 
 def _active_services(business_id: int):
     with get_conn() as con:
-        return [dict(r) for r in con.execute(
-            "SELECT id, name, duration_min, price FROM services "
-            "WHERE business_id=? AND active=1 ORDER BY name", (business_id,)
-        ).fetchall()]
+        return [
+            dict(r)
+            for r in con.execute(
+                "SELECT id, name, duration_min, price FROM services "
+                "WHERE business_id=? AND active=1 ORDER BY name",
+                (business_id,),
+            ).fetchall()
+        ]
 
 
 def _get_business_or_404(slug: str):
@@ -56,7 +62,8 @@ def book_page(slug):
     services = _active_services(biz["id"])
     return render_template(
         "public_booking.html",
-        business=biz, services=services,
+        business=biz,
+        services=services,
         booked=request.args.get("booked") == "1",
         min_date=date.today().isoformat(),
         max_date=(date.today() + timedelta(days=60)).isoformat(),
@@ -98,11 +105,14 @@ def book_slots(slug):
 def book_submit(slug):
     biz = _get_business_or_404(slug)
     if not _rate_ok(f"book:{request.remote_addr}"):
-        return render_template("public_booking.html", business=biz,
-                               services=_active_services(biz["id"]),
-                               error="Too many attempts. Please wait a minute and try again.",
-                               min_date=date.today().isoformat(),
-                               max_date=(date.today() + timedelta(days=60)).isoformat()), 429
+        return render_template(
+            "public_booking.html",
+            business=biz,
+            services=_active_services(biz["id"]),
+            error="Too many attempts. Please wait a minute and try again.",
+            min_date=date.today().isoformat(),
+            max_date=(date.today() + timedelta(days=60)).isoformat(),
+        ), 429
 
     services = {s["id"]: s for s in _active_services(biz["id"])}
     service_id = request.form.get("service_id", type=int)
@@ -114,8 +124,11 @@ def book_submit(slug):
 
     def _err(msg):
         return render_template(
-            "public_booking.html", business=biz, services=list(services.values()),
-            error=msg, min_date=date.today().isoformat(),
+            "public_booking.html",
+            business=biz,
+            services=list(services.values()),
+            error=msg,
+            min_date=date.today().isoformat(),
             max_date=(date.today() + timedelta(days=60)).isoformat(),
         ), 400
 
@@ -141,19 +154,30 @@ def book_submit(slug):
     customer_id = None
     try:
         from customers_bp import find_or_create_customer
+
         customer_id = find_or_create_customer(
-            business_id=biz["id"], name=name, email=email or None,
-            phone=phone or phone_raw, source="public_booking",
+            business_id=biz["id"],
+            name=name,
+            email=email or None,
+            phone=phone or phone_raw,
+            source="public_booking",
         )
     except Exception as e:
         logger.warning(f"Public booking: customer link failed: {e}")
 
     appt_id, err = create_appointment_atomic(
-        business_id=biz["id"], start_at=slot, duration_min=svc["duration_min"] or 30,
-        customer_name=name, phone=phone or phone_raw, service=svc["name"],
-        status="confirmed", source="api",  # public self-serve (table CHECK: ai|owner|api)
-        notes="Booked via public booking page", customer_email=email or None,
-        external_provider_key=provider_key, customer_id=customer_id,
+        business_id=biz["id"],
+        start_at=slot,
+        duration_min=svc["duration_min"] or 30,
+        customer_name=name,
+        phone=phone or phone_raw,
+        service=svc["name"],
+        status="confirmed",
+        source="api",  # public self-serve (table CHECK: ai|owner|api)
+        notes="Booked via public booking page",
+        customer_email=email or None,
+        external_provider_key=provider_key,
+        customer_id=customer_id,
     )
     if err or not appt_id:
         return _err(err or "Sorry, that time was just taken. Please choose another.")
@@ -161,18 +185,29 @@ def book_submit(slug):
     # Schedule reminders (best-effort).
     try:
         from core.reminders import schedule_reminders_for_appointment
-        schedule_reminders_for_appointment(appt_id, slot, customer_email=email or None,
-                                           customer_phone=phone or phone_raw)
+
+        schedule_reminders_for_appointment(
+            appt_id, slot, customer_email=email or None, customer_phone=phone or phone_raw
+        )
     except Exception as e:
         logger.warning(f"Public booking: reminder scheduling failed: {e}")
 
     try:
         from core.webhooks import emit_event
-        emit_event(biz["id"], "booking.created", {
-            "appointment_id": appt_id, "service": svc["name"], "start_at": slot,
-            "customer_name": name, "phone": phone or phone_raw, "email": email or None,
-            "source": "public",
-        })
+
+        emit_event(
+            biz["id"],
+            "booking.created",
+            {
+                "appointment_id": appt_id,
+                "service": svc["name"],
+                "start_at": slot,
+                "customer_name": name,
+                "phone": phone or phone_raw,
+                "email": email or None,
+                "source": "public",
+            },
+        )
     except Exception:
         pass
 

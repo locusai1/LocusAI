@@ -1,10 +1,10 @@
 # core/encryption.py — Field-level encryption for PII data in LocusAI
 # Provides encryption/decryption utilities for sensitive data at rest
 
-import os
 import base64
 import hashlib
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -46,20 +46,14 @@ def _get_encryption_key() -> bytes:
     # Fall back to deriving from FLASK_SECRET_KEY
     flask_secret = os.getenv("FLASK_SECRET_KEY")
     if not flask_secret:
-        raise ValueError(
-            "No encryption key configured. Set ENCRYPTION_KEY or FLASK_SECRET_KEY."
-        )
+        raise ValueError("No encryption key configured. Set ENCRYPTION_KEY or FLASK_SECRET_KEY.")
 
     # Derive a 32-byte key using PBKDF2
     # Using a fixed salt is not ideal but necessary for deterministic derivation
     # In production, use a proper ENCRYPTION_KEY
     salt = b"locusai_pii_encryption_v1"
     _ENCRYPTION_KEY = hashlib.pbkdf2_hmac(
-        'sha256',
-        flask_secret.encode('utf-8'),
-        salt,
-        iterations=100000,
-        dklen=32
+        "sha256", flask_secret.encode("utf-8"), salt, iterations=100000, dklen=32
     )
 
     logger.warning(
@@ -77,8 +71,6 @@ def _get_encryption_key() -> bytes:
 # If cryptography library is available, use it; otherwise fall back to simpler method
 try:
     from cryptography.fernet import Fernet
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
     _FERNET: Optional[Fernet] = None
 
@@ -110,8 +102,8 @@ try:
 
         try:
             fernet = _get_fernet()
-            encrypted = fernet.encrypt(value.encode('utf-8'))
-            return "enc:" + encrypted.decode('utf-8')
+            encrypted = fernet.encrypt(value.encode("utf-8"))
+            return "enc:" + encrypted.decode("utf-8")
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
             raise
@@ -132,8 +124,8 @@ try:
         try:
             fernet = _get_fernet()
             encrypted_data = value[4:]  # Remove "enc:" prefix
-            decrypted = fernet.decrypt(encrypted_data.encode('utf-8'))
-            return decrypted.decode('utf-8')
+            decrypted = fernet.decrypt(encrypted_data.encode("utf-8"))
+            return decrypted.decode("utf-8")
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
             raise
@@ -164,9 +156,9 @@ except ImportError:
         try:
             key = _get_encryption_key()
             # Simple XOR obfuscation (NOT cryptographically secure)
-            data = value.encode('utf-8')
+            data = value.encode("utf-8")
             result = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-            return "obf:" + base64.b64encode(result).decode('utf-8')
+            return "obf:" + base64.b64encode(result).decode("utf-8")
         except Exception as e:
             logger.error(f"Obfuscation failed: {e}")
             raise
@@ -186,9 +178,9 @@ except ImportError:
         try:
             key = _get_encryption_key()
             prefix = "obf:" if value.startswith("obf:") else "enc:"
-            data = base64.b64decode(value[len(prefix):])
+            data = base64.b64decode(value[len(prefix) :])
             result = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-            return result.decode('utf-8')
+            return result.decode("utf-8")
         except Exception as e:
             logger.error(f"De-obfuscation failed: {e}")
             raise
@@ -199,6 +191,7 @@ except ImportError:
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
 
 def is_encrypted(value: str) -> bool:
     """Check if a value is encrypted."""
@@ -245,6 +238,7 @@ def decrypt_dict_fields(data: dict, fields: list) -> dict:
 # Hashing Utilities (for non-reversible data like tokens)
 # ============================================================================
 
+
 def hash_token(token: str, salt: Optional[str] = None) -> str:
     """Create a secure hash of a token for storage.
 
@@ -261,9 +255,9 @@ def hash_token(token: str, salt: Optional[str] = None) -> str:
     if not token:
         return ""
 
-    data = token.encode('utf-8')
+    data = token.encode("utf-8")
     if salt:
-        data = salt.encode('utf-8') + data
+        data = salt.encode("utf-8") + data
 
     return hashlib.sha256(data).hexdigest()
 
@@ -283,6 +277,7 @@ def verify_token_hash(token: str, stored_hash: str, salt: Optional[str] = None) 
         return False
 
     import hmac
+
     computed = hash_token(token, salt)
     return hmac.compare_digest(computed, stored_hash)
 
@@ -308,6 +303,7 @@ SESSION_PII_FIELDS = ["phone"]
 # Key Generation Utility (for deployment setup)
 # ============================================================================
 
+
 def generate_encryption_key() -> str:
     """Generate a new random encryption key.
 
@@ -315,8 +311,9 @@ def generate_encryption_key() -> str:
         Base64-encoded 32-byte key suitable for ENCRYPTION_KEY env var
     """
     import secrets
+
     key = secrets.token_bytes(32)
-    return base64.b64encode(key).decode('utf-8')
+    return base64.b64encode(key).decode("utf-8")
 
 
 if __name__ == "__main__":

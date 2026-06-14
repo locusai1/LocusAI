@@ -1,12 +1,19 @@
 # integrations_bp.py — pick provider + store config per business
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, g
-from core.db import get_conn, list_businesses, get_business_by_id, ensure_tenant_key
 import json
+
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+
+from core.db import ensure_tenant_key, get_business_by_id, get_conn, list_businesses
 
 bp = Blueprint("integrations", __name__)
 
-def _user(): return session.get("user")
-def _need_login(): return _user() is None
+
+def _user():
+    return session.get("user")
+
+
+def _need_login():
+    return _user() is None
 
 
 def _get_widget_settings(business_id):
@@ -24,8 +31,7 @@ def _get_widget_settings(business_id):
 
     with get_conn() as con:
         row = con.execute(
-            "SELECT * FROM widget_settings WHERE business_id = ?",
-            (business_id,)
+            "SELECT * FROM widget_settings WHERE business_id = ?", (business_id,)
         ).fetchone()
 
         if row:
@@ -38,14 +44,15 @@ def _get_widget_settings(business_id):
     return {**defaults, "business_id": business_id}
 
 
-@bp.route("/integrations", methods=["GET","POST"])
+@bp.route("/integrations", methods=["GET", "POST"])
 def integrations_index():
-    if _need_login(): return redirect(url_for("auth.login"))
+    if _need_login():
+        return redirect(url_for("auth.login"))
 
     business_id = int((request.values.get("business_id") or 0))
     providers = [
-        {"key":"local", "name":"Local (in-app scheduler)"},
-        {"key":"dummy", "name":"Dummy External (demo)"},
+        {"key": "local", "name": "Local (in-app scheduler)"},
+        {"key": "dummy", "name": "Dummy External (demo)"},
         # Future: {"key":"google_calendar","name":"Google Calendar"}, etc.
     ]
     current = None
@@ -54,7 +61,7 @@ def integrations_index():
     tenant_key = ""
     business = None
 
-    if request.method=="POST":
+    if request.method == "POST":
         key = (request.form.get("provider_key") or "local").strip()
         raw = request.form.get("config_json") or "{}"
         try:
@@ -63,12 +70,15 @@ def integrations_index():
             flash("Config must be valid JSON.", "err")
             return redirect(url_for("integrations.integrations_index", business_id=business_id))
         with get_conn() as con:
-            con.execute("""
+            con.execute(
+                """
               INSERT INTO integrations(business_id,provider_key,status,account_json,updated_at)
               VALUES(?,?,?,?,datetime('now','localtime'))
               ON CONFLICT(business_id,provider_key)
               DO UPDATE SET status=excluded.status, account_json=excluded.account_json, updated_at=excluded.updated_at
-            """, (business_id, key, "active", json.dumps(data)))
+            """,
+                (business_id, key, "active", json.dumps(data)),
+            )
         flash("Integration saved.", "ok")
         return redirect(url_for("integrations.integrations_index", business_id=business_id))
 
@@ -79,39 +89,48 @@ def integrations_index():
         widget = _get_widget_settings(business_id)
 
         with get_conn() as con:
-            row = con.execute("""
+            row = con.execute(
+                """
               SELECT provider_key, account_json FROM integrations
               WHERE business_id=? AND status='active'
               ORDER BY id DESC LIMIT 1
-            """,(business_id,)).fetchone()
+            """,
+                (business_id,),
+            ).fetchone()
         if row:
             current = row["provider_key"]
-            try: cfg = json.loads(row["account_json"] or "{}")
-            except: cfg = {}
+            try:
+                cfg = json.loads(row["account_json"] or "{}")
+            except:
+                cfg = {}
 
     # Google Calendar status
     gcal_connected = False
     gcal_calendar_id = None
     try:
-        from core.google_calendar import get_business_gcal_config, GOOGLE_CONFIGURED as GCAL_CONFIGURED
+        from core.google_calendar import GOOGLE_CONFIGURED as GCAL_CONFIGURED
+        from core.google_calendar import get_business_gcal_config
+
         gcal_cfg = get_business_gcal_config(business_id) if business_id else None
         gcal_connected = bool(gcal_cfg)
         gcal_calendar_id = gcal_cfg.get("calendar_id") if gcal_cfg else None
     except Exception:
         GCAL_CONFIGURED = False
 
-    return render_template("integrations.html",
-                           businesses=businesses,
-                           business_id=business_id,
-                           business=business,
-                           providers=providers,
-                           current=current,
-                           cfg=cfg,
-                           widget=widget,
-                           tenant_key=tenant_key,
-                           gcal_configured=GCAL_CONFIGURED,
-                           gcal_connected=gcal_connected,
-                           gcal_calendar_id=gcal_calendar_id)
+    return render_template(
+        "integrations.html",
+        businesses=businesses,
+        business_id=business_id,
+        business=business,
+        providers=providers,
+        current=current,
+        cfg=cfg,
+        widget=widget,
+        tenant_key=tenant_key,
+        gcal_configured=GCAL_CONFIGURED,
+        gcal_connected=gcal_connected,
+        gcal_calendar_id=gcal_calendar_id,
+    )
 
 
 @bp.route("/integrations/widget", methods=["POST"])
@@ -129,7 +148,9 @@ def widget_settings():
     enabled = 1 if request.form.get("enabled") == "on" else 0
     position = request.form.get("position", "bottom-right")
     primary_color = request.form.get("primary_color", "").strip() or None
-    welcome_message = request.form.get("welcome_message", "").strip() or "Hi! How can I help you today?"
+    welcome_message = (
+        request.form.get("welcome_message", "").strip() or "Hi! How can I help you today?"
+    )
     placeholder_text = request.form.get("placeholder_text", "").strip() or "Type a message..."
     allowed_domains_raw = request.form.get("allowed_domains", "").strip()
     show_branding = 1 if request.form.get("show_branding") == "on" else 0
@@ -154,7 +175,8 @@ def widget_settings():
 
     # Save to database
     with get_conn() as con:
-        con.execute("""
+        con.execute(
+            """
             INSERT INTO widget_settings (
                 business_id, enabled, position, primary_color, welcome_message,
                 placeholder_text, allowed_domains, show_branding, auto_open_delay, updated_at
@@ -169,8 +191,19 @@ def widget_settings():
                 show_branding = excluded.show_branding,
                 auto_open_delay = excluded.auto_open_delay,
                 updated_at = excluded.updated_at
-        """, (business_id, enabled, position, primary_color, welcome_message,
-              placeholder_text, allowed_domains, show_branding, auto_open_delay))
+        """,
+            (
+                business_id,
+                enabled,
+                position,
+                primary_color,
+                welcome_message,
+                placeholder_text,
+                allowed_domains,
+                show_branding,
+                auto_open_delay,
+            ),
+        )
         con.commit()
 
     flash("Widget settings saved.", "ok")
@@ -180,6 +213,7 @@ def widget_settings():
 # ============================================================================
 # Google Calendar OAuth
 # ============================================================================
+
 
 @bp.route("/integrations/google/connect")
 def google_connect():
@@ -193,9 +227,13 @@ def google_connect():
         return redirect(url_for("integrations.integrations_index"))
 
     try:
-        from core.google_calendar import get_authorization_url, GOOGLE_CONFIGURED
+        from core.google_calendar import GOOGLE_CONFIGURED, get_authorization_url
+
         if not GOOGLE_CONFIGURED:
-            flash("Google Calendar credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env", "err")
+            flash(
+                "Google Calendar credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env",
+                "err",
+            )
             return redirect(url_for("integrations.integrations_index", business_id=business_id))
 
         # Use the current server URL for the redirect URI
@@ -294,6 +332,7 @@ def google_disconnect():
 
     try:
         from core.google_calendar import disconnect_gcal
+
         disconnect_gcal(business_id)
         flash("Google Calendar disconnected.", "ok")
     except Exception as e:
@@ -313,11 +352,12 @@ def google_select_calendar():
 
     try:
         from core.google_calendar import get_business_gcal_config, save_business_gcal_config
+
         config = get_business_gcal_config(business_id)
         if config:
             config["calendar_id"] = calendar_id
             save_business_gcal_config(business_id, config)
-            flash(f"Calendar updated.", "ok")
+            flash("Calendar updated.", "ok")
         else:
             flash("Google Calendar not connected.", "err")
     except Exception as e:

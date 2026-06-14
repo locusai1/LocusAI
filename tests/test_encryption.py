@@ -2,13 +2,14 @@
 # Tests for field-level encryption, hashing, and PII protection
 
 import os
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 # ============================================================================
 # Encryption/Decryption Tests
 # ============================================================================
+
 
 class TestFieldEncryption:
     """Tests for field-level encryption and decryption."""
@@ -22,7 +23,7 @@ class TestFieldEncryption:
 
     def test_decrypt_field_returns_original(self):
         """Decryption should return the original value."""
-        from core.encryption import encrypt_field, decrypt_field
+        from core.encryption import decrypt_field, encrypt_field
 
         original = "My secret information"
         encrypted = encrypt_field(original)
@@ -76,7 +77,7 @@ class TestFieldEncryption:
 
     def test_encrypt_unicode(self):
         """Unicode characters should be properly encrypted/decrypted."""
-        from core.encryption import encrypt_field, decrypt_field
+        from core.encryption import decrypt_field, encrypt_field
 
         original = "Hello 世界 🌍 Здравствуй"
         encrypted = encrypt_field(original)
@@ -85,7 +86,7 @@ class TestFieldEncryption:
 
     def test_encrypt_special_characters(self):
         """Special characters should be properly handled."""
-        from core.encryption import encrypt_field, decrypt_field
+        from core.encryption import decrypt_field, encrypt_field
 
         original = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
         encrypted = encrypt_field(original)
@@ -94,7 +95,7 @@ class TestFieldEncryption:
 
     def test_encrypt_long_string(self):
         """Long strings should be properly encrypted/decrypted."""
-        from core.encryption import encrypt_field, decrypt_field
+        from core.encryption import decrypt_field, encrypt_field
 
         original = "A" * 10000
         encrypted = encrypt_field(original)
@@ -135,6 +136,7 @@ class TestIsEncrypted:
 # Dictionary Encryption Tests
 # ============================================================================
 
+
 class TestDictEncryption:
     """Tests for dictionary field encryption utilities."""
 
@@ -146,7 +148,7 @@ class TestDictEncryption:
             "name": "John Doe",
             "email": "john@example.com",
             "phone": "555-1234",
-            "notes": "Some notes"
+            "notes": "Some notes",
         }
 
         result = encrypt_dict_fields(data, ["email", "phone"])
@@ -171,13 +173,9 @@ class TestDictEncryption:
 
     def test_decrypt_dict_fields(self):
         """Should decrypt specified fields in a dictionary."""
-        from core.encryption import encrypt_dict_fields, decrypt_dict_fields
+        from core.encryption import decrypt_dict_fields, encrypt_dict_fields
 
-        original = {
-            "name": "John Doe",
-            "email": "john@example.com",
-            "phone": "555-1234"
-        }
+        original = {"name": "John Doe", "email": "john@example.com", "phone": "555-1234"}
 
         encrypted = encrypt_dict_fields(original, ["email", "phone"])
         decrypted = decrypt_dict_fields(encrypted, ["email", "phone"])
@@ -202,6 +200,7 @@ class TestDictEncryption:
 # Token Hashing Tests
 # ============================================================================
 
+
 class TestTokenHashing:
     """Tests for secure token hashing."""
 
@@ -211,7 +210,7 @@ class TestTokenHashing:
 
         result = hash_token("my-secret-token")
         assert isinstance(result, str)
-        assert all(c in '0123456789abcdef' for c in result)
+        assert all(c in "0123456789abcdef" for c in result)
 
     def test_hash_token_consistent(self):
         """Same input should always produce same hash."""
@@ -306,13 +305,15 @@ class TestVerifyTokenHash:
 # Key Generation Tests
 # ============================================================================
 
+
 class TestKeyGeneration:
     """Tests for encryption key generation."""
 
     def test_generate_encryption_key_length(self):
         """Generated key should be base64-encoded 32 bytes."""
-        from core.encryption import generate_encryption_key
         import base64
+
+        from core.encryption import generate_encryption_key
 
         key = generate_encryption_key()
 
@@ -335,6 +336,7 @@ class TestKeyGeneration:
 # ============================================================================
 # PII Field Constants Tests
 # ============================================================================
+
 
 class TestPiiFieldConstants:
     """Tests for PII field constant definitions."""
@@ -366,6 +368,7 @@ class TestPiiFieldConstants:
 # Encryption Availability Tests
 # ============================================================================
 
+
 class TestEncryptionAvailability:
     """Tests for encryption module availability detection."""
 
@@ -377,7 +380,7 @@ class TestEncryptionAvailability:
 
     def test_encryption_works_regardless_of_backend(self):
         """Encryption should work whether using Fernet or fallback."""
-        from core.encryption import encrypt_field, decrypt_field
+        from core.encryption import decrypt_field, encrypt_field
 
         original = "test data"
         encrypted = encrypt_field(original)

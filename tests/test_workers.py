@@ -9,8 +9,10 @@ from core import workers
 def _run(name, tick, *, duration=0.25, interval=0.01):
     stop = threading.Event()
     t = threading.Thread(
-        target=workers.run_supervised, args=(name, tick, interval),
-        kwargs={"stop_event": stop}, daemon=True,
+        target=workers.run_supervised,
+        args=(name, tick, interval),
+        kwargs={"stop_event": stop},
+        daemon=True,
     )
     t.start()
     time.sleep(duration)
@@ -37,8 +39,8 @@ class TestSupervisor:
                 raise ValueError("boom")
 
         hb = _run("t_flaky", flaky)
-        assert hb["errors"] >= 2          # caught the failures
-        assert hb["runs"] >= 1            # kept going and recovered
+        assert hb["errors"] >= 2  # caught the failures
+        assert hb["runs"] >= 1  # kept going and recovered
         assert "boom" in (hb["last_error"] or "")
 
     def test_never_dies_when_tick_always_fails(self):
@@ -60,8 +62,10 @@ class TestSupervisor:
         calls = []
         stop = threading.Event()
         t = threading.Thread(
-            target=workers.run_supervised, args=("t_delay", lambda: calls.append(1), 0.01),
-            kwargs={"initial_delay": 0.2, "stop_event": stop}, daemon=True,
+            target=workers.run_supervised,
+            args=("t_delay", lambda: calls.append(1), 0.01),
+            kwargs={"initial_delay": 0.2, "stop_event": stop},
+            daemon=True,
         )
         t.start()
         time.sleep(0.05)  # before the delay elapses

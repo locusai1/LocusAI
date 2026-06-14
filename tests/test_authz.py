@@ -9,12 +9,14 @@ class TestGetAllowedBusinessIds:
     def test_returns_empty_for_none_user(self):
         """Should return empty list for None user."""
         from core.authz import get_allowed_business_ids_for_user
+
         result = get_allowed_business_ids_for_user(None)
         assert result == []
 
     def test_returns_empty_for_empty_user(self):
         """Should return empty list for empty user dict."""
         from core.authz import get_allowed_business_ids_for_user
+
         result = get_allowed_business_ids_for_user({})
         assert result == []
 
@@ -35,10 +37,13 @@ class TestGetAllowedBusinessIds:
 
         # Map user to business
         with transaction() as con:
-            con.execute("""
+            con.execute(
+                """
                 INSERT OR IGNORE INTO business_users (user_id, business_id)
                 VALUES (?, ?)
-            """, (sample_user["id"], sample_business["id"]))
+            """,
+                (sample_user["id"], sample_business["id"]),
+            )
 
         owner = {"id": sample_user["id"], "role": "owner"}
         result = get_allowed_business_ids_for_user(owner)
@@ -70,10 +75,13 @@ class TestUserCanAccessBusiness:
 
         # Ensure mapping exists
         with transaction() as con:
-            con.execute("""
+            con.execute(
+                """
                 INSERT OR IGNORE INTO business_users (user_id, business_id)
                 VALUES (?, ?)
-            """, (sample_user["id"], sample_business["id"]))
+            """,
+                (sample_user["id"], sample_business["id"]),
+            )
 
         user = {"id": sample_user["id"], "role": "owner"}
         assert user_can_access_business(user, sample_business["id"]) is True
@@ -100,6 +108,7 @@ class TestUserCanAccessBusiness:
     def test_returns_false_for_none_user(self, sample_business):
         """Should return False for None user."""
         from core.authz import user_can_access_business
+
         assert user_can_access_business(None, sample_business["id"]) is False
 
 
@@ -109,22 +118,30 @@ class TestMultipleBusinessAccess:
     def test_owner_with_multiple_businesses(self, sample_user):
         """Owner can be mapped to multiple businesses."""
         from core.authz import get_allowed_business_ids_for_user
-        from core.db import transaction, get_conn
+        from core.db import get_conn, transaction
 
         # Create additional businesses and map user to them
         with transaction() as con:
             cur = con.cursor()
             # Create test businesses
-            cur.execute("INSERT INTO businesses (name, slug) VALUES ('Multi Test 1', 'multi-test-1')")
+            cur.execute(
+                "INSERT INTO businesses (name, slug) VALUES ('Multi Test 1', 'multi-test-1')"
+            )
             biz1 = cur.lastrowid
-            cur.execute("INSERT INTO businesses (name, slug) VALUES ('Multi Test 2', 'multi-test-2')")
+            cur.execute(
+                "INSERT INTO businesses (name, slug) VALUES ('Multi Test 2', 'multi-test-2')"
+            )
             biz2 = cur.lastrowid
 
             # Map user to both
-            cur.execute("INSERT INTO business_users (user_id, business_id) VALUES (?, ?)",
-                       (sample_user["id"], biz1))
-            cur.execute("INSERT INTO business_users (user_id, business_id) VALUES (?, ?)",
-                       (sample_user["id"], biz2))
+            cur.execute(
+                "INSERT INTO business_users (user_id, business_id) VALUES (?, ?)",
+                (sample_user["id"], biz1),
+            )
+            cur.execute(
+                "INSERT INTO business_users (user_id, business_id) VALUES (?, ?)",
+                (sample_user["id"], biz2),
+            )
 
         user = {"id": sample_user["id"], "role": "owner"}
         result = get_allowed_business_ids_for_user(user)

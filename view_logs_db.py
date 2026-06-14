@@ -2,9 +2,11 @@ import sqlite3
 
 DB_PATH = "receptionist.db"
 
+
 def list_businesses(con):
     rows = con.execute("SELECT id, name FROM businesses ORDER BY name").fetchall()
     return rows
+
 
 def list_sessions(con, business_id):
     rows = con.execute(
@@ -13,6 +15,7 @@ def list_sessions(con, business_id):
     ).fetchall()
     return rows
 
+
 def show_session_messages(con, session_id):
     rows = con.execute(
         "SELECT timestamp, sender, text FROM messages WHERE session_id = ? ORDER BY id",
@@ -20,6 +23,7 @@ def show_session_messages(con, session_id):
     ).fetchall()
     for r in rows:
         print(f"[{r['timestamp']}] {r['sender'].upper()}: {r['text']}")
+
 
 def run():
     con = sqlite3.connect(DB_PATH)
@@ -44,6 +48,6 @@ def run():
     show_session_messages(con, sid)
     print("\n--- End ---\n")
 
+
 if __name__ == "__main__":
     run()
-

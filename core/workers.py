@@ -4,11 +4,11 @@
 # inside try/except, failures are logged and retried with exponential backoff,
 # and a heartbeat is recorded so /health can show each worker is alive.
 
+import logging
 import threading
 import time
-import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,12 @@ def run_supervised(
     exponential backoff capped at `max_backoff`."""
     with _LOCK:
         HEARTBEATS[name] = {
-            "started_at": _now().isoformat(), "last_run": None,
-            "last_error": None, "runs": 0, "errors": 0, "interval": interval,
+            "started_at": _now().isoformat(),
+            "last_run": None,
+            "last_error": None,
+            "runs": 0,
+            "errors": 0,
+            "interval": interval,
         }
     hb = HEARTBEATS[name]
 
@@ -65,8 +69,9 @@ def run_supervised(
         except Exception as e:  # never let the loop die
             hb["errors"] += 1
             hb["last_error"] = f"{type(e).__name__}: {e}"
-            logger.warning("Worker '%s' tick failed (#%d): %s",
-                           name, hb["errors"], e, exc_info=True)
+            logger.warning(
+                "Worker '%s' tick failed (#%d): %s", name, hb["errors"], e, exc_info=True
+            )
             wait = min(interval, backoff)
             backoff = min(backoff * 2, max_backoff)
         _sleep(wait)
@@ -81,8 +86,10 @@ def start_worker(
 ) -> threading.Thread:
     """Spawn a daemon thread running `tick` under supervision."""
     t = threading.Thread(
-        target=run_supervised, name=f"worker:{name}",
-        args=(name, tick, interval), kwargs={"initial_delay": initial_delay},
+        target=run_supervised,
+        name=f"worker:{name}",
+        args=(name, tick, interval),
+        kwargs={"initial_delay": initial_delay},
         daemon=True,
     )
     t.start()

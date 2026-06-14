@@ -1,10 +1,10 @@
 # core/sms.py — SMS sending via Telnyx for LocusAI
 # Provides SMS messaging for reminders, notifications, and 2-way conversations
 
-import os
 import logging
+import os
 import re
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ def record_opt_out(phone: str, source: str = "sms") -> bool:
         return False
     try:
         from core.db import get_conn
+
         with get_conn() as con:
             con.execute(
                 "INSERT INTO sms_opt_outs (phone, source) VALUES (?, ?) "
@@ -73,6 +74,7 @@ def clear_opt_out(phone: str) -> bool:
         return False
     try:
         from core.db import get_conn
+
         with get_conn() as con:
             con.execute("DELETE FROM sms_opt_outs WHERE phone = ?", (norm,))
             con.commit()
@@ -90,6 +92,7 @@ def is_opted_out(phone: str) -> bool:
         return False
     try:
         from core.db import get_conn
+
         with get_conn() as con:
             row = con.execute(
                 "SELECT 1 FROM sms_opt_outs WHERE phone = ? LIMIT 1", (norm,)
@@ -103,6 +106,7 @@ def is_opted_out(phone: str) -> bool:
 # ============================================================================
 # SMS Sending
 # ============================================================================
+
 
 def send_sms(
     to: str,
@@ -135,7 +139,11 @@ def send_sms(
         return {"id": None, "status": "suppressed", "error": "Recipient opted out"}
 
     if not TELNYX_CONFIGURED:
-        return {"id": None, "status": "error", "error": "Telnyx is not configured. Set TELNYX_API_KEY."}
+        return {
+            "id": None,
+            "status": "error",
+            "error": "Telnyx is not configured. Set TELNYX_API_KEY.",
+        }
 
     # Truncate to SMS limit
     if len(message) > 1600:
@@ -208,6 +216,7 @@ def send_bulk_sms(
 # Phone Number Utilities
 # ============================================================================
 
+
 def validate_phone(phone: str) -> Tuple[bool, str]:
     normalized = _normalize_phone(phone)
     if not normalized:
@@ -251,6 +260,7 @@ def _mask_phone(phone: str) -> str:
 # Incoming Webhook Parsing
 # ============================================================================
 
+
 def parse_telnyx_webhook(data: Dict) -> Dict[str, Any]:
     """Parse an incoming Telnyx SMS webhook (JSON body).
 
@@ -283,6 +293,7 @@ def parse_telnyx_webhook(data: Dict) -> Dict[str, Any]:
 # ============================================================================
 # Config Check
 # ============================================================================
+
 
 def check_telnyx_config() -> Dict[str, bool]:
     return {

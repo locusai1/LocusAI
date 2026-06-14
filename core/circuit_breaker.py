@@ -3,10 +3,10 @@
 
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Dict, Optional, Callable, Any
-from threading import Lock
+from datetime import datetime
 from functools import wraps
+from threading import Lock
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,16 +14,19 @@ logger = logging.getLogger(__name__)
 # Circuit Breaker States
 # ============================================================================
 
+
 class CircuitState:
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation - requests allowed
-    OPEN = "open"          # Blocking requests - service is failing
+
+    CLOSED = "closed"  # Normal operation - requests allowed
+    OPEN = "open"  # Blocking requests - service is failing
     HALF_OPEN = "half_open"  # Testing recovery - limited requests
 
 
 # ============================================================================
 # Circuit Breaker Implementation
 # ============================================================================
+
 
 class CircuitBreaker:
     """Circuit breaker for external service calls.
@@ -48,10 +51,7 @@ class CircuitBreaker:
     """
 
     def __init__(
-        self,
-        failure_threshold: int = 5,
-        recovery_timeout: int = 60,
-        half_open_requests: int = 1
+        self, failure_threshold: int = 5, recovery_timeout: int = 60, half_open_requests: int = 1
     ):
         """Initialize circuit breaker.
 
@@ -78,7 +78,7 @@ class CircuitBreaker:
                 "successes": 0,
                 "last_failure": None,
                 "opened_at": None,
-                "half_open_count": 0
+                "half_open_count": 0,
             }
         return self._circuits[service]
 
@@ -139,9 +139,7 @@ class CircuitBreaker:
                 # Failure in half-open state - reopen circuit
                 circuit["state"] = CircuitState.OPEN
                 circuit["opened_at"] = now
-                logger.warning(
-                    f"Circuit for {service} reopened after half-open failure: {error}"
-                )
+                logger.warning(f"Circuit for {service} reopened after half-open failure: {error}")
                 return True
 
             if state == CircuitState.CLOSED:
@@ -187,7 +185,9 @@ class CircuitBreaker:
                 "service": service,
                 "state": circuit["state"],
                 "failures": circuit["failures"],
-                "last_failure": circuit["last_failure"].isoformat() if circuit["last_failure"] else None,
+                "last_failure": circuit["last_failure"].isoformat()
+                if circuit["last_failure"]
+                else None,
                 "opened_at": circuit["opened_at"].isoformat() if circuit["opened_at"] else None,
             }
 
@@ -201,7 +201,7 @@ class CircuitBreaker:
                     "successes": 0,
                     "last_failure": None,
                     "opened_at": None,
-                    "half_open_count": 0
+                    "half_open_count": 0,
                 }
                 logger.info(f"Circuit for {service} manually reset")
 
@@ -218,7 +218,9 @@ class CircuitBreaker:
                     "state": circuit["state"],
                     "failure_count": circuit["failures"],
                     "success_count": circuit["successes"],
-                    "last_failure": circuit["last_failure"].isoformat() if circuit["last_failure"] else None,
+                    "last_failure": circuit["last_failure"].isoformat()
+                    if circuit["last_failure"]
+                    else None,
                     "opened_at": circuit["opened_at"].isoformat() if circuit["opened_at"] else None,
                 }
             return stats
@@ -237,9 +239,9 @@ def get_ai_circuit_breaker() -> CircuitBreaker:
     global _ai_circuit_breaker
     if _ai_circuit_breaker is None:
         _ai_circuit_breaker = CircuitBreaker(
-            failure_threshold=3,      # Open after 3 failures
-            recovery_timeout=60,      # Try recovery after 60 seconds
-            half_open_requests=1      # Allow 1 test request
+            failure_threshold=3,  # Open after 3 failures
+            recovery_timeout=60,  # Try recovery after 60 seconds
+            half_open_requests=1,  # Allow 1 test request
         )
     return _ai_circuit_breaker
 
@@ -248,10 +250,9 @@ def get_ai_circuit_breaker() -> CircuitBreaker:
 # Decorator for Circuit Breaker
 # ============================================================================
 
+
 def with_circuit_breaker(
-    service: str,
-    breaker: Optional[CircuitBreaker] = None,
-    fallback: Optional[Callable] = None
+    service: str, breaker: Optional[CircuitBreaker] = None, fallback: Optional[Callable] = None
 ):
     """Decorator to wrap a function with circuit breaker protection.
 
@@ -265,6 +266,7 @@ def with_circuit_breaker(
         def call_openai(prompt):
             return openai.chat.completions.create(...)
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -285,11 +287,13 @@ def with_circuit_breaker(
                 raise
 
         return wrapper
+
     return decorator
 
 
 class CircuitOpenError(Exception):
     """Raised when circuit breaker is open and no fallback is available."""
+
     pass
 
 
@@ -297,12 +301,13 @@ class CircuitOpenError(Exception):
 # Retry with Exponential Backoff
 # ============================================================================
 
+
 def retry_with_backoff(
     max_attempts: int = 3,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
     exponential_base: float = 2.0,
-    exceptions: tuple = (Exception,)
+    exceptions: tuple = (Exception,),
 ):
     """Decorator to retry a function with exponential backoff.
 
@@ -318,6 +323,7 @@ def retry_with_backoff(
         def call_api():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -337,13 +343,12 @@ def retry_with_backoff(
                         time.sleep(delay)
                         delay = min(delay * exponential_base, max_delay)
                     else:
-                        logger.error(
-                            f"All {max_attempts} attempts failed for {func.__name__}: {e}"
-                        )
+                        logger.error(f"All {max_attempts} attempts failed for {func.__name__}: {e}")
 
             raise last_exception
 
         return wrapper
+
     return decorator
 
 
@@ -351,12 +356,13 @@ def retry_with_backoff(
 # Combined Circuit Breaker + Retry
 # ============================================================================
 
+
 def resilient_call(
     service: str,
     max_retries: int = 2,
     retry_delay: float = 1.0,
     breaker: Optional[CircuitBreaker] = None,
-    fallback: Optional[Callable] = None
+    fallback: Optional[Callable] = None,
 ):
     """Decorator combining circuit breaker and retry logic.
 
@@ -367,6 +373,7 @@ def resilient_call(
         def call_openai(prompt):
             return openai.chat.completions.create(...)
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -415,4 +422,5 @@ def resilient_call(
             raise last_exception
 
         return wrapper
+
     return decorator

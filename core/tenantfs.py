@@ -1,14 +1,19 @@
-import os, json
+import json
+import os
+
 from core.db import get_business_by_id
 
-def business_paths(slug:str):
-    data_dir   = os.path.join("businesses", slug)             # non-public
-    static_dir = os.path.join("static", "tenants", slug)      # public assets
+
+def business_paths(slug: str):
+    data_dir = os.path.join("businesses", slug)  # non-public
+    static_dir = os.path.join("static", "tenants", slug)  # public assets
     return data_dir, static_dir
 
-def write_meta_from_db(business_id:int):
+
+def write_meta_from_db(business_id: int):
     b = get_business_by_id(business_id)
-    if not b: return
+    if not b:
+        return
     slug = b["slug"]
     data_dir, _ = business_paths(slug)
     os.makedirs(data_dir, exist_ok=True)

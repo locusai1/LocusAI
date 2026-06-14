@@ -4,6 +4,7 @@ from pathlib import Path
 
 # Load .env file from project root
 from dotenv import load_dotenv
+
 _env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(_env_path, override=True)
 
@@ -18,9 +19,10 @@ else:
     # Note: This changes on restart, so sessions will be invalidated
     FLASK_SECRET_KEY = secrets.token_hex(32)
     import sys
+
     print("WARNING: No secure FLASK_SECRET_KEY set. Generated temporary key.", file=sys.stderr)
     print("Set FLASK_SECRET_KEY environment variable for persistent sessions.", file=sys.stderr)
-APP_BASE_URL     = os.getenv("APP_BASE_URL", "http://127.0.0.1:5050")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:5050")
 
 # ===== Database =====
 # Path to the SQLite file. In production set this to a persistent volume so data
@@ -30,11 +32,11 @@ LOCUSAI_DB_PATH = os.getenv("LOCUSAI_DB_PATH")  # None → repo-local default
 
 # ===== OpenAI =====
 # Required for AI to run. Keep it out of source control.
-OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Optional: set if you use a proxy or Azure endpoint
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 # Model selector so you can switch without code changes
-OPENAI_MODEL    = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # ===== Retell AI (Voice Calls) =====
 # Required for voice AI functionality
@@ -51,10 +53,10 @@ VOICE_RECORDING_ENABLED = os.getenv("VOICE_RECORDING_ENABLED", "true").lower() =
 # Local snapshots always work. To also push off-box, set BACKUP_S3_BUCKET (and
 # AWS creds in the environment; boto3 must be installed). Works with any
 # S3-compatible store via BACKUP_S3_ENDPOINT (e.g. Backblaze B2).
-BACKUP_DIR         = os.getenv("BACKUP_DIR", "backups")
-BACKUP_KEEP        = int(os.getenv("BACKUP_KEEP", "14"))
-BACKUP_S3_BUCKET   = os.getenv("BACKUP_S3_BUCKET")
-BACKUP_S3_PREFIX   = os.getenv("BACKUP_S3_PREFIX", "locusai-db")
+BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
+BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "14"))
+BACKUP_S3_BUCKET = os.getenv("BACKUP_S3_BUCKET")
+BACKUP_S3_PREFIX = os.getenv("BACKUP_S3_PREFIX", "locusai-db")
 BACKUP_S3_ENDPOINT = os.getenv("BACKUP_S3_ENDPOINT")  # optional (S3-compatible)
 
 # ===== Error Monitoring (Sentry) =====
@@ -68,17 +70,17 @@ SENTRY_DSN = os.getenv("SENTRY_DSN")
 #   1. STRIPE_SECRET_KEY / STRIPE_PUBLISHABLE_KEY — API keys
 #   2. STRIPE_WEBHOOK_SECRET — from the webhook endpoint you create (whsec_...)
 #   3. STRIPE_PRICE_* — the recurring Price IDs for each plan (price_...)
-STRIPE_SECRET_KEY       = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_PUBLISHABLE_KEY  = os.getenv("STRIPE_PUBLISHABLE_KEY")
-STRIPE_WEBHOOK_SECRET   = os.getenv("STRIPE_WEBHOOK_SECRET")
-STRIPE_PRICE_STARTER       = os.getenv("STRIPE_PRICE_STARTER")
-STRIPE_PRICE_PROFESSIONAL  = os.getenv("STRIPE_PRICE_PROFESSIONAL")
-STRIPE_PRICE_BUSINESS      = os.getenv("STRIPE_PRICE_BUSINESS")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_STARTER = os.getenv("STRIPE_PRICE_STARTER")
+STRIPE_PRICE_PROFESSIONAL = os.getenv("STRIPE_PRICE_PROFESSIONAL")
+STRIPE_PRICE_BUSINESS = os.getenv("STRIPE_PRICE_BUSINESS")
 
 # ===== Email (optional; used for appointment confirmations) =====
-SMTP_HOST = os.getenv("SMTP_HOST")            # e.g. "smtp.gmail.com"
+SMTP_HOST = os.getenv("SMTP_HOST")  # e.g. "smtp.gmail.com"
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
 SMTP_FROM = os.getenv("SMTP_FROM", "no-reply@locusai.local")
-SMTP_TLS  = os.getenv("SMTP_TLS", "true").lower() == "true"
+SMTP_TLS = os.getenv("SMTP_TLS", "true").lower() == "true"

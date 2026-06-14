@@ -1,25 +1,26 @@
 # tests/test_circuit_breaker.py — Tests for core/circuit_breaker.py
 # Tests for circuit breaker pattern implementation
 
-import pytest
 import time
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.circuit_breaker import (
     CircuitBreaker,
-    CircuitState,
     CircuitOpenError,
-    with_circuit_breaker,
-    retry_with_backoff,
-    resilient_call,
+    CircuitState,
     get_ai_circuit_breaker,
+    resilient_call,
+    retry_with_backoff,
+    with_circuit_breaker,
 )
-
 
 # ============================================================================
 # CircuitBreaker Basic State Tests
 # ============================================================================
+
 
 class TestCircuitBreakerBasicState:
     """Tests for basic circuit breaker state management."""
@@ -57,6 +58,7 @@ class TestCircuitBreakerBasicState:
 # ============================================================================
 # Circuit Opening Tests
 # ============================================================================
+
 
 class TestCircuitOpening:
     """Tests for circuit opening on failures."""
@@ -104,6 +106,7 @@ class TestCircuitOpening:
 # Circuit Recovery Tests
 # ============================================================================
 
+
 class TestCircuitRecovery:
     """Tests for circuit recovery behavior."""
 
@@ -111,7 +114,7 @@ class TestCircuitRecovery:
         """Circuit should enter half-open state after recovery timeout."""
         breaker = CircuitBreaker(
             failure_threshold=2,
-            recovery_timeout=1  # 1 second for testing
+            recovery_timeout=1,  # 1 second for testing
         )
 
         # Open the circuit
@@ -133,7 +136,7 @@ class TestCircuitRecovery:
         breaker = CircuitBreaker(
             failure_threshold=2,
             recovery_timeout=0,  # Immediate recovery for testing
-            half_open_requests=1
+            half_open_requests=1,
         )
 
         # Open circuit
@@ -152,11 +155,7 @@ class TestCircuitRecovery:
 
     def test_failure_in_half_open_reopens_circuit(self):
         """Failure in half-open state should reopen the circuit."""
-        breaker = CircuitBreaker(
-            failure_threshold=2,
-            recovery_timeout=0,
-            half_open_requests=1
-        )
+        breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=0, half_open_requests=1)
 
         # Open circuit
         breaker.record_failure("test")
@@ -175,6 +174,7 @@ class TestCircuitRecovery:
 # ============================================================================
 # Success Counter Tests
 # ============================================================================
+
 
 class TestSuccessCounter:
     """Tests for success counting behavior."""
@@ -199,6 +199,7 @@ class TestSuccessCounter:
 # ============================================================================
 # Multiple Services Tests
 # ============================================================================
+
 
 class TestMultipleServices:
     """Tests for handling multiple services independently."""
@@ -235,6 +236,7 @@ class TestMultipleServices:
 # ============================================================================
 # Decorator Tests
 # ============================================================================
+
 
 class TestWithCircuitBreakerDecorator:
     """Tests for @with_circuit_breaker decorator."""
@@ -306,6 +308,7 @@ class TestWithCircuitBreakerDecorator:
 # Retry with Backoff Tests
 # ============================================================================
 
+
 class TestRetryWithBackoff:
     """Tests for @retry_with_backoff decorator."""
 
@@ -340,6 +343,7 @@ class TestRetryWithBackoff:
 
     def test_retry_only_catches_specified_exceptions(self):
         """Should only retry for specified exception types."""
+
         @retry_with_backoff(max_attempts=3, initial_delay=0.01, exceptions=(ValueError,))
         def raises_type_error():
             raise TypeError("Wrong type")
@@ -352,6 +356,7 @@ class TestRetryWithBackoff:
 # ============================================================================
 # Resilient Call Tests
 # ============================================================================
+
 
 class TestResilientCall:
     """Tests for @resilient_call decorator (combined breaker + retry)."""
@@ -389,8 +394,9 @@ class TestResilientCall:
         """Should use fallback after exhausting retries."""
         breaker = CircuitBreaker(failure_threshold=10)
 
-        @resilient_call("test", max_retries=1, retry_delay=0.01,
-                       breaker=breaker, fallback=lambda: "fallback")
+        @resilient_call(
+            "test", max_retries=1, retry_delay=0.01, breaker=breaker, fallback=lambda: "fallback"
+        )
         def always_fails():
             raise ValueError("Error")
 
@@ -401,6 +407,7 @@ class TestResilientCall:
 # ============================================================================
 # Global Circuit Breaker Tests
 # ============================================================================
+
 
 class TestGlobalCircuitBreaker:
     """Tests for global AI circuit breaker instance."""
@@ -420,6 +427,7 @@ class TestGlobalCircuitBreaker:
 # ============================================================================
 # Thread Safety Tests
 # ============================================================================
+
 
 class TestThreadSafety:
     """Tests for thread safety of circuit breaker."""

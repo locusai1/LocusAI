@@ -1,7 +1,8 @@
 # providers/retell_provider.py — Retell AI voice provider
 # Integrates voice calling with the provider pattern
 
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from core.integrations import Provider, register
 
 
@@ -31,21 +32,25 @@ class RetellProvider(Provider):
     def fetch_services(self) -> List[Dict]:
         """Retell doesn't manage services - delegate to local provider."""
         from providers.local_provider import LocalProvider
+
         return LocalProvider(self.business_id, {}).fetch_services()
 
     def fetch_slots(self, service_id: Optional[int], date_str: str) -> List[str]:
         """Retell doesn't manage slots - delegate to local provider."""
         from providers.local_provider import LocalProvider
+
         return LocalProvider(self.business_id, {}).fetch_slots(service_id, date_str)
 
     def create_booking(self, payload: Dict) -> Dict:
         """Create booking via local provider (voice calls use same booking system)."""
         from providers.local_provider import LocalProvider
+
         return LocalProvider(self.business_id, {}).create_booking(payload)
 
     def cancel_booking(self, external_id: str) -> bool:
         """Cancel booking via local provider."""
         from providers.local_provider import LocalProvider
+
         return LocalProvider(self.business_id, {}).cancel_booking(external_id)
 
     # ========================================================================
@@ -59,6 +64,7 @@ class RetellProvider(Provider):
 
         # Fall back to voice_settings
         from core.voice import get_voice_settings
+
         settings = get_voice_settings(self.business_id)
         return settings.get("retell_agent_id")
 
@@ -69,6 +75,7 @@ class RetellProvider(Provider):
 
         # Fall back to voice_settings
         from core.voice import get_voice_settings
+
         settings = get_voice_settings(self.business_id)
         return settings.get("retell_phone_number")
 
@@ -82,7 +89,7 @@ class RetellProvider(Provider):
         Returns:
             Call data from Retell API
         """
-        from core.voice import get_retell_client, RetellClientError
+        from core.voice import RetellClientError, get_retell_client
 
         agent_id = self.get_agent_id()
         from_number = self.get_phone_number()
@@ -97,10 +104,7 @@ class RetellProvider(Provider):
             from_number=from_number,
             to_number=to_number,
             agent_id=agent_id,
-            metadata={
-                "business_id": self.business_id,
-                **(metadata or {})
-            }
+            metadata={"business_id": self.business_id, **(metadata or {})},
         )
 
     def get_call_analytics(self, days: int = 30) -> Dict:
@@ -116,53 +120,77 @@ class RetellProvider(Provider):
 
         with get_conn() as con:
             # Total calls
-            total = con.execute("""
+            total = con.execute(
+                """
                 SELECT COUNT(*) as count FROM voice_calls
                 WHERE business_id = ?
                   AND datetime(created_at) > datetime('now', ? || ' days')
-            """, (self.business_id, -days)).fetchone()["count"]
+            """,
+                (self.business_id, -days),
+            ).fetchone()["count"]
 
             # Calls by direction
             by_direction = {}
-            for row in con.execute("""
+            for row in con.execute(
+                """
                 SELECT direction, COUNT(*) as count FROM voice_calls
                 WHERE business_id = ?
                   AND datetime(created_at) > datetime('now', ? || ' days')
                 GROUP BY direction
-            """, (self.business_id, -days)):
+            """,
+                (self.business_id, -days),
+            ):
                 by_direction[row["direction"]] = row["count"]
 
             # Average duration
-            avg_duration = con.execute("""
+            avg_duration = (
+                con.execute(
+                    """
                 SELECT AVG(duration_seconds) as avg FROM voice_calls
                 WHERE business_id = ?
                   AND duration_seconds IS NOT NULL
                   AND datetime(created_at) > datetime('now', ? || ' days')
-            """, (self.business_id, -days)).fetchone()["avg"] or 0
+            """,
+                    (self.business_id, -days),
+                ).fetchone()["avg"]
+                or 0
+            )
 
             # Bookings from voice
-            bookings = con.execute("""
+            bookings = con.execute(
+                """
                 SELECT COUNT(*) as count FROM voice_calls
                 WHERE business_id = ?
                   AND booking_confirmed = 1
                   AND datetime(created_at) > datetime('now', ? || ' days')
-            """, (self.business_id, -days)).fetchone()["count"]
+            """,
+                (self.business_id, -days),
+            ).fetchone()["count"]
 
             # Transfers
-            transfers = con.execute("""
+            transfers = con.execute(
+                """
                 SELECT COUNT(*) as count FROM voice_calls
                 WHERE business_id = ?
                   AND transferred = 1
                   AND datetime(created_at) > datetime('now', ? || ' days')
-            """, (self.business_id, -days)).fetchone()["count"]
+            """,
+                (self.business_id, -days),
+            ).fetchone()["count"]
 
             # Total cost
-            total_cost = con.execute("""
+            total_cost = (
+                con.execute(
+                    """
                 SELECT SUM(cost_cents) as total FROM voice_calls
                 WHERE business_id = ?
                   AND cost_cents IS NOT NULL
                   AND datetime(created_at) > datetime('now', ? || ' days')
-            """, (self.business_id, -days)).fetchone()["total"] or 0
+            """,
+                    (self.business_id, -days),
+                ).fetchone()["total"]
+                or 0
+            )
 
         return {
             "total_calls": total,

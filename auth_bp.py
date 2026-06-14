@@ -4,17 +4,17 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Tuple
+from typing import Dict, Optional, Tuple
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from core.db import get_conn, transaction
-from core.validators import validate_email, validate_password
 from core.mailer import send_email
+from core.validators import validate_email, validate_password
 
 logger = logging.getLogger(__name__)
-security_logger = logging.getLogger('security')
+security_logger = logging.getLogger("security")
 
 bp = Blueprint("auth", __name__)
 
@@ -24,19 +24,20 @@ def _mask_email(email: str) -> str:
 
     Example: 'john.doe@example.com' -> 'j***@e***.com'
     """
-    if not email or '@' not in email:
-        return '***'
+    if not email or "@" not in email:
+        return "***"
 
-    local, domain = email.rsplit('@', 1)
-    parts = domain.rsplit('.', 1)
+    local, domain = email.rsplit("@", 1)
+    parts = domain.rsplit(".", 1)
 
-    masked_local = local[0] + '***' if local else '***'
+    masked_local = local[0] + "***" if local else "***"
     if len(parts) == 2:
-        masked_domain = parts[0][0] + '***.' + parts[1] if parts[0] else '***.' + parts[1]
+        masked_domain = parts[0][0] + "***." + parts[1] if parts[0] else "***." + parts[1]
     else:
-        masked_domain = '***'
+        masked_domain = "***"
 
     return f"{masked_local}@{masked_domain}"
+
 
 # ============================================================================
 # Account Lockout Configuration
@@ -115,22 +116,14 @@ def record_failed_attempt(email: str, ip: str) -> Tuple[int, bool]:
 
     if not data:
         # First failed attempt
-        _failed_attempts[key] = {
-            "count": 1,
-            "first_attempt": now,
-            "locked_until": None
-        }
+        _failed_attempts[key] = {"count": 1, "first_attempt": now, "locked_until": None}
         return 1, False
 
     # Check if we should reset the counter (window expired)
     first_attempt = data.get("first_attempt")
     if first_attempt and now - first_attempt > timedelta(minutes=ATTEMPT_WINDOW_MINUTES):
         # Reset counter
-        _failed_attempts[key] = {
-            "count": 1,
-            "first_attempt": now,
-            "locked_until": None
-        }
+        _failed_attempts[key] = {"count": 1, "first_attempt": now, "locked_until": None}
         return 1, False
 
     # Increment counter
@@ -180,8 +173,8 @@ def login():
 
     # Extract credentials
     email_or_username = (
-        request.form.get("email") or request.form.get("username") or ""
-    ).strip().lower()
+        (request.form.get("email") or request.form.get("username") or "").strip().lower()
+    )
     password = request.form.get("password") or ""
     client_ip = request.remote_addr or "unknown"
 
@@ -200,7 +193,7 @@ def login():
         flash(
             f"Account temporarily locked due to too many failed attempts. "
             f"Please try again in {remaining_minutes} minute(s).",
-            "err"
+            "err",
         )
         return render_template("login.html"), 429
 
@@ -210,13 +203,15 @@ def login():
         row = con.execute(
             """SELECT id, email, name, password_hash, role,
                       email_verified, trial_ends_at
-               FROM users WHERE lower(email)=?""", (email_or_username,)
+               FROM users WHERE lower(email)=?""",
+            (email_or_username,),
         ).fetchone()
         if not row:
             row = con.execute(
                 """SELECT id, email, name, password_hash, role,
                           email_verified, trial_ends_at
-                   FROM users WHERE lower(name)=?""", (email_or_username,)
+                   FROM users WHERE lower(name)=?""",
+                (email_or_username,),
             ).fetchone()
 
     # Verify credentials
@@ -234,7 +229,7 @@ def login():
             flash(
                 f"Account temporarily locked due to too many failed attempts. "
                 f"Please try again in {LOCKOUT_DURATION_MINUTES} minutes.",
-                "err"
+                "err",
             )
             return render_template("login.html"), 429
 
@@ -269,7 +264,7 @@ def login():
         with get_conn() as con:
             m = con.execute(
                 "SELECT business_id FROM business_users WHERE user_id=? ORDER BY created_at LIMIT 1",
-                (row["id"],)
+                (row["id"],),
             ).fetchone()
         session["active_business_id"] = m["business_id"] if m else None
     else:
@@ -281,7 +276,9 @@ def login():
     # Block unverified users (admins are always treated as verified)
     email_verified = row["email_verified"] if "email_verified" in row.keys() else 1
     if not email_verified and row["role"] != "admin":
-        flash(f"Welcome back, {row['name']}. Please verify your email to access your dashboard.", "ok")
+        flash(
+            f"Welcome back, {row['name']}. Please verify your email to access your dashboard.", "ok"
+        )
         return redirect(url_for("auth.verify_email_pending"))
 
     flash(f"Welcome back, {row['name']}.", "ok")
@@ -322,9 +319,7 @@ def signup():
 
     # Check email not already taken
     with get_conn() as con:
-        existing = con.execute(
-            "SELECT id FROM users WHERE lower(email)=?", (email,)
-        ).fetchone()
+        existing = con.execute("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
 
     if existing:
         flash("An account with that email already exists. Try signing in.", "err")
@@ -341,7 +336,7 @@ def signup():
                 """INSERT INTO users(email, name, password_hash, role,
                                     email_verified, trial_ends_at, signup_source)
                    VALUES(?, ?, ?, 'owner', 0, ?, 'signup')""",
-                (email, name, password_hash, trial_ends_at)
+                (email, name, password_hash, trial_ends_at),
             )
             user_id = cur.lastrowid
     except Exception as e:
@@ -375,7 +370,7 @@ def verify_email(token: str):
                FROM email_verification_tokens evt
                JOIN users u ON u.id = evt.user_id
                WHERE evt.token=?""",
-            (token,)
+            (token,),
         ).fetchone()
 
     if not row or row["expires_at"] < now:
@@ -395,11 +390,11 @@ def verify_email(token: str):
         with transaction() as con:
             con.execute(
                 "UPDATE email_verification_tokens SET verified_at=? WHERE id=?",
-                (verified_at, row["id"])
+                (verified_at, row["id"]),
             )
             con.execute(
                 "UPDATE users SET email_verified=1, trial_ends_at=? WHERE id=?",
-                (trial_ends_at, row["user_id"])
+                (trial_ends_at, row["user_id"]),
             )
     except Exception as e:
         logger.error(f"Failed to verify email for user {row['user_id']}: {e}")
@@ -418,7 +413,9 @@ def verify_email(token: str):
     }
     session["login_time"] = datetime.now().isoformat()
 
-    logger.info(f"Email verified and auto-login: user {row['user_id']} ({_mask_email(row['email'])})")
+    logger.info(
+        f"Email verified and auto-login: user {row['user_id']} ({_mask_email(row['email'])})"
+    )
     flash(f"Welcome to LocusAI, {row['name']}! Your 14-day trial has started.", "ok")
     return redirect(url_for("onboard.business_new"))
 
@@ -432,8 +429,7 @@ def resend_verification():
 
     with get_conn() as con:
         row = con.execute(
-            "SELECT id, email, name, email_verified FROM users WHERE id=?",
-            (user["id"],)
+            "SELECT id, email, name, email_verified FROM users WHERE id=?", (user["id"],)
         ).fetchone()
 
     if not row or row["email_verified"]:
@@ -464,14 +460,15 @@ def _send_verification_email(user_id: int, email: str, name: str) -> None:
             # Invalidate any existing unused tokens
             con.execute(
                 "UPDATE email_verification_tokens SET expires_at=? WHERE user_id=? AND verified_at IS NULL",
-                (datetime.now().isoformat(), user_id)
+                (datetime.now().isoformat(), user_id),
             )
             con.execute(
                 "INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
-                (user_id, token, expires_at)
+                (user_id, token, expires_at),
             )
 
         from core.settings import APP_BASE_URL
+
         verify_url = f"{APP_BASE_URL}/verify-email/{token}"
         send_email(
             to_email=email,
@@ -483,7 +480,7 @@ def _send_verification_email(user_id: int, email: str, name: str) -> None:
                 f"This link expires in 24 hours.\n\n"
                 f"If you didn't create a LocusAI account, you can safely ignore this email.\n\n"
                 f"— The LocusAI Team"
-            )
+            ),
         )
     except Exception as e:
         logger.error(f"Failed to send verification email to {_mask_email(email)}: {e}")
@@ -513,14 +510,15 @@ def forgot_password():
                 # Invalidate any existing unused tokens for this user
                 con.execute(
                     "UPDATE password_reset_tokens SET used=1 WHERE user_id=? AND used=0",
-                    (user["id"],)
+                    (user["id"],),
                 )
                 con.execute(
                     "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
-                    (user["id"], token, expires_at)
+                    (user["id"], token, expires_at),
                 )
 
             from core.settings import APP_BASE_URL
+
             reset_url = f"{APP_BASE_URL}/reset-password/{token}"
             send_email(
                 to_email=user["email"],
@@ -533,7 +531,7 @@ def forgot_password():
                     f"If you didn't request this, you can safely ignore this email. "
                     f"Your password won't change.\n\n"
                     f"— The LocusAI Team"
-                )
+                ),
             )
             logger.info(f"Password reset email sent to user {user['id']} ({_mask_email(email)})")
         except Exception as e:
@@ -555,14 +553,10 @@ def reset_password(token: str):
                FROM password_reset_tokens prt
                JOIN users u ON u.id = prt.user_id
                WHERE prt.token=?""",
-            (token,)
+            (token,),
         ).fetchone()
 
-    token_invalid = (
-        not row
-        or row["used"]
-        or row["expires_at"] < now
-    )
+    token_invalid = not row or row["used"] or row["expires_at"] < now
 
     if request.method == "GET":
         if token_invalid:
@@ -599,10 +593,7 @@ def reset_password(token: str):
     # Mark token as used
     try:
         with transaction() as con:
-            con.execute(
-                "UPDATE password_reset_tokens SET used=1 WHERE id=?",
-                (row["id"],)
-            )
+            con.execute("UPDATE password_reset_tokens SET used=1 WHERE id=?", (row["id"],))
     except Exception as e:
         logger.error(f"Failed to mark reset token {row['id']} as used: {e}")
 
@@ -626,6 +617,7 @@ def logout():
 # ============================================================================
 # User Management (Admin Only)
 # ============================================================================
+
 
 def create_user(email: str, name: str, password: str, role: str = "owner") -> Optional[int]:
     """Create a new user with proper password hashing.
@@ -659,7 +651,7 @@ def create_user(email: str, name: str, password: str, role: str = "owner") -> Op
             cur = con.cursor()
             cur.execute(
                 "INSERT INTO users(email, name, password_hash, role) VALUES(?, ?, ?, ?)",
-                (email, name, password_hash, role)
+                (email, name, password_hash, role),
             )
             user_id = cur.lastrowid
             logger.info(f"Created user {user_id} ({_mask_email(email)}) with role {role}")
@@ -686,10 +678,7 @@ def change_password(user_id: int, new_password: str) -> bool:
 
     try:
         with transaction() as con:
-            con.execute(
-                "UPDATE users SET password_hash=? WHERE id=?",
-                (password_hash, user_id)
-            )
+            con.execute("UPDATE users SET password_hash=? WHERE id=?", (password_hash, user_id))
         logger.info(f"Password changed for user {user_id}")
         return True
     except Exception as e:
@@ -707,7 +696,7 @@ def assign_user_to_business(user_id: int, business_id: int) -> bool:
         with transaction() as con:
             con.execute(
                 "INSERT OR IGNORE INTO business_users(user_id, business_id) VALUES(?, ?)",
-                (user_id, business_id)
+                (user_id, business_id),
             )
         logger.info(f"User {user_id} assigned to business {business_id}")
         return True
@@ -719,6 +708,7 @@ def assign_user_to_business(user_id: int, business_id: int) -> bool:
 # ============================================================================
 # User Management Routes (Admin Only)
 # ============================================================================
+
 
 def _require_admin():
     """Return redirect if user is not an admin, else None."""
@@ -853,7 +843,7 @@ def users_unassign(user_id: int):
         with transaction() as con:
             con.execute(
                 "DELETE FROM business_users WHERE user_id=? AND business_id=?",
-                (user_id, int(business_id))
+                (user_id, int(business_id)),
             )
         flash("User removed from business.", "ok")
     except Exception as e:
