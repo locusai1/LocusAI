@@ -509,6 +509,8 @@ def update_voice_settings(business_id: int, **fields) -> bool:
         "transcript_enabled",
         "booking_enabled",
         "booking_confirmation_required",
+        "missed_call_recovery_enabled",
+        "lead_followup_enabled",
     }
 
     safe_fields = {k: v for k, v in fields.items() if k in allowed}
@@ -1329,6 +1331,10 @@ def handle_call_ended(data: Dict) -> Dict:
         if from_number:
             _trigger_missed_call_sms(from_number, business_id)
 
+    # Never-drop-a-call: alert the owner about an unresolved inbound call.
+    if voice_call:
+        _trigger_call_recovery(voice_call)
+
     # Trigger post-call AI analysis in background (non-blocking)
     if transcript and not is_missed:
         trigger_post_call_analysis(call_id, transcript, business_id)
@@ -1343,9 +1349,9 @@ def _trigger_missed_call_sms(caller_phone: str, business_id: int) -> None:
     def _send():
         try:
             from core.db import get_business_by_id
-            from core.sms import TWILIO_CONFIGURED, send_sms
+            from core.sms import TELNYX_CONFIGURED, send_sms
 
-            if not TWILIO_CONFIGURED:
+            if not TELNYX_CONFIGURED:
                 return
             biz = get_business_by_id(business_id)
             biz_name = dict(biz).get("name", "us") if biz else "us"
@@ -1360,6 +1366,21 @@ def _trigger_missed_call_sms(caller_phone: str, business_id: int) -> None:
             logger.warning(f"Could not send missed-call SMS to {caller_phone}: {e}")
 
     threading.Thread(target=_send, daemon=True).start()
+
+
+def _trigger_call_recovery(voice_call: Dict) -> None:
+    """Run owner missed-call recovery in a background thread (deduped internally)."""
+    import threading
+
+    def _run():
+        try:
+            from core.call_recovery import recover_call
+
+            recover_call(voice_call)
+        except Exception as e:
+            logger.warning(f"Call recovery failed: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _business_redacts_transcripts(call_id: str) -> bool:
@@ -1408,6 +1429,9 @@ def handle_call_analyzed(data: Dict) -> Dict:
         vc = get_voice_call(call_id)
         if vc:
             maybe_schedule_lead_followup(vc)
+            # Analysis may now reveal a voicemail/incomplete outcome the
+            # call-ended heuristic missed — recovery is deduped so this is safe.
+            _trigger_call_recovery(vc)
     except Exception:
         logger.debug("lead follow-up scheduling skipped", exc_info=True)
 

@@ -676,6 +676,7 @@ document.addEventListener('DOMContentLoaded', function() {
       after_hours_message: form.after_hours_message.value,
       recording_enabled: form.recording_enabled.checked,
       booking_enabled: form.booking_enabled.checked,
+      missed_call_recovery_enabled: form.missed_call_recovery_enabled.checked,
     };
 
     fetch('/api/voice/settings', {
@@ -767,6 +768,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="checkbox" name="booking_enabled" {% if voice_settings.get('booking_enabled', True) %}checked{% endif %}>
             <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
             Allow AI to book appointments
+          </label>
+
+          <label class="vs-toggle" style="margin-top:10px;">
+            <input type="checkbox" name="missed_call_recovery_enabled" {% if voice_settings.get('missed_call_recovery_enabled', True) %}checked{% endif %}>
+            <span class="vs-toggle-track"><span class="vs-toggle-thumb"></span></span>
+            Never drop a call — alert me about missed/dropped calls &amp; voicemails
           </label>
         </div>
 

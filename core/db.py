@@ -729,6 +729,13 @@ def init_db() -> None:
             "missed_call_recovery_enabled",
             "ALTER TABLE voice_settings ADD COLUMN missed_call_recovery_enabled INTEGER DEFAULT 1",
         )
+        # Dedup flag so a dropped call alerts the owner at most once
+        _safe_alter_add_column(
+            cur,
+            "voice_calls",
+            "recovery_alerted",
+            "ALTER TABLE voice_calls ADD COLUMN recovery_alerted INTEGER DEFAULT 0",
+        )
 
         con.commit()
         logger.info("Database schema initialized successfully")
