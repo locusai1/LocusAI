@@ -1,0 +1,119 @@
+{% extends "public_base.html" %}
+{% block title %}Try the LocusAI receptionist on your own business{% endblock %}
+{% block meta_description %}See LocusAI answer questions about YOUR business in 60 seconds — no signup. Enter your website and start chatting with your AI receptionist.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .try-wrap { max-width: 720px; margin: 0 auto; padding: 56px 20px 80px; }
+  .try-head { text-align: center; margin-bottom: 28px; }
+  .try-head h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.1; margin-bottom: 12px; }
+  .try-head p { color: var(--pf-muted, #555); font-size: 17px; }
+  .try-card { background: #fff; border: 1px solid var(--pf-border, #e7e7e9); border-radius: 16px; padding: 22px; box-shadow: 0 8px 30px rgba(0,0,0,.05); }
+  .try-form { display: grid; gap: 12px; }
+  .try-form input { width: 100%; padding: 13px 14px; border: 1px solid var(--pf-border,#dcdce0); border-radius: 10px; font-size: 15px; }
+  .try-chat { display: none; }
+  .try-msgs { min-height: 260px; max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+  .try-bubble { max-width: 82%; padding: 10px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.45; }
+  .try-bot { align-self: flex-start; background: #f3f3f5; color: #111; border-bottom-left-radius: 4px; }
+  .try-user { align-self: flex-end; background: var(--pf-ink, #171717); color: #fff; border-bottom-right-radius: 4px; }
+  .try-inputrow { display: flex; gap: 8px; margin-top: 14px; }
+  .try-inputrow input { flex: 1; padding: 12px 14px; border: 1px solid var(--pf-border,#dcdce0); border-radius: 10px; font-size: 15px; }
+  .try-err { color: #dc2626; font-size: 13px; margin-top: 8px; min-height: 16px; }
+  .try-cta { text-align: center; margin-top: 22px; }
+  .try-note { font-size: 12px; color: var(--pf-muted,#777); text-align: center; margin-top: 10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="try-wrap">
+  <div class="try-head">
+    <h1>Hear your own AI receptionist — in 60 seconds</h1>
+    <p>Enter your business and website. We'll build a live receptionist that answers using your real info. No signup.</p>
+  </div>
+
+  <div class="try-card">
+    <!-- Setup -->
+    <form id="trySetup" class="try-form" onsubmit="return tryStart(event)">
+      <input id="tryName" type="text" placeholder="Business name (e.g. StyleCuts Hair Studio)" autocomplete="organization" required>
+      <input id="tryUrl" type="url" placeholder="Website (optional, e.g. https://yoursite.com)" autocomplete="url">
+      <button class="pf-btn pf-btn-primary" type="submit" id="tryStartBtn" style="justify-content:center;">Build my AI receptionist →</button>
+      <div class="try-err" id="trySetupErr"></div>
+    </form>
+
+    <!-- Chat -->
+    <div id="tryChat" class="try-chat">
+      <div class="try-msgs" id="tryMsgs"></div>
+      <form class="try-inputrow" onsubmit="return trySend(event)">
+        <input id="tryInput" type="text" placeholder="Ask about prices, opening hours, booking…" autocomplete="off">
+        <button class="pf-btn pf-btn-primary" type="submit" id="trySendBtn">Send</button>
+      </form>
+      <div class="try-err" id="tryChatErr"></div>
+    </div>
+  </div>
+
+  <div class="try-cta" id="tryCta" style="display:none;">
+    <a class="pf-btn pf-btn-primary" href="{{ url_for('auth.signup') }}">Get this for my business — start free trial</a>
+    <div class="try-note">This is a quick demo. The real LocusAI also handles phone calls, SMS, bookings and more.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  var msgs = document.getElementById('tryMsgs');
+
+  function bubble(text, who){
+    var b = document.createElement('div');
+    b.className = 'try-bubble ' + (who==='user'?'try-user':'try-bot');
+    b.innerHTML = esc(text);
+    msgs.appendChild(b);
+    msgs.scrollTop = msgs.scrollHeight;
+    return b;
+  }
+
+  window.tryStart = function(e){
+    e.preventDefault();
+    var btn = document.getElementById('tryStartBtn');
+    var err = document.getElementById('trySetupErr');
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Building…';
+    fetch('/api/try/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name: document.getElementById('tryName').value, url: document.getElementById('tryUrl').value })
+    }).then(function(r){ return r.json().then(function(d){ return {ok:r.ok, d:d}; }); })
+    .then(function(res){
+      if(!res.ok){ err.textContent = res.d.error || 'Something went wrong.'; btn.disabled=false; btn.textContent='Build my AI receptionist →'; return; }
+      document.getElementById('trySetup').style.display='none';
+      document.getElementById('tryChat').style.display='block';
+      document.getElementById('tryCta').style.display='block';
+      bubble(res.d.greeting, 'bot');
+      document.getElementById('tryInput').focus();
+    }).catch(function(){ err.textContent='Network error. Try again.'; btn.disabled=false; btn.textContent='Build my AI receptionist →'; });
+    return false;
+  };
+
+  window.trySend = function(e){
+    e.preventDefault();
+    var input = document.getElementById('tryInput');
+    var err = document.getElementById('tryChatErr');
+    var text = input.value.trim();
+    if(!text) return false;
+    err.textContent=''; input.value='';
+    bubble(text, 'user');
+    var thinking = bubble('…', 'bot');
+    var btn = document.getElementById('trySendBtn'); btn.disabled = true;
+    fetch('/api/try/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message: text })
+    }).then(function(r){ return r.json().then(function(d){ return {ok:r.ok, d:d}; }); })
+    .then(function(res){
+      btn.disabled=false;
+      if(!res.ok){ thinking.remove(); err.textContent = res.d.error || 'Error.'; return; }
+      thinking.innerHTML = esc(res.d.reply);
+      msgs.scrollTop = msgs.scrollHeight;
+    }).catch(function(){ thinking.remove(); btn.disabled=false; err.textContent='Network error.'; });
+    return false;
+  };
+})();
+</script>
+{% endblock %}

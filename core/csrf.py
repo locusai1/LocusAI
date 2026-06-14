@@ -11,6 +11,7 @@ _EXEMPT_PATHS = {
     "/api/whatsapp/",  # WhatsApp webhooks use signature verification
     "/api/voice/",  # Voice webhooks use signature verification
     "/api/billing/",  # Stripe webhooks use signature verification
+    "/api/try/",  # Public no-auth demo (rate-limited; no sensitive action)
 }
 
 

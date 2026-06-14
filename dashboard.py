@@ -766,6 +766,67 @@ def home():
     return render_template("home.html")
 
 
+@app.route("/try")
+def try_demo():
+    """Public 'try it now' page — build a live AI receptionist from any website."""
+    return render_template("try.html")
+
+
+@app.route("/api/try/start", methods=["POST"])
+def try_start():
+    """Scrape a prospect's site and start an ephemeral demo (session-stored)."""
+    from core.demo import build_demo_context
+    from core.security import check_rate_limit
+
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    allowed, _ = check_rate_limit(f"demo_start:{ip}", limit=8, window_seconds=300)
+    if not allowed:
+        return jsonify({"error": "Too many demos started. Please wait a moment."}), 429
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:80]
+    url = (data.get("url") or "").strip()[:300]
+    if not name:
+        return jsonify({"error": "Please enter your business name."}), 400
+
+    ok, ctx = build_demo_context(name, url)
+    if not ok:
+        return jsonify({"error": ctx.get("error", "Could not start demo.")}), 400
+
+    session["demo"] = {"ctx": ctx, "history": []}
+    session.modified = True
+    return jsonify({"greeting": ctx["greeting"], "scraped": bool(ctx.get("context"))})
+
+
+@app.route("/api/try/chat", methods=["POST"])
+def try_chat():
+    """One demo turn — real AI seeded with the scraped site, no side effects."""
+    from core.demo import demo_reply
+    from core.security import check_rate_limit
+
+    demo = session.get("demo")
+    if not demo:
+        return jsonify({"error": "Start a demo first."}), 400
+
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    allowed, _ = check_rate_limit(f"demo_chat:{ip}", limit=30, window_seconds=300)
+    if not allowed:
+        return jsonify({"error": "You've hit the demo limit. Sign up to keep going!"}), 429
+
+    message = (request.get_json(silent=True) or {}).get("message", "").strip()[:500]
+    if not message:
+        return jsonify({"error": "empty"}), 400
+
+    history = demo.get("history", [])
+    reply = demo_reply(demo["ctx"], history, message)
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": reply})
+    demo["history"] = history[-24:]
+    session["demo"] = demo
+    session.modified = True
+    return jsonify({"reply": reply})
+
+
 @app.post("/brand/set")
 def set_brand():
     """Set the active business for the session."""
