@@ -325,6 +325,19 @@ def handle_escalation(
             customer_info=customer_info,
             conversation_summary=summary,
         )
+        # Push to the owner's phone (PWA). No-op if push isn't configured.
+        try:
+            from core.push import send_push_to_business
+
+            who = (customer_info or {}).get("name") or "A caller"
+            send_push_to_business(
+                business_id,
+                title=f"{priority.upper()}: customer needs you",
+                body=f"{who}: {sentiment_result.escalation_reason or 'escalation triggered'}",
+                url="/escalations",
+            )
+        except Exception:
+            logger.debug("push notify skipped", exc_info=True)
 
     return escalation_id
 

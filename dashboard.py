@@ -19,6 +19,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -1560,6 +1561,50 @@ def voice_dashboard():
         voice_settings=voice_settings,
         now=datetime.now(),
     )
+
+
+@app.route("/sw.js")
+def service_worker():
+    """Serve the service worker from root so its scope covers the whole app."""
+    resp = send_from_directory(app.static_folder, "sw.js")
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/api/push/public-key")
+def push_public_key():
+    """Expose the VAPID public key (empty string when push isn't configured)."""
+    from core.push import public_key
+
+    return jsonify({"key": public_key() or ""})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    if session.get("user") is None:
+        return jsonify({"error": "unauthorized"}), 401
+    from core.push import save_subscription
+
+    sub = request.get_json(silent=True) or {}
+    user_id = session["user"].get("id")
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    ua = request.headers.get("User-Agent", "")[:300]
+    ok = save_subscription(user_id, sub, business_id=business_id, user_agent=ua)
+    return jsonify({"success": ok}), (200 if ok else 400)
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    if session.get("user") is None:
+        return jsonify({"error": "unauthorized"}), 401
+    from core.push import remove_subscription
+
+    endpoint = (request.get_json(silent=True) or {}).get("endpoint")
+    if endpoint:
+        remove_subscription(endpoint)
+    return jsonify({"success": True})
 
 
 @app.route("/audit")

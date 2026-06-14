@@ -1,9 +1,18 @@
 import os
 import sqlite3
+from datetime import datetime, timedelta
 
 # Use the booking helper after imports so providers can lazy-load
 from core.booking import maybe_commit_booking
 from core.db import create_session, get_business_by_id, get_conn, init_db
+
+
+def _next_monday_10am() -> str:
+    """A Monday at least a week out, so the slot is always in the future."""
+    d = datetime.now().date() + timedelta(days=7)
+    while d.weekday() != 0:  # 0 = Monday
+        d += timedelta(days=1)
+    return d.strftime("%Y-%m-%d 10:00")
 
 
 def test_booking_commit_basic():
@@ -45,8 +54,12 @@ def test_booking_commit_basic():
     session_id = create_session(bid)
     business = get_business_by_id(bid)
 
-    # Choose a Monday in the future (2025-10-20 is a Monday)
-    reply = '<BOOKING>{"name":"Tester","phone":"07000 000000","service":"Checkup","datetime":"2025-10-20 10:00"}</BOOKING>'
+    # Choose a Monday safely in the future (computed so the test never goes stale)
+    slot = _next_monday_10am()
+    reply = (
+        '<BOOKING>{"name":"Tester","phone":"07000 000000","service":"Checkup",'
+        f'"datetime":"{slot}"}}</BOOKING>'
+    )
 
     clean, committed = maybe_commit_booking(reply, business, session_id)
     assert committed is True, f"Expected booking commit, got text: {clean}"
