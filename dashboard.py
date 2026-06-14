@@ -1519,6 +1519,92 @@ def voice_dashboard():
     )
 
 
+@app.route("/test-ai")
+def test_ai():
+    """Sandbox: chat with your own AI receptionist without side effects."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        flash("Select a business to test its AI.", "err")
+        return redirect(url_for("dashboard"))
+    session.pop("sandbox_state", None)  # fresh conversation each visit
+    business = get_business_by_id(business_id)
+    return render_template("test_ai.html", business=business)
+
+
+@app.route("/api/test-ai/chat", methods=["POST"])
+def test_ai_chat():
+    """Run one sandbox turn: real AI, no bookings/escalations/SMS persisted."""
+    if session.get("user") is None:
+        return jsonify({"error": "unauthorized"}), 401
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"error": "no business"}), 400
+    business = get_business_by_id(business_id)
+    if not business:
+        return jsonify({"error": "no business"}), 400
+
+    text = (request.form.get("message") or "").strip()
+    if not text:
+        return jsonify({"error": "empty"}), 400
+
+    from core.ai import process_message_with_metadata
+
+    st = session.get("sandbox_state") or {"history": []}
+    result = process_message_with_metadata(
+        text, dict(business), st, suppress_escalation=True
+    )
+    session["sandbox_state"] = st  # persists updated history for multi-turn
+
+    # Strip machine tags so the sandbox shows what a customer would hear.
+    reply = re.sub(
+        r"<(BOOKING|CANCEL|RESCHEDULE)>.*?</\1>", "", result.get("reply", ""), flags=re.DOTALL
+    ).strip()
+    return jsonify(
+        {
+            "reply": reply,
+            "low_confidence": result.get("low_confidence", False),
+            "sentiment": result.get("sentiment"),
+        }
+    )
+
+
+@app.route("/api/test-ai/reset", methods=["POST"])
+def test_ai_reset():
+    if session.get("user") is None:
+        return jsonify({"error": "unauthorized"}), 401
+    session.pop("sandbox_state", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/call-feedback", methods=["POST"])
+def call_feedback():
+    """Record an owner thumbs up/down on a handled call or chat."""
+    user = session.get("user")
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    business_id = safe_int(request.form.get("business_id")) or g.get(
+        "active_business_id"
+    ) or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"error": "no business"}), 400
+    if user.get("role") != "admin" and not user_can_access_business(user, business_id):
+        return jsonify({"error": "forbidden"}), 403
+
+    from core.feedback import record_feedback
+
+    ok = record_feedback(
+        business_id,
+        (request.form.get("rating") or "").strip(),
+        voice_call_id=safe_int(request.form.get("voice_call_id")) or None,
+        session_id=safe_int(request.form.get("session_id")) or None,
+        note=request.form.get("note"),
+        created_by=user.get("id"),
+    )
+    return (jsonify({"ok": True}) if ok else (jsonify({"error": "invalid"}), 400))
+
+
 @app.route("/health")
 def health():
     """Basic health check endpoint for load balancers."""

@@ -864,6 +864,35 @@ def value_report():
     return render_template("value_report.html", report=report, business_name=business_name, days=days)
 
 
+@analytics_bp.route("/analytics/insights")
+def insights():
+    """Missed-revenue, demand, and benchmark intelligence."""
+    redir = _need_login()
+    if redir:
+        return redir
+
+    business_id = getattr(g, "active_business_id", None)
+    if not business_id:
+        flash("Please select a business first.", "err")
+        return redirect(url_for("dashboard"))
+
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    days = max(7, min(days, 365))
+
+    from core.insights import compute_benchmarks, compute_demand_insights, compute_missed_revenue
+
+    return render_template(
+        "insights.html",
+        days=days,
+        missed=compute_missed_revenue(business_id, days),
+        demand=compute_demand_insights(business_id, days),
+        benchmarks=compute_benchmarks(business_id, days),
+    )
+
+
 @analytics_bp.route("/api/analytics/overview")
 def api_overview():
     """API endpoint for real-time overview stats."""

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Test your AI · LocusAI{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:20px;">
+  <h1 class="page-title">Test your AI</h1>
+  <p class="text-muted" style="margin-top:4px;">
+    Chat with {{ business.name if business else 'your' }}'s AI receptionist exactly as a customer
+    would — nothing here is saved, no bookings or alerts are created. Try asking about prices,
+    booking, or something you haven't told it yet.
+  </p>
+</div>
+
+<div class="card" style="max-width:720px;">
+  <div class="card-body">
+    <div id="sandbox" style="min-height:300px;max-height:52vh;overflow-y:auto;padding:4px;"></div>
+    <form id="sandboxForm" class="flex items-center gap-2" style="margin-top:14px;" onsubmit="return sbSend(event)">
+      <input id="sbInput" class="input flex-1" autocomplete="off" placeholder="Type a message as a customer…">
+      <button class="btn btn-primary" type="submit" id="sbBtn">Send</button>
+      <button class="btn" type="button" onclick="sbReset()">Reset</button>
+    </form>
+  </div>
+</div>
+
+<style>
+  .sb-msg { display:flex; margin:8px 0; }
+  .sb-msg .bubble { padding:9px 13px; border-radius:13px; font-size:14px; line-height:1.5; max-width:80%; }
+  .sb-user { justify-content:flex-end; }
+  .sb-user .bubble { background:var(--text-primary,#171717); color:#fff; border-bottom-right-radius:4px; }
+  .sb-bot .bubble { background:var(--bg-muted,#f4f4f5); color:var(--text-primary,#171717); border-bottom-left-radius:4px; }
+  .sb-flag { font-size:11px; color:#b45309; margin-top:3px; }
+</style>
+
+<script>
+  var CSRF = document.querySelector('meta[name=csrf-token]').content;
+  var box = document.getElementById('sandbox');
+
+  function add(role, text, lowConf) {
+    var wrap = document.createElement('div');
+    wrap.className = 'sb-msg ' + (role === 'user' ? 'sb-user' : 'sb-bot');
+    var b = document.createElement('div'); b.className = 'bubble'; b.textContent = text;
+    wrap.appendChild(b); box.appendChild(wrap);
+    if (lowConf) {
+      var f = document.createElement('div'); f.className = 'sb-flag';
+      f.textContent = '⚠︎ Low confidence — it offered to take a message rather than guess.';
+      box.appendChild(f);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function sbSend(e) {
+    e.preventDefault();
+    var inp = document.getElementById('sbInput');
+    var btn = document.getElementById('sbBtn');
+    var text = inp.value.trim();
+    if (!text) return false;
+    add('user', text); inp.value = ''; btn.disabled = true;
+    var body = new URLSearchParams(); body.append('csrf_token', CSRF); body.append('message', text);
+    fetch("{{ url_for('test_ai_chat') }}", { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        btn.disabled = false;
+        if (d.error) { add('bot', 'Something went wrong — please try again.'); return; }
+        add('bot', d.reply, d.low_confidence);
+      })
+      .catch(function () { btn.disabled = false; add('bot', 'Something went wrong — please try again.'); });
+    return false;
+  }
+
+  function sbReset() {
+    var body = new URLSearchParams(); body.append('csrf_token', CSRF);
+    fetch("{{ url_for('test_ai_reset') }}", { method: 'POST', body: body })
+      .then(function () { box.innerHTML = ''; });
+  }
+
+  add('bot', "Hi! I'm the AI receptionist. Ask me anything a customer might — about services, prices, hours, or booking an appointment.");
+</script>
+{% endblock %}

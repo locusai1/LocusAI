@@ -78,6 +78,19 @@ def _row_to_dict(row):
         return row or {}
 
 
+_UNSURE_MARKER = re.compile(r"<\s*UNSURE\s*/?\s*>", re.I)
+
+
+def strip_confidence_marker(text: str):
+    """Remove the <UNSURE/> marker the model appends when it lacks the facts.
+    Returns (clean_text, low_confidence: bool)."""
+    if not text:
+        return text, False
+    low = bool(_UNSURE_MARKER.search(text))
+    clean = _UNSURE_MARKER.sub("", text).strip()
+    return clean, low
+
+
 def _business_prompt(bd: dict, sentiment_context: Optional[Dict] = None) -> str:
     """Build the system prompt with optional sentiment-aware adjustments."""
     name = bd.get("name", "this business")
@@ -99,6 +112,11 @@ Business details (use when relevant, do not invent):
 Guidelines:
 - Keep replies to 1–3 sentences unless asked for detail.
 - If unsure or info is missing, offer to take a message and escalate to a human.
+- CONFIDENCE: Never invent business-specific facts (prices, policies, availability, staff,
+  addresses) that are not given above or in the provided knowledge. If you don't have the
+  information to answer accurately, do NOT guess — say you'll have someone confirm and take
+  their details, and append the marker <UNSURE/> at the very end of your reply (it will be
+  removed before the customer sees it).
 - If the caller wants to book, ask minimally for: name, phone, service, preferred date/time.
 - IMPORTANT: When you have ALL booking details, output EXACTLY ONE machine-readable line:
   <BOOKING>{{"name":"<NAME>","phone":"<PHONE>","service":"<SERVICE>","datetime":"YYYY-MM-DD HH:MM","notes":""}}</BOOKING>
@@ -514,6 +532,7 @@ def process_message(
     state: Optional[Dict] = None,
     customer_id: Optional[int] = None,
     customer_info: Optional[Dict] = None,
+    suppress_escalation: bool = False,
 ) -> str:
     """
     Generate a human-like receptionist reply with sentiment awareness.
@@ -574,7 +593,12 @@ def process_message(
     # =========================================================================
     # Escalation Check
     # =========================================================================
-    if sentiment_result and sentiment_result.triggers_escalation and ESCALATION_AVAILABLE:
+    if (
+        sentiment_result
+        and sentiment_result.triggers_escalation
+        and ESCALATION_AVAILABLE
+        and not suppress_escalation
+    ):
         try:
             # Get full business data if we only have partial
             business = bd
@@ -644,6 +668,11 @@ def process_message(
     reply = _call_ai_with_resilience(messages)
     if not reply:
         reply = FALLBACK_RESPONSE
+
+    # Confidence gate: strip the <UNSURE/> marker and flag low-confidence replies
+    # so the channel can react (and so they're never shown to the customer).
+    reply, low_confidence = strip_confidence_marker(reply)
+    state["low_confidence"] = low_confidence
 
     # =========================================================================
     # Update State
@@ -860,6 +889,7 @@ def process_message_with_metadata(
     state: Optional[Dict] = None,
     customer_id: Optional[int] = None,
     customer_info: Optional[Dict] = None,
+    suppress_escalation: bool = False,
 ) -> Dict[str, Any]:
     """
     Enhanced version that returns metadata along with the reply.
@@ -882,6 +912,7 @@ def process_message_with_metadata(
         state=state,
         customer_id=customer_id,
         customer_info=customer_info,
+        suppress_escalation=suppress_escalation,
     )
 
     # Extract metadata from state
@@ -891,6 +922,7 @@ def process_message_with_metadata(
         "intent": None,
         "escalated": state.get("escalated", False),
         "escalation_id": state.get("escalation_id"),
+        "low_confidence": state.get("low_confidence", False),
     }
 
     # Get latest sentiment if available

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Insights · LocusAI{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:24px;">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h1 class="page-title">Business Insights</h1>
+      <p class="text-muted" style="margin-top:4px;">
+        What your calls and chats reveal about demand, lost revenue, and how you compare —
+        last {{ days }} days.
+      </p>
+    </div>
+    <form method="get" action="{{ url_for('analytics.insights') }}">
+      <select name="days" class="input" onchange="this.form.submit()" style="width:auto;">
+        <option value="7"  {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+      </select>
+    </form>
+  </div>
+</div>
+
+<!-- Missed revenue -->
+<div class="card mb-6">
+  <div class="card-body">
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 14px;">💸 Missed revenue</h3>
+    {% if missed.lost_opportunities %}
+    <div class="flex flex-wrap items-center gap-6">
+      <div>
+        <div style="font-size:34px;font-weight:800;color:#dc2626;">
+          ~£{{ '{:,.0f}'.format(missed.estimated_lost_revenue) }}
+        </div>
+        <div class="text-muted text-xs">estimated lost in the last {{ missed.period_days }} days</div>
+      </div>
+      <div class="text-secondary" style="font-size:14px;line-height:1.7;">
+        <div><strong>{{ missed.missed_calls }}</strong> missed call{{ '' if missed.missed_calls == 1 else 's' }}
+          {% if missed.after_hours_missed %}(<strong>{{ missed.after_hours_missed }}</strong> after hours){% endif %}</div>
+        <div><strong>{{ missed.unconverted_booking_calls }}</strong> caller{{ '' if missed.unconverted_booking_calls == 1 else 's' }} discussed booking but didn't book</div>
+        <div class="text-muted text-xs mt-1">Estimate = {{ missed.lost_opportunities }} lost opportunities × £{{ '{:,.0f}'.format(missed.avg_booking_value) }} average booking.</div>
+      </div>
+    </div>
+    {% if missed.after_hours_missed %}
+    <p class="text-secondary mt-4" style="font-size:13px;">
+      💡 <strong>{{ missed.after_hours_missed }}</strong> of your missed calls came in after hours —
+      enabling after-hours AI answering would capture them.
+    </p>
+    {% endif %}
+    {% else %}
+    <p class="text-muted" style="font-size:14px;">No missed-revenue signals yet — your AI is catching what comes in. 🎉</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Demand insights -->
+<div class="card mb-6">
+  <div class="card-body">
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 14px;">📈 Demand insights</h3>
+    {% if demand.peak_hour is not none %}
+    <p class="text-secondary" style="font-size:14px;margin-bottom:14px;">
+      Demand peaks around <strong>{{ '%02d:00'|format(demand.peak_hour) }}</strong>
+      {% if demand.peak_day %}and is busiest on <strong>{{ demand.peak_day }}</strong>{% endif %} —
+      worth making sure you're well staffed then.
+    </p>
+    {% endif %}
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <div class="text-muted text-xs uppercase tracking-wide mb-2">Most-requested services</div>
+        {% if demand.top_services %}
+          {% for s in demand.top_services %}
+          <div class="flex items-center justify-between" style="padding:6px 0;border-bottom:1px solid var(--border-light,#ebebeb);">
+            <span style="font-size:14px;">{{ s.name }}</span>
+            <span class="text-muted text-sm">{{ s.count }}</span>
+          </div>
+          {% endfor %}
+        {% else %}<p class="text-muted text-sm">Not enough data yet.</p>{% endif %}
+      </div>
+      <div>
+        <div class="text-muted text-xs uppercase tracking-wide mb-2">Most-asked questions</div>
+        {% if demand.top_questions %}
+          {% for q in demand.top_questions %}
+          <div class="flex items-center justify-between gap-3" style="padding:6px 0;border-bottom:1px solid var(--border-light,#ebebeb);">
+            <span style="font-size:14px;" class="truncate">{{ q.text }}</span>
+            <span class="text-muted text-sm flex-shrink-0">{{ q.count }}×</span>
+          </div>
+          {% endfor %}
+        {% else %}<p class="text-muted text-sm">Not enough data yet.</p>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmarks -->
+<div class="card">
+  <div class="card-body">
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 14px;">🏆 How you compare</h3>
+    {% if benchmarks.available %}
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <div class="text-muted text-xs uppercase tracking-wide">Call answer rate</div>
+        <div style="font-size:28px;font-weight:700;margin-top:4px;">{{ benchmarks.your_answer_rate }}%</div>
+        <div class="text-sm {{ 'text-green-500' if benchmarks.answer_rate_verdict == 'above' else 'text-red-500' }}">
+          {{ benchmarks.answer_rate_verdict }} the typical {{ benchmarks.cohort_answer_rate }}%
+        </div>
+      </div>
+      <div>
+        <div class="text-muted text-xs uppercase tracking-wide">Booking conversion</div>
+        <div style="font-size:28px;font-weight:700;margin-top:4px;">{{ benchmarks.your_conversion_rate }}%</div>
+        <div class="text-sm {{ 'text-green-500' if benchmarks.conversion_verdict == 'above' else 'text-red-500' }}">
+          {{ benchmarks.conversion_verdict }} the typical {{ benchmarks.cohort_conversion_rate }}%
+        </div>
+      </div>
+    </div>
+    <p class="text-muted text-xs mt-4">Compared anonymously against {{ benchmarks.cohort_size }} active businesses on LocusAI.</p>
+    {% else %}
+    <p class="text-muted" style="font-size:14px;">
+      Benchmarks appear once enough businesses are active (need {{ benchmarks.min_cohort }};
+      currently {{ benchmarks.cohort_size }}). Your data stays anonymous.
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

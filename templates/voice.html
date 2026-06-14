@@ -141,6 +141,7 @@
               <th>Outcome</th>
               <th>Sentiment</th>
               <th>Summary</th>
+              <th>Rate</th>
             </tr>
           </thead>
           <tbody>
@@ -174,6 +175,10 @@
                 {% else %}—{% endif %}
               </td>
               <td class="vc-summary">{{ (c.call_summary or '')[:60] }}{% if c.call_summary and c.call_summary|length > 60 %}…{% endif %}</td>
+              <td class="vc-rate" onclick="event.stopPropagation()">
+                <button type="button" class="vc-thumb" title="Good call" data-call="{{ c.id }}" data-rating="up" onclick="rateCall(this)">👍</button>
+                <button type="button" class="vc-thumb" title="Needs work" data-call="{{ c.id }}" data-rating="down" onclick="rateCall(this)">👎</button>
+              </td>
             </tr>
             {% endfor %}
           </tbody>

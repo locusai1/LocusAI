@@ -379,6 +379,24 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS ix_lead_followups_due ON lead_followups(status, scheduled_for);"
         )
 
+        # ---- conversation_feedback (owner thumbs up/down on handled calls/chats) ----
+        cur.execute("""CREATE TABLE IF NOT EXISTS conversation_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            voice_call_id INTEGER,
+            session_id INTEGER,
+            rating TEXT NOT NULL CHECK(rating IN ('up', 'down')),
+            note TEXT,
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(voice_call_id),
+            UNIQUE(session_id),
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        );""")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_feedback_business ON conversation_feedback(business_id, rating);"
+        )
+
         # ---- widget_settings ----
         cur.execute("""CREATE TABLE IF NOT EXISTS widget_settings (
             business_id INTEGER PRIMARY KEY,
