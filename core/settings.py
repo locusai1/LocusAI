@@ -59,6 +59,13 @@ BACKUP_S3_BUCKET = os.getenv("BACKUP_S3_BUCKET")
 BACKUP_S3_PREFIX = os.getenv("BACKUP_S3_PREFIX", "locusai-db")
 BACKUP_S3_ENDPOINT = os.getenv("BACKUP_S3_ENDPOINT")  # optional (S3-compatible)
 
+# ===== Web Push (PWA owner alerts) =====
+# Optional. Generate once with `python -m core.push genkeys` and set all three.
+# Without them, the PWA still installs but push notifications are a no-op.
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
+VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:hello@locusai.co.uk")
+
 # ===== Error Monitoring (Sentry) =====
 # Optional. When SENTRY_DSN is set, errors are reported to Sentry; otherwise it's
 # a no-op. Get a DSN free at sentry.io (5K errors/month).
