@@ -146,6 +146,34 @@ def kb_suggestions():
     return {"configured": True, "suggestions": suggestions}
 
 
+@bp.post("/kb/import-website")
+def kb_import_website():
+    """Generate KB suggestions from a business's website URL (JSON)."""
+    if not _logged_in():
+        return redirect(url_for("auth.login"))
+    business_id = _int(request.form.get("business_id") or request.args.get("business_id") or "0")
+    if not business_id or not _can_access(business_id):
+        return {"configured": False, "suggestions": [], "error": "access"}, 403
+
+    url = (request.form.get("url") or "").strip()
+    if not url:
+        return {"configured": True, "suggestions": [], "error": "Enter a website address."}, 400
+
+    from core.kb_ingest import suggest_from_website
+    from core.kb_suggestions import is_configured
+
+    if not is_configured():
+        return {"configured": False, "suggestions": []}
+    with get_conn() as con:
+        row = con.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
+    name = row["name"] if row else "the business"
+    try:
+        result = suggest_from_website(business_id, url, name)
+    except Exception:
+        result = {"configured": True, "suggestions": [], "error": "Couldn't import that page."}
+    return result
+
+
 @bp.post("/kb/suggestions/add")
 def kb_suggestions_add():
     """Create a KB entry from an accepted suggestion."""

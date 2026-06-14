@@ -14,6 +14,10 @@
               onclick="loadKbSuggestions({{ business_id }})">
         ✨ Suggest from conversations
       </button>
+      <button class="btn" id="kb-web-btn" type="button"
+              onclick="loadKbFromWebsite({{ business_id }})">
+        🌐 Import from website
+      </button>
       <button class="btn" onclick="document.getElementById('importModal').classList.remove('hidden')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         Import CSV
@@ -31,7 +35,7 @@
 <!-- AI suggestions panel (populated on demand) -->
 <div id="kb-suggest-panel" class="card mb-6 hidden">
   <div class="card-body">
-    <h3 style="font-size:15px; font-weight:700; margin:0 0 4px;">✨ Suggested from your conversations</h3>
+    <h3 id="kb-suggest-heading" style="font-size:15px; font-weight:700; margin:0 0 4px;">✨ Suggested from your conversations</h3>
     <p class="text-muted" style="font-size:13px; margin:0 0 14px;">
       Common questions customers asked that aren't in your knowledge base yet. Review and add the ones you like.
     </p>
@@ -39,11 +43,53 @@
   </div>
 </div>
 <script>
+  var KB_CSRF = "{{ csrf_token }}";
+  var KB_ADD_URL = "{{ url_for('kb.kb_suggestions_add') }}";
+
+  function renderKbSuggestions(data, list, bid, emptyMsg) {
+    if (!data.configured) {
+      list.innerHTML = '<p class="text-muted" style="font-size:13px;">AI suggestions need an OpenAI key configured on the server.</p>';
+      return;
+    }
+    if (data.error && (!data.suggestions || !data.suggestions.length)) {
+      var p = document.createElement('p');
+      p.className = 'text-muted'; p.style.fontSize = '13px';
+      p.textContent = data.error;
+      list.innerHTML = ''; list.appendChild(p);
+      return;
+    }
+    if (!data.suggestions || !data.suggestions.length) {
+      list.innerHTML = '<p class="text-muted" style="font-size:13px;">' + emptyMsg + '</p>';
+      return;
+    }
+    list.innerHTML = '';
+    data.suggestions.forEach(function (s) {
+      var card = document.createElement('div');
+      card.className = 'kb-sug';
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.action = KB_ADD_URL;
+      form.innerHTML =
+        '<input type="hidden" name="csrf_token" value="' + KB_CSRF + '">' +
+        '<input type="hidden" name="business_id" value="' + bid + '">' +
+        '<input type="hidden" name="question">' +
+        '<input type="hidden" name="answer">' +
+        '<div class="kb-sug-q"></div>' +
+        '<div class="kb-sug-a"></div>' +
+        '<button class="btn btn-sm btn-primary" type="submit">+ Add to knowledge base</button>';
+      form.querySelector('input[name="question"]').value = s.question;
+      form.querySelector('input[name="answer"]').value = s.answer;
+      form.querySelector('.kb-sug-q').textContent = s.question;
+      form.querySelector('.kb-sug-a').textContent = s.answer;
+      card.appendChild(form);
+      list.appendChild(card);
+    });
+  }
+
   function loadKbSuggestions(bid) {
     var btn = document.getElementById('kb-suggest-btn');
     var panel = document.getElementById('kb-suggest-panel');
     var list = document.getElementById('kb-suggest-list');
-    var csrf = "{{ csrf_token }}";
     btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Analysing…';
     panel.classList.remove('hidden');
     list.innerHTML = '<p class="text-muted" style="font-size:13px;">Reading recent conversations…</p>';
@@ -51,40 +97,38 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         btn.disabled = false; btn.textContent = orig;
-        if (!data.configured) {
-          list.innerHTML = '<p class="text-muted" style="font-size:13px;">AI suggestions need an OpenAI key configured on the server.</p>';
-          return;
-        }
-        if (!data.suggestions || !data.suggestions.length) {
-          list.innerHTML = '<p class="text-muted" style="font-size:13px;">No new suggestions right now — not enough recent questions, or your knowledge base already covers them.</p>';
-          return;
-        }
-        list.innerHTML = '';
-        data.suggestions.forEach(function (s) {
-          var card = document.createElement('div');
-          card.className = 'kb-sug';
-          var form = document.createElement('form');
-          form.method = 'post';
-          form.action = "{{ url_for('kb.kb_suggestions_add') }}";
-          form.innerHTML =
-            '<input type="hidden" name="csrf_token" value="' + csrf + '">' +
-            '<input type="hidden" name="business_id" value="' + bid + '">' +
-            '<input type="hidden" name="question">' +
-            '<input type="hidden" name="answer">' +
-            '<div class="kb-sug-q"></div>' +
-            '<div class="kb-sug-a"></div>' +
-            '<button class="btn btn-sm btn-primary" type="submit">+ Add to knowledge base</button>';
-          form.querySelector('input[name="question"]').value = s.question;
-          form.querySelector('input[name="answer"]').value = s.answer;
-          form.querySelector('.kb-sug-q').textContent = s.question;
-          form.querySelector('.kb-sug-a').textContent = s.answer;
-          card.appendChild(form);
-          list.appendChild(card);
-        });
+        renderKbSuggestions(data, list, bid, 'No new suggestions right now — not enough recent questions, or your knowledge base already covers them.');
       })
       .catch(function () {
         btn.disabled = false; btn.textContent = orig;
         list.innerHTML = '<p class="text-muted" style="font-size:13px;">Couldn\'t load suggestions — please try again.</p>';
+      });
+  }
+
+  function loadKbFromWebsite(bid) {
+    var url = window.prompt('Enter your website address — we\'ll read it and suggest knowledge base entries:', 'https://');
+    if (!url || url === 'https://') { return; }
+    var btn = document.getElementById('kb-web-btn');
+    var panel = document.getElementById('kb-suggest-panel');
+    var list = document.getElementById('kb-suggest-list');
+    var heading = document.getElementById('kb-suggest-heading');
+    if (heading) { heading.textContent = '🌐 Suggested from your website'; }
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Reading…';
+    panel.classList.remove('hidden');
+    list.innerHTML = '<p class="text-muted" style="font-size:13px;">Reading ' + url + ' …</p>';
+    var body = new URLSearchParams();
+    body.append('csrf_token', KB_CSRF);
+    body.append('business_id', bid);
+    body.append('url', url);
+    fetch("{{ url_for('kb.kb_import_website') }}", { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false; btn.textContent = orig;
+        renderKbSuggestions(data, list, bid, 'I couldn\'t find anything useful on that page. Try a page with your services, prices, or FAQs.');
+      })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = orig;
+        list.innerHTML = '<p class="text-muted" style="font-size:13px;">Couldn\'t read that page — please try again.</p>';
       });
   }
 </script>
