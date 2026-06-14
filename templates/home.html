@@ -31,6 +31,28 @@
   .hm-ok { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #15803d; }
   .hm-ok svg { width: 15px; height: 15px; }
 
+  /* Hero demo — animated, layered, floating */
+  .hm-demo-wrap { position: relative; max-width: 480px; margin: 54px auto 0; }
+  .hm-demo { margin: 0; animation: hmFade .6s var(--pf-ease) both, hmFloat 6s ease-in-out 1.1s infinite; }
+  @keyframes hmFade { from { opacity: 0; transform: translateY(22px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes hmFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+  .hm-demo__body .hm-msg { opacity: 0; animation: hmMsg .5s var(--pf-ease) forwards; }
+  .hm-demo__body .hm-msg:nth-child(1) { animation-delay: .8s; }
+  .hm-demo__body .hm-msg:nth-child(2) { animation-delay: 1.6s; }
+  .hm-demo__body .hm-msg:nth-child(3) { animation-delay: 2.4s; }
+  .hm-demo__foot .hm-ok { opacity: 0; animation: hmMsg .5s var(--pf-ease) 3.2s forwards; }
+  @keyframes hmMsg { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .hm-chip { position: absolute; background: var(--pf-card); border: 1px solid var(--pf-line); border-radius: 14px;
+    box-shadow: var(--pf-sh-lg); padding: 11px 14px; display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 600; color: var(--pf-ink); z-index: 2; }
+  .hm-chip small { display: block; font-size: 11px; font-weight: 500; color: var(--pf-muted); }
+  .hm-chip-ic { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .hm-chip-ic svg { width: 16px; height: 16px; }
+  .hm-chip-1 { top: 8px; left: -72px; animation: hmFade .6s var(--pf-ease) .9s both, hmFloat 5s ease-in-out 1.5s infinite; }
+  .hm-chip-2 { bottom: 70px; right: -66px; animation: hmFade .6s var(--pf-ease) 1.2s both, hmFloat 7s ease-in-out 1.8s infinite; }
+  @media (max-width: 980px) { .hm-chip { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .hm-demo, .hm-chip, .hm-demo__body .hm-msg, .hm-demo__foot .hm-ok { animation: none !important; opacity: 1 !important; transform: none !important; } }
+
   /* Works-with strip */
   .hm-logos { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 34px; }
   .hm-logos span { font-size: 15px; font-weight: 600; color: var(--pf-faint); letter-spacing: -.01em; }
@@ -80,26 +102,40 @@
       LocusAI answers every call, books appointments and replies to enquiries across voice, SMS and web chat — 24/7, so you never lose another customer to a missed call.
     </p>
     <div class="hm-hero__cta" data-reveal>
-      <a href="{{ url_for('auth.signup') }}" class="pf-btn pf-btn-primary pf-btn-lg">Start free trial
+      <a href="{{ url_for('auth.signup') }}" class="pf-btn pf-btn-primary pf-btn-lg" data-magnetic>Start free trial
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
       </a>
       <a href="#how-it-works" class="pf-btn pf-btn-ghost pf-btn-lg">See how it works</a>
     </div>
     <p class="hm-trust" data-reveal>14-day free trial · No credit card required · Cancel anytime</p>
 
-    <!-- Live call demo -->
-    <div class="hm-demo" data-reveal aria-hidden="true">
-      <div class="hm-demo__top">
-        <span class="hm-live"><span class="hm-pulse"></span> Live call</span>
-        <span class="hm-demo__num">+44 20 4620 3253 · 0:14</span>
+    <!-- Live call demo (animated, layered) -->
+    <div class="hm-demo-wrap" aria-hidden="true">
+      <div class="hm-chip hm-chip-1">
+        <span class="hm-chip-ic" style="background:var(--pf-bg-tint);color:var(--pf-a-3);">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </span>
+        <span>New booking<small>Friday · 2:30pm</small></span>
       </div>
-      <div class="hm-demo__body">
-        <div class="hm-msg"><div class="hm-av c">JD</div><div class="hm-bub c">Hi, do you have anything free this Friday afternoon?</div></div>
-        <div class="hm-msg ai"><div class="hm-av a">AI</div><div class="hm-bub a">Of course! I've got 2:30 or 4:00pm on Friday — which suits you best?</div></div>
-        <div class="hm-msg"><div class="hm-av c">JD</div><div class="hm-bub c">2:30 is perfect, thanks.</div></div>
+      <div class="hm-chip hm-chip-2">
+        <span class="hm-chip-ic" style="background:var(--pf-green-bg);color:var(--pf-green);">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+        </span>
+        <span>Answered in 1.2s<small>0 missed calls</small></span>
       </div>
-      <div class="hm-demo__foot">
-        <span class="hm-ok"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg> Appointment booked — confirmation sent by SMS</span>
+      <div class="hm-demo">
+        <div class="hm-demo__top">
+          <span class="hm-live"><span class="hm-pulse"></span> Live call</span>
+          <span class="hm-demo__num">+44 20 4620 3253 · 0:14</span>
+        </div>
+        <div class="hm-demo__body">
+          <div class="hm-msg"><div class="hm-av c">JD</div><div class="hm-bub c">Hi, do you have anything free this Friday afternoon?</div></div>
+          <div class="hm-msg ai"><div class="hm-av a">AI</div><div class="hm-bub a">Of course! I've got 2:30 or 4:00pm on Friday — which suits you best?</div></div>
+          <div class="hm-msg"><div class="hm-av c">JD</div><div class="hm-bub c">2:30 is perfect, thanks.</div></div>
+        </div>
+        <div class="hm-demo__foot">
+          <span class="hm-ok"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg> Appointment booked — confirmation sent by SMS</span>
+        </div>
       </div>
     </div>
   </div>
@@ -108,11 +144,11 @@
 <!-- STATS -->
 <section class="pf-section--tight">
   <div class="pf-container">
-    <div class="pf-stats" data-reveal>
-      <div class="pf-stat"><div class="pf-stat__num"><span class="pf-grad-text">24/7</span></div><div class="pf-stat__lbl">Always answering</div></div>
-      <div class="pf-stat"><div class="pf-stat__num">3</div><div class="pf-stat__lbl">Channels: voice, SMS, chat</div></div>
-      <div class="pf-stat"><div class="pf-stat__num">&lt;10<span style="font-size:18px"> min</span></div><div class="pf-stat__lbl">To set up</div></div>
-      <div class="pf-stat"><div class="pf-stat__num">£0</div><div class="pf-stat__lbl">Per-minute charges</div></div>
+    <div class="pf-stats pf-stagger">
+      <div class="pf-stat" data-reveal><div class="pf-stat__num"><span class="pf-grad-text">24/7</span></div><div class="pf-stat__lbl">Always answering</div></div>
+      <div class="pf-stat" data-reveal><div class="pf-stat__num"><span data-countup="3">3</span></div><div class="pf-stat__lbl">Channels: voice, SMS, chat</div></div>
+      <div class="pf-stat" data-reveal><div class="pf-stat__num">&lt;10<span style="font-size:18px"> min</span></div><div class="pf-stat__lbl">To set up</div></div>
+      <div class="pf-stat" data-reveal><div class="pf-stat__num">£0</div><div class="pf-stat__lbl">Per-minute charges</div></div>
     </div>
   </div>
 </section>
@@ -135,7 +171,7 @@
       <h2 class="pf-h2">Everything a great receptionist does.<br>Without the salary.</h2>
       <p class="pf-lead">Voice, SMS and web chat — one AI that knows your business inside out and works around the clock.</p>
     </div>
-    <div class="pf-grid pf-grid-3">
+    <div class="pf-grid pf-grid-3 pf-stagger">
       {% set feats = [
         ['M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z','Voice AI receptionist','A natural British voice answers every call, handles enquiries and greets repeat callers by name.'],
         ['M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z','Smart booking','Checks your real-time availability and books, reschedules or cancels on the spot — with reminders.'],
@@ -163,7 +199,7 @@
       <h2 class="pf-h2">Live in 10 minutes</h2>
       <p class="pf-lead">No technical knowledge needed. If you can fill in a form, you can set up LocusAI.</p>
     </div>
-    <div class="hm-steps">
+    <div class="hm-steps pf-stagger">
       <div data-reveal><div class="hm-step__n">1</div><h3 class="pf-h3">Describe your business</h3><p style="margin-top:8px;color:var(--pf-text);font-size:14.5px;line-height:1.6;">Tell us your services, hours and how you'd like calls handled. Our wizard takes about five minutes.</p></div>
       <div data-reveal><div class="hm-step__n">2</div><h3 class="pf-h3">We configure your AI</h3><p style="margin-top:8px;color:var(--pf-text);font-size:14.5px;line-height:1.6;">Your AI is trained on your details, connected to your number, and ready to answer in your brand's voice.</p></div>
       <div data-reveal><div class="hm-step__n">3</div><h3 class="pf-h3">Never miss a call again</h3><p style="margin-top:8px;color:var(--pf-text);font-size:14.5px;line-height:1.6;">It handles enquiries, books appointments and escalates to you only when a human is genuinely needed.</p></div>
@@ -196,7 +232,7 @@
       </div>
       <div class="hm-roi__out">
         <div style="font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.6);">Potential recovered revenue</div>
-        <div class="hm-roi__big" id="roi-result">£1,560</div>
+        <div class="hm-roi__big" id="roi-result" data-countup="1559" data-pre="£">£1,559</div>
         <div class="hm-roi__cap">per month — captured by answering the calls you're missing today.</div>
         <a href="{{ url_for('auth.signup') }}" class="pf-btn pf-btn-white" style="margin-top:24px;align-self:flex-start;">Start capturing it free</a>
         <div class="hm-roi__note">Illustrative estimate based on your inputs. Your results will vary.</div>
@@ -219,7 +255,7 @@
         </div>
       </div>
     </div>
-    <div class="pf-prices">
+    <div class="pf-prices pf-stagger">
       {% set plans = [
         ['Starter','For solo owners who never want to miss a chat.', 49, ['AI web chat widget','100 conversations / month','1 business','Booking confirmation flow','Email support'], false],
         ['Professional','Voice, SMS and chat — the full receptionist.', 149, ['Everything in Starter','AI voice + SMS + web chat','500 conversations / month','3 team members','Google Calendar sync','Caller recognition'], true],

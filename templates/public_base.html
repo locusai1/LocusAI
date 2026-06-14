@@ -8,8 +8,9 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+  <script>(function(){try{var t=localStorage.getItem('locusai_theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   {% block extra_head %}{% endblock %}
 </head>
 <body class="pf">
@@ -31,6 +32,10 @@
       <li><a href="{{ url_for('home') }}#faq">FAQ</a></li>
     </ul>
     <div class="pf-nav__actions">
+      <button class="pf-theme" id="pf-theme" aria-label="Toggle dark mode" type="button">
+        <svg class="sun" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg class="moon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
       <a href="{{ url_for('auth.login') }}" class="pf-btn pf-btn-ghost">Sign in</a>
       <a href="{{ url_for('auth.signup') }}" class="pf-btn pf-btn-primary">Start free trial</a>
     </div>
@@ -152,6 +157,43 @@
     if(!ack){ c.style.display='flex'; setTimeout(function(){ c.classList.remove('hidden'); }, 700); }
     var a=document.getElementById('pf-cookie-accept'), d=document.getElementById('pf-cookie-dismiss');
     if(a)a.addEventListener('click',go); if(d)d.addEventListener('click',go);
+  })();
+  /* Theme toggle */
+  (function(){ var btn=document.getElementById('pf-theme'); if(!btn) return; var K='locusai_theme';
+    btn.addEventListener('click', function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme', cur);
+      try{ localStorage.setItem(K, cur); }catch(e){}
+    });
+  })();
+  /* Magnetic buttons (pointer-fine only) */
+  (function(){ if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if(!window.matchMedia('(pointer:fine)').matches) return;
+    document.querySelectorAll('[data-magnetic]').forEach(function(el){
+      el.addEventListener('mousemove', function(e){ var r=el.getBoundingClientRect();
+        var x=e.clientX-r.left-r.width/2, y=e.clientY-r.top-r.height/2;
+        el.style.transform='translate('+x*0.22+'px,'+y*0.3+'px)'; });
+      el.addEventListener('mouseleave', function(){ el.style.transform=''; });
+    });
+  })();
+  /* Parallax aurora — hero glow drifts with scroll + pointer */
+  (function(){ if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var hero=document.querySelector('.pf-aurora'); if(!hero) return;
+    var mx=0,my=0,sy=0;
+    function apply(){ hero.style.setProperty('--pf-par-x', mx+'px'); hero.style.setProperty('--pf-par-y', (my+sy)+'px'); }
+    if(window.matchMedia('(pointer:fine)').matches){
+      window.addEventListener('mousemove', function(e){ mx=(e.clientX/window.innerWidth-.5)*30; my=(e.clientY/window.innerHeight-.5)*22; apply(); }, {passive:true});
+    }
+    window.addEventListener('scroll', function(){ sy=window.scrollY*0.12; apply(); }, {passive:true});
+  })();
+  /* Count-up numbers */
+  (function(){ var els=document.querySelectorAll('[data-countup]'); if(!els.length||!('IntersectionObserver' in window)) return;
+    var io=new IntersectionObserver(function(es){ es.forEach(function(en){ if(!en.isIntersecting) return; var el=en.target; io.unobserve(el);
+      var to=parseFloat(el.dataset.countup), pre=el.dataset.pre||'', suf=el.dataset.suf||'', dur=900, t0=null;
+      function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/dur,1); var v=Math.round(to*(1-Math.pow(1-p,3)));
+        el.textContent=pre+v.toLocaleString('en-GB')+suf; if(p<1)requestAnimationFrame(step); }
+      requestAnimationFrame(step); }); }, {threshold:.4});
+    els.forEach(function(e){ io.observe(e); });
   })();
 </script>
 </body>

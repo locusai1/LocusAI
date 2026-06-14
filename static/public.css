@@ -348,3 +348,97 @@ body.pf {
   .pf-cookie__actions { width: 100%; }
   .pf-cookie__actions .pf-btn { flex: 1; }
 }
+
+/* ============================================================================
+   ELEVATION LAYER — display type, grain, parallax, dark mode, motion
+   ============================================================================ */
+
+/* Display typeface for headings (paired with Inter for body) */
+:root { --pf-display: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
+.pf-h1, .pf-h2, .pf-h3, .pf-logo__text, .pf-price__amt b, .pf-stat__num, .hm-roi__big {
+  font-family: var(--pf-display);
+}
+.pf-h1 { letter-spacing: -.04em; }
+
+/* Grain / noise overlay on atmospheric surfaces (adds depth) */
+.pf-aurora, .pf-cta, .pf-auth__aside, .hm-roi__out {
+  --pf-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+}
+.pf-cta, .pf-auth__aside, .hm-roi__out { position: relative; }
+.pf-cta::after, .pf-auth__aside::after, .hm-roi__out::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background-image: var(--pf-grain); opacity: .5; mix-blend-mode: overlay;
+}
+.pf-cta > *, .pf-auth__aside > *, .hm-roi__out > * { position: relative; z-index: 2; }
+
+/* Staggered reveal — children animate in sequence */
+.pf-stagger > [data-reveal]:nth-child(1) { transition-delay: .04s; }
+.pf-stagger > [data-reveal]:nth-child(2) { transition-delay: .10s; }
+.pf-stagger > [data-reveal]:nth-child(3) { transition-delay: .16s; }
+.pf-stagger > [data-reveal]:nth-child(4) { transition-delay: .22s; }
+.pf-stagger > [data-reveal]:nth-child(5) { transition-delay: .28s; }
+.pf-stagger > [data-reveal]:nth-child(6) { transition-delay: .34s; }
+
+/* Theme toggle button */
+.pf-theme { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--pf-line-2);
+  background: var(--pf-card); color: var(--pf-ink-2); display: inline-flex; align-items: center;
+  justify-content: center; cursor: pointer; transition: background .2s, border-color .2s, color .2s; flex-shrink: 0; }
+.pf-theme:hover { background: var(--pf-bg-soft); }
+.pf-theme svg { width: 18px; height: 18px; }
+.pf-theme .moon { display: none; }
+html[data-theme="dark"] .pf-theme .moon { display: block; }
+html[data-theme="dark"] .pf-theme .sun { display: none; }
+
+/* ── DARK MODE ─────────────────────────────────────────────────────────────
+   Token swap + targeted component fixes. */
+html[data-theme="dark"] {
+  --pf-ink:      #f5f5fb;
+  --pf-ink-2:    #cdced9;
+  --pf-text:     #a4a5b4;
+  --pf-muted:    #7c7d8d;
+  --pf-faint:    #5b5c6c;
+  --pf-bg:       #08080f;
+  --pf-bg-soft:  #0d0d18;
+  --pf-bg-tint:  #18182c;
+  --pf-card:     #111120;
+  --pf-line:     rgba(255,255,255,.09);
+  --pf-line-2:   rgba(255,255,255,.15);
+  --pf-green-bg: rgba(34,197,94,.14);
+  --pf-sh-sm: 0 1px 2px rgba(0,0,0,.4);
+  --pf-sh:    0 8px 28px -12px rgba(0,0,0,.6);
+  --pf-sh-lg: 0 30px 70px -28px rgba(0,0,0,.8), 0 6px 16px rgba(0,0,0,.4);
+}
+html[data-theme="dark"] body.pf { background: var(--pf-bg); }
+html[data-theme="dark"] .pf-nav { background: rgba(8,8,15,.7); }
+html[data-theme="dark"] .pf-nav.is-scrolled { background: rgba(8,8,15,.88); }
+html[data-theme="dark"] .pf-mobile { background: var(--pf-bg); }
+html[data-theme="dark"] .pf-eyebrow { color: #b9adff; }
+html[data-theme="dark"] .pf-grad-text { filter: saturate(1.15) brightness(1.15); }
+html[data-theme="dark"] .pf-card,
+html[data-theme="dark"] .pf-faq__item,
+html[data-theme="dark"] .pf-price { background: var(--pf-card); }
+html[data-theme="dark"] .pf-price--featured {
+  background: linear-gradient(var(--pf-card),var(--pf-card)) padding-box, var(--pf-grad) border-box;
+}
+html[data-theme="dark"] .pf-btn-ghost { background: var(--pf-card); color: var(--pf-ink-2); }
+html[data-theme="dark"] .pf-btn-ghost:hover { background: var(--pf-bg-tint); }
+html[data-theme="dark"] .pf-input { background: var(--pf-bg-soft); color: var(--pf-ink); }
+html[data-theme="dark"] .pf-cookie { background: var(--pf-card); }
+html[data-theme="dark"] .pf-toggle { background: var(--pf-bg-soft); }
+html[data-theme="dark"] .pf-toggle button.active { background: var(--pf-bg-tint); color: var(--pf-ink); }
+/* Home custom pieces in dark */
+html[data-theme="dark"] .hm-demo,
+html[data-theme="dark"] .pbk-card { background: var(--pf-card); border-color: var(--pf-line); }
+html[data-theme="dark"] .hm-demo__top { background: var(--pf-bg-soft); }
+html[data-theme="dark"] .hm-bub.c, html[data-theme="dark"] .pbk-input { background: var(--pf-bg-soft); }
+html[data-theme="dark"] .hm-demo__foot { background: rgba(34,197,94,.08); }
+html[data-theme="dark"] .hm-roi__in { background: var(--pf-card); }
+html[data-theme="dark"] .pf-stat { background: var(--pf-card); }
+html[data-theme="dark"] .pf-stats { background: var(--pf-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-aurora__blob, [data-magnetic] { transform: none !important; }
+}
+
+/* Parallax drift for the aurora glow (driven by JS --pf-par-x/y) */
+.pf-aurora::before { transform: translate3d(var(--pf-par-x,0), var(--pf-par-y,0), 0); transition: transform .25s ease-out; }
