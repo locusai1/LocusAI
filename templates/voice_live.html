@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Live calls · LocusAI{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+  <div>
+    <h1 class="page-title">Live calls</h1>
+    <p class="text-muted" style="margin-top:4px;">
+      Calls happening right now. Transcripts update live — if a caller needs a person,
+      the AI hands off to your transfer number automatically.
+    </p>
+  </div>
+  <span id="liveDot" class="text-muted" style="font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+    <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span>
+    Live
+  </span>
+</div>
+
+<div id="liveCalls" class="grid md:grid-cols-2 gap-4"></div>
+<div id="liveEmpty" class="card" style="display:none;">
+  <div class="card-body text-muted" style="text-align:center;padding:40px;">
+    No calls in progress right now. This page refreshes automatically.
+  </div>
+</div>
+
+<script>
+(function(){
+  var box = document.getElementById('liveCalls');
+  var empty = document.getElementById('liveEmpty');
+  var dot = document.getElementById('liveDot');
+
+  function esc(s){ var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+
+  function render(calls){
+    if(!calls.length){ box.innerHTML=''; empty.style.display='block'; return; }
+    empty.style.display='none';
+    box.innerHTML = calls.map(function(c){
+      var status = esc(c.call_status);
+      var who = esc(c.customer_name || c.from_number || 'Unknown caller');
+      var tail = esc(c.transcript_tail || '').replace(/\n/g,'<br>') || '<span class="text-muted">…connecting…</span>';
+      var badge = status === 'transferred'
+        ? '<span style="color:#f59e0b;font-weight:600;">Transferred to human</span>'
+        : '<span style="color:#22c55e;font-weight:600;">● ' + status + '</span>';
+      return '<div class="card"><div class="card-body">' +
+        '<div class="flex items-center justify-between" style="margin-bottom:8px;">' +
+          '<strong>' + who + '</strong>' + badge +
+        '</div>' +
+        '<div class="text-muted" style="font-size:12px;margin-bottom:10px;">Started ' + esc(c.started_at || '') + '</div>' +
+        '<div style="font-size:13px;line-height:1.5;max-height:220px;overflow-y:auto;background:var(--bg-subtle,#fafafa);border-radius:8px;padding:10px;">' + tail + '</div>' +
+      '</div></div>';
+    }).join('');
+  }
+
+  function poll(){
+    fetch('/api/voice/live', {headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ render(d.calls || []); dot.style.opacity=1; })
+      .catch(function(){ dot.style.opacity=0.4; });
+  }
+  poll();
+  setInterval(poll, 4000);
+})();
+</script>
+{% endblock %}

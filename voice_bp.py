@@ -263,6 +263,112 @@ def fn_reschedule_appointment():
     return jsonify({"success": ok, "message": message})
 
 
+@bp.route("/fn/transfer", methods=["POST"])
+def fn_transfer():
+    """Custom function: warm-transfer the caller to a human.
+
+    The agent calls this when the caller asks for a person or hits something the
+    AI can't resolve. We record the transfer + reason, generate a short briefing
+    for the human, and return the destination number for Retell to dial. If no
+    transfer number is configured, we tell the agent to take a message instead.
+    """
+    if not _verify_retell_request():
+        return Response("Unauthorized", status=403)
+    data = request.get_json(force=True, silent=True) or {}
+    call = data.get("call", {}) or {}
+    call_id = call.get("call_id")
+    business_id, from_number, args = _fn_context(data)
+    reason = (args.get("reason") or "Caller requested a human").strip()
+
+    settings = get_voice_settings(business_id) or {}
+    transfer_number = settings.get("transfer_number")
+    if not settings.get("transfer_enabled") or not transfer_number:
+        return jsonify(
+            {
+                "success": False,
+                "transfer": False,
+                "message": (
+                    "I'm not able to transfer you right now, but I can take a "
+                    "detailed message and have someone call you straight back."
+                ),
+            }
+        )
+
+    # Build a spoken briefing for the human who picks up.
+    briefing = ""
+    try:
+        from core.voice import generate_transfer_briefing
+
+        vc = get_voice_call(call_id) if call_id else None
+        transcript = (vc or {}).get("transcript") or ""
+        caller_name = args.get("caller_name") or (vc or {}).get("customer_name")
+        briefing = generate_transfer_briefing(transcript, caller_name)
+    except Exception:
+        logger.debug("transfer briefing skipped", exc_info=True)
+
+    if call_id:
+        try:
+            update_voice_call(
+                call_id,
+                transferred=1,
+                transfer_number=transfer_number,
+                transfer_reason=reason,
+                call_status="transferred",
+                call_outcome="escalated",
+            )
+        except Exception:
+            logger.warning("Could not mark call %s transferred", call_id)
+
+    logger.info(f"Voice transfer (business {business_id}, {from_number}): {reason}")
+    return jsonify(
+        {
+            "success": True,
+            "transfer": True,
+            "transfer_number": transfer_number,
+            "briefing": briefing,
+            "message": "Of course — connecting you to a member of the team now.",
+        }
+    )
+
+
+# ============================================================================
+# Live Call Monitor — ongoing calls feed for the dashboard
+# ============================================================================
+
+
+@bp.route("/live", methods=["GET"])
+def live_calls():
+    """JSON feed of in-progress calls for the live monitor page (polled)."""
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"calls": []})
+
+    with get_conn() as con:
+        rows = con.execute(
+            """SELECT v.retell_call_id, v.from_number, c.name AS customer_name,
+                      v.call_status, v.started_at, v.transcript, v.duration_seconds
+               FROM voice_calls v
+               LEFT JOIN customers c ON c.id = v.customer_id
+               WHERE v.business_id = ?
+                 AND v.call_status IN ('ongoing','registered','transferred')
+               ORDER BY datetime(COALESCE(v.started_at, v.created_at)) DESC
+               LIMIT 25""",
+            (business_id,),
+        ).fetchall()
+    calls = []
+    for r in rows:
+        d = dict(r)
+        # Send only the tail of the transcript to keep payloads light.
+        t = d.get("transcript") or ""
+        d["transcript_tail"] = t[-1200:]
+        d.pop("transcript", None)
+        calls.append(d)
+    return jsonify({"calls": calls})
+
+
 # ============================================================================
 # LLM Response Webhook (Real-time conversation)
 # ============================================================================

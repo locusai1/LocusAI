@@ -1394,6 +1394,19 @@ def delete_logo(business_id: int):
     return redirect(url_for("edit_business", business_id=business_id))
 
 
+@app.route("/voice/live")
+def voice_live():
+    """Live call monitor — watch in-progress calls and request a human handoff."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        flash("Select a business to monitor calls.", "err")
+        return redirect(url_for("dashboard"))
+    business = get_business_by_id(business_id)
+    return render_template("voice_live.html", business=business)
+
+
 @app.route("/voice")
 def voice_dashboard():
     """Voice AI analytics and call management page."""
