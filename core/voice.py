@@ -1290,6 +1290,15 @@ def handle_call_ended(data: Dict) -> Dict:
         duration_seconds is not None and duration_seconds < 8 and len(transcript.strip()) < 20
     )
 
+    # Compliance: scrub PII from the transcript at rest if the business opted in
+    # (regulated verticals). Done before any write so raw PII is never stored.
+    if transcript and _business_redacts_transcripts(call_id):
+        from core.security import redact_pii_text
+
+        transcript = redact_pii_text(transcript)
+        if transcript_json:
+            transcript_json = redact_pii_text(transcript_json)
+
     # Update call record
     update_voice_call(
         call_id,

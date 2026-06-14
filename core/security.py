@@ -245,6 +245,47 @@ def mask_phone(phone: str) -> str:
     return "***-***-" + digits[-4:]
 
 
+# ============================================================================
+# Free-text PII redaction (for call transcripts stored at rest)
+# ============================================================================
+
+# Order matters: email before phone so the digits in an address aren't eaten.
+_REDACT_EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
+# Card numbers: 13-16 digits, optionally separated by spaces/dashes.
+_REDACT_CARD = re.compile(r"\b(?:\d[ -]?){13,16}\b")
+# Phone numbers: international or local, 7+ digits with common separators.
+_REDACT_PHONE = re.compile(r"(?<!\w)(\+?\d[\d().\- ]{6,}\d)(?!\w)")
+
+
+def redact_pii_text(text: Optional[str]) -> str:
+    """Redact emails, card numbers and phone numbers from free text.
+
+    Used to scrub call transcripts before storage for businesses that enable
+    transcript redaction (regulated verticals). Conservative: it replaces matched
+    spans with a typed placeholder rather than deleting, so the transcript stays
+    readable.
+
+        "call me on 020 4620 3253 or sarah@acme.co.uk"
+        -> "call me on [phone redacted] or [email redacted]"
+    """
+    if not text:
+        return text or ""
+    out = _REDACT_EMAIL.sub("[email redacted]", text)
+
+    def _card(m: "re.Match") -> str:
+        digits = re.sub(r"\D", "", m.group())
+        return "[card redacted]" if 13 <= len(digits) <= 16 else m.group()
+
+    out = _REDACT_CARD.sub(_card, out)
+
+    def _phone(m: "re.Match") -> str:
+        digits = re.sub(r"\D", "", m.group())
+        return "[phone redacted]" if len(digits) >= 7 else m.group()
+
+    out = _REDACT_PHONE.sub(_phone, out)
+    return out
+
+
 def _mask_sensitive_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively mask sensitive data in a dictionary."""
     if not isinstance(data, dict):

@@ -679,6 +679,57 @@ def init_db() -> None:
             UNIQUE(business_id, period_start)
         );""")
 
+        # Audit log — immutable record of sensitive actions (compliance/RBAC trail)
+        cur.execute("""CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER,
+            user_id INTEGER,
+            user_email TEXT,
+            action TEXT NOT NULL,
+            entity_type TEXT,
+            entity_id TEXT,
+            ip TEXT,
+            detail TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );""")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_business ON audit_log(business_id, created_at)"
+        )
+
+        # Web Push subscriptions — owner mobile alerts (PWA)
+        cur.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            business_id INTEGER,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            user_agent TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );""")
+
+        # Compliance / integration columns on businesses
+        _safe_alter_add_column(
+            cur,
+            "businesses",
+            "redact_transcripts",
+            "ALTER TABLE businesses ADD COLUMN redact_transcripts INTEGER DEFAULT 0",
+        )
+        _safe_alter_add_column(
+            cur,
+            "businesses",
+            "calendar_feed_token",
+            "ALTER TABLE businesses ADD COLUMN calendar_feed_token TEXT",
+        )
+        # Missed-call recovery (never-drop-a-call) — opt-out per business
+        _safe_alter_add_column(
+            cur,
+            "voice_settings",
+            "missed_call_recovery_enabled",
+            "ALTER TABLE voice_settings ADD COLUMN missed_call_recovery_enabled INTEGER DEFAULT 1",
+        )
+
         con.commit()
         logger.info("Database schema initialized successfully")
 
@@ -734,6 +785,8 @@ _BUSINESS_ALLOWED_COLUMNS = frozenset(
         "static_path",
         "archived",
         "kb_autolearn_enabled",
+        "redact_transcripts",
+        "calendar_feed_token",
     }
 )
 
@@ -1070,7 +1123,7 @@ def create_appointment_atomic(
 
 def cleanup_old_data(business_id: Optional[int] = None) -> Dict[str, int]:
     """Clean up old data based on retention policies. Returns counts of deleted records."""
-    counts = {"messages": 0, "sessions": 0, "appointments": 0}
+    counts = {"messages": 0, "sessions": 0, "appointments": 0, "voice_calls": 0}
 
     with transaction() as con:
         # Get businesses with retention policies
@@ -1123,6 +1176,17 @@ def cleanup_old_data(business_id: Optional[int] = None) -> Dict[str, int]:
                 (bid, -days),
             )
             counts["appointments"] += cur.rowcount
+
+            # Delete old voice calls (transcripts/recordings are sensitive PII)
+            cur = con.execute(
+                """
+                DELETE FROM voice_calls
+                WHERE business_id = ?
+                  AND datetime(created_at) < datetime('now', ? || ' days')
+            """,
+                (bid, -days),
+            )
+            counts["voice_calls"] += cur.rowcount
 
     if any(counts.values()):
         logger.info(f"Data cleanup completed: {counts}")
