@@ -399,6 +399,30 @@ Never skip the recording notice. It must always be the first thing said.
 
 **Old Agent** (deprecated): `agent_19e267112e9474a8f53d3368a4` (used custom WebSocket LLM)
 
+### Voice Latency & Naturalness Tuning (verified vs Retell API, Jun 2026)
+
+Confirmed field names + recommended values for the two open voice issues (latency too slow; Dorothy sounds robotic). Pulled from current Retell API docs — see `docs.retellai.com/api-references/update-agent`, `.../update-retell-llm`, `.../build/transcription-mode`.
+
+**On the LLM (`update-retell-llm` → `llm_b41019c52636d5321f084e5bdbbb`):**
+- `model` — accepts `gpt-4.1` | `gpt-4.1-mini` | `gpt-4.1-nano` | `gpt-5`…`gpt-5.5` | `claude-4.5-sonnet` | `claude-4.6-sonnet` | `claude-4.5-haiku` | `gemini-3.0-flash` | etc. **Retell's 2026 production recommendation is `gpt-4.1`** (low latency + reliable tool use; GPT-5 variants are *slower* due to reasoning). Verify what `llm_b41019…` is currently on.
+- `model_high_priority` (bool, default false) — set `true` for "dedicated resource, lower & more consistent latency".
+
+**On the agent (`update-agent` → `agent_7fe6433627a68c931f05b7ae84`):**
+- `voice_model` (enum) — engine selector, separate from `voice_id`. Expressiveness↑: `eleven_v3` (newest, fixes "robotic", slightly higher latency). Latency↑: `eleven_flash_v2_5`. Others: `eleven_turbo_v2_5`, `sonic-3`/`sonic-3.5` (Cartesia, emotion control), `speech-02-turbo` (MiniMax). **Genuine tradeoff — A/B `eleven_v3` vs `eleven_flash_v2_5` on a recording.**
+- `voice_temperature` (0–2, default 1) — higher = more variant/expressive (counteracts robotic flatness); ~1.1 to start.
+- `voice_speed` (0.5–2, default 1).
+- `enable_dynamic_voice_speed` (bool, default false) — agent paces to caller's speech rate. **Turn on.**
+- `enable_dynamic_responsiveness` (bool, default false) — agent adapts response speed to caller turn-taking. **Turn on.**
+- `responsiveness` (0–1, default 1) — already maxed.
+- `interruption_sensitivity` (0–1, default 1) — currently 0.8.
+- `enable_backchannel` (bool) + `backchannel_frequency` (0–1, default 0.8) + `backchannel_words` (array).
+- `stt_mode` (enum) — `fast` (lowest latency, use this) | `accurate` (~+200ms) | `custom` (needs `custom_stt_config`: `provider` azure/deepgram/soniox, `endpointing_ms`).
+
+⚠️ **`update-agent` edits the agent's *draft* version** — you must **publish** the agent (dashboard or API) for changes to hit live calls.
+⚠️ **`voice_id` list lives in the Retell dashboard** (API only says "find in Dashboard"). `voice_model` picks the engine; to use a v3 Dorothy you copy the matching `voice_id` from the dashboard. Current `11labs-Dorothy` is the older naming.
+
+**Recommended rollout order:** (1) LLM `gpt-4.1` + `model_high_priority:true`; (2) agent `enable_dynamic_voice_speed:true`, `enable_dynamic_responsiveness:true`, `stt_mode:"fast"`; test call; (3) A/B `voice_model` `eleven_v3` (+`voice_temperature:1.1`) vs `eleven_flash_v2_5`. Publish after each agent patch.
+
 ### Telnyx Configuration
 | Setting | Value |
 |---------|-------|
