@@ -766,6 +766,42 @@ def home():
     return render_template("home.html")
 
 
+@app.route("/calendar/<token>.ics")
+def calendar_feed(token):
+    """Public iCal subscription feed (secret token = auth). For Google/Outlook/Apple."""
+    from core.calendar_feed import build_feed, business_by_feed_token
+
+    biz = business_by_feed_token(token)
+    if not biz:
+        abort(404)
+    ics = build_feed(biz["id"], biz.get("name", ""))
+    return Response(
+        ics,
+        mimetype="text/calendar",
+        headers={
+            "Content-Disposition": 'inline; filename="locusai.ics"',
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+@app.route("/calendar/subscribe", methods=["POST"])
+def calendar_subscribe_token():
+    """Create the feed token (or rotate it) for the active business."""
+    if session.get("user") is None:
+        return jsonify({"error": "unauthorized"}), 401
+    business_id = g.get("active_business_id") or session.get("active_business_id")
+    if not business_id:
+        return jsonify({"error": "no business"}), 400
+    from core.calendar_feed import ensure_feed_token, feed_path, regenerate_feed_token
+
+    rotate = (request.get_json(silent=True) or {}).get("rotate")
+    token = regenerate_feed_token(business_id) if rotate else ensure_feed_token(business_id)
+    if not token:
+        return jsonify({"error": "failed"}), 400
+    return jsonify({"url": request.url_root.rstrip("/") + feed_path(token)})
+
+
 @app.route("/try")
 def try_demo():
     """Public 'try it now' page — build a live AI receptionist from any website."""
