@@ -214,9 +214,7 @@ def fn_find_appointments():
         {
             "success": True,
             "count": len(appts),
-            "appointments": [
-                {"service": a["service"], "datetime": a["start_at"]} for a in appts
-            ],
+            "appointments": [{"service": a["service"], "datetime": a["start_at"]} for a in appts],
             "message": "I found: " + "; ".join(parts) + ".",
         }
     )

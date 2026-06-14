@@ -195,8 +195,9 @@ class TestVoiceFunctions:
         bid = sample_business["id"]
         aid = _make_appt(test_db, bid, when=_future(days=3, hour=14))
         new_dt = _future(days=5, hour=11)
-        with patch("core.db.DB_PATH", test_db), patch(
-            "core.db.check_slot_available", return_value=True
+        with (
+            patch("core.db.DB_PATH", test_db),
+            patch("core.db.check_slot_available", return_value=True),
         ):
             ok, msg = booking.voice_reschedule_appointment(
                 bid, new_datetime=new_dt, phone="+14155551234", service="Haircut"
@@ -229,9 +230,11 @@ class TestVoiceFunctionEndpoints:
 
         bid = sample_business["id"]
         aid = _make_appt(test_db, bid)
-        with patch("core.db.DB_PATH", test_db), patch(
-            "voice_bp._verify_retell_request", return_value=True
-        ), patch("voice_bp._get_business_by_phone", return_value=bid):
+        with (
+            patch("core.db.DB_PATH", test_db),
+            patch("voice_bp._verify_retell_request", return_value=True),
+            patch("voice_bp._get_business_by_phone", return_value=bid),
+        ):
             resp = client.post(
                 "/api/voice/fn/cancel-appointment",
                 json={
@@ -249,9 +252,11 @@ class TestVoiceFunctionEndpoints:
 
     def test_find_endpoint_no_appointments(self, client, sample_business, test_db):
         bid = sample_business["id"]
-        with patch("core.db.DB_PATH", test_db), patch(
-            "voice_bp._verify_retell_request", return_value=True
-        ), patch("voice_bp._get_business_by_phone", return_value=bid):
+        with (
+            patch("core.db.DB_PATH", test_db),
+            patch("voice_bp._verify_retell_request", return_value=True),
+            patch("voice_bp._get_business_by_phone", return_value=bid),
+        ):
             resp = client.post(
                 "/api/voice/fn/find-appointments",
                 json={"call": {"from_number": "+19990001111", "to_number": "+442046203253"}},

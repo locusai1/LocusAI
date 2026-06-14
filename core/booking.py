@@ -690,7 +690,9 @@ def _resolve_target_appointment(business_id, payload, session_id):
     return candidates[0], None
 
 
-def _validate_reschedule_slot(bid: int, appt: Dict, new_dt: datetime) -> Tuple[Optional[str], Optional[str]]:
+def _validate_reschedule_slot(
+    bid: int, appt: Dict, new_dt: datetime
+) -> Tuple[Optional[str], Optional[str]]:
     """Check a proposed new time is free (excluding the appointment being moved).
     Returns (new_slot_str, None) if OK, else (None, speakable_error)."""
     from core.db import check_slot_available
@@ -704,14 +706,20 @@ def _validate_reschedule_slot(bid: int, appt: Dict, new_dt: datetime) -> Tuple[O
             if r and r["duration_min"]:
                 duration = r["duration_min"]
     if not check_slot_available(bid, new_slot, duration, exclude_appointment_id=appt["id"]):
-        alt = get_available_slots_for_day(bid, new_dt.strftime("%Y-%m-%d"), appt.get("service"), limit=1)
+        alt = get_available_slots_for_day(
+            bid, new_dt.strftime("%Y-%m-%d"), appt.get("service"), limit=1
+        )
         sug = f" The closest free time I can see is {alt[0]}." if alt else ""
         return None, f"That time isn't available.{sug} Would another time work?"
     return new_slot, None
 
 
 def _apply_cancel(
-    business_id: int, appt_id: int, service: Optional[str], old_slot: Optional[str], phone: Optional[str]
+    business_id: int,
+    appt_id: int,
+    service: Optional[str],
+    old_slot: Optional[str],
+    phone: Optional[str],
 ) -> Tuple[bool, str]:
     """Cancel an appointment: update status, cancel reminders, emit event.
     Single source of truth shared by web/SMS confirm flow and voice functions."""
@@ -963,7 +971,12 @@ def voice_reschedule_appointment(
     if slot_err:
         return False, slot_err
     return _apply_reschedule(
-        business_id, appt["id"], appt.get("service"), appt.get("start_at"), new_slot, appt.get("phone")
+        business_id,
+        appt["id"],
+        appt.get("service"),
+        appt.get("start_at"),
+        new_slot,
+        appt.get("phone"),
     )
 
 
