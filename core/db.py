@@ -85,12 +85,17 @@ def _table_exists(cur: sqlite3.Cursor, table: str) -> bool:
 
 
 def _safe_alter_add_column(cur: sqlite3.Cursor, table: str, col: str, ddl: str) -> None:
-    """Safely add a column if it doesn't exist."""
+    """Safely add a column if it doesn't exist (idempotent across restarts/workers)."""
     try:
         if not _col_exists(cur, table, col):
             cur.execute(ddl)
     except sqlite3.OperationalError as e:
-        logger.warning(f"Could not add column {col} to {table}: {e}")
+        # "duplicate column name" just means another worker/run added it first —
+        # the migration is idempotent, so this is expected, not an error.
+        if "duplicate column name" in str(e).lower():
+            logger.debug(f"Column {col} on {table} already present, skipping add.")
+        else:
+            logger.warning(f"Could not add column {col} to {table}: {e}")
 
 
 # ============================================================================
