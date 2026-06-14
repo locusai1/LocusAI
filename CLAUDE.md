@@ -374,12 +374,18 @@ Retell AI → voice_ws.py WebSocket → core/ai.py → OpenAI → Response
 | Agent ID | `agent_7fe6433627a68c931f05b7ae84` |
 | Agent Name | LocusAI Receptionist |
 | LLM ID | `llm_b41019c52636d5321f084e5bdbbb` |
+| LLM model | `gpt-4.1-mini` (+ `model_high_priority`) — tuned Jun 2026 from `gpt-4o-mini` |
 | Voice | `11labs-Dorothy` (British female) |
+| Voice model | `eleven_v3` (`voice_temperature` 1.1) |
 | Language | en-GB |
 | Response Engine | Retell LLM (native) |
+| STT mode | `accurate` (was `fast`) |
+| Dynamic pacing | `enable_dynamic_voice_speed` + `enable_dynamic_responsiveness` ON |
 | Responsiveness | 1.0 (max) |
 | Interruption Sensitivity | 0.8 |
 | Backchannels | Enabled (0.7 frequency) |
+| Webhook URL | `https://locusai.co.uk/api/voice/webhook` (was a stale trycloudflare tunnel) |
+| **Live published version** | **v3** (phone number follows latest published — no version pin) |
 
 **Current LLM Prompt** (in `core/voice.py` — dynamic per business):
 ```
@@ -422,6 +428,28 @@ Confirmed field names + recommended values for the two open voice issues (latenc
 ⚠️ **`voice_id` list lives in the Retell dashboard** (API only says "find in Dashboard"). `voice_model` picks the engine; to use a v3 Dorothy you copy the matching `voice_id` from the dashboard. Current `11labs-Dorothy` is the older naming.
 
 **Recommended rollout order:** (1) LLM `gpt-4.1` + `model_high_priority:true`; (2) agent `enable_dynamic_voice_speed:true`, `enable_dynamic_responsiveness:true`, `stt_mode:"fast"`; test call; (3) A/B `voice_model` `eleven_v3` (+`voice_temperature:1.1`) vs `eleven_flash_v2_5`. Publish after each agent patch.
+
+#### ⚠️ Versioning workflow (CRITICAL — learned the hard way, Jun 2026)
+
+Publishing an agent **locks that version**. After publish, `PATCH /update-agent` and `PATCH /update-retell-llm` return `"Cannot update published agent/LLM"` (HTTP 400/422), and `publish-agent-version` does **NOT** auto-create a new draft (it just re-publishes in place). To make ANY further change you must spin a new draft first:
+
+```bash
+RK=$(grep -E '^RETELL_API_KEY=' .env | cut -d= -f2- | tr -d '"'\'' \r')
+AG=agent_7fe6433627a68c931f05b7ae84
+# 1. New draft from the current live version (also creates a matching Retell-LLM draft):
+NEWV=$(curl -s -X POST "https://api.retellai.com/create-agent-version/$AG" \
+  -H "Authorization: Bearer $RK" -H "Content-Type: application/json" \
+  -d '{"base_version": 3}' | python3 -c "import sys,json;print(json.load(sys.stdin)['version'])")
+# 2. Edit the draft (LLM edits target the new draft automatically — no separate LLM-version endpoint exists):
+curl -s -X PATCH "https://api.retellai.com/update-retell-llm/llm_b41019c52636d5321f084e5bdbbb" \
+  -H "Authorization: Bearer $RK" -H "Content-Type: application/json" -d '{"model":"gpt-4.1-mini"}'
+curl -s -X PATCH "https://api.retellai.com/update-agent/$AG" \
+  -H "Authorization: Bearer $RK" -H "Content-Type: application/json" -d '{"stt_mode":"accurate"}'
+# 3. Go live:
+curl -s -X POST "https://api.retellai.com/publish-agent-version/$AG" \
+  -H "Authorization: Bearer $RK" -H "Content-Type: application/json" -d "{\"version\": $NEWV}"
+```
+Notes: `create-agent-version` (`base_version` int, required) returns the new draft version + bumps the linked LLM to a new draft. No `create-retell-llm-version` endpoint exists — LLM versioning rides on the agent's. The phone number (`+442046203253`) has **no version pin**, so it always serves the latest *published* version. The agent ran fine **unpublished** before Jun 2026 (the draft served calls) — publishing is the cleaner pattern but introduced this lock.
 
 ### Telnyx Configuration
 | Setting | Value |
