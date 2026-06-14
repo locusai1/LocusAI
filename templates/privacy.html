@@ -4,45 +4,33 @@
 
 {% block extra_head %}
 <style>
-  .page-hero {
-    background: white;
-    border-bottom: 1px solid rgba(0,0,0,.06);
-    padding: 64px 32px 48px;
-    text-align: center;
-  }
+  .page-hero { padding: 72px 24px 52px; text-align: center; }
   .page-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 5px 12px;
-    background: #f5f5f5;
-    border: 1px solid #e5e5e5;
-    border-radius: 100px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #525252;
-    margin-bottom: 20px;
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px;
+    background: var(--pf-bg-tint); border: 1px solid var(--pf-line); border-radius: var(--pf-pill);
+    font-size: 12.5px; font-weight: 600; color: var(--pf-a-3); margin-bottom: 20px;
   }
-  .page-title { font-size: 36px; font-weight: 700; letter-spacing: -0.03em; color: #171717; margin-bottom: 12px; }
-  .page-subtitle { font-size: 16px; color: #737373; max-width: 520px; margin: 0 auto; }
-  .content-wrapper { max-width: 760px; margin: 0 auto; padding: 64px 32px 96px; }
-  .doc-section { margin-bottom: 48px; }
-  .doc-section h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: #171717; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
-  .doc-section h3 { font-size: 15px; font-weight: 600; color: #171717; margin: 20px 0 8px; }
-  .doc-section p { font-size: 15px; color: #404040; margin-bottom: 14px; }
+  .page-title { font-size: clamp(32px,4vw,44px); font-weight: 800; letter-spacing: -0.03em; color: var(--pf-ink); margin-bottom: 12px; }
+  .page-subtitle { font-size: 16px; color: var(--pf-muted); max-width: 520px; margin: 0 auto; }
+  .content-wrapper { max-width: 760px; margin: 0 auto; padding: 8px 24px 96px; }
+  .doc-section { margin-bottom: 44px; }
+  .doc-section h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: var(--pf-ink); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--pf-line); }
+  .doc-section h3 { font-size: 15px; font-weight: 600; color: var(--pf-ink); margin: 20px 0 8px; }
+  .doc-section p { font-size: 15px; color: var(--pf-text); margin-bottom: 14px; line-height: 1.7; }
   .doc-section ul, .doc-section ol { padding-left: 20px; margin-bottom: 14px; }
-  .doc-section li { font-size: 15px; color: #404040; margin-bottom: 6px; }
-  .doc-section a { color: #171717; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
-  .info-card { background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; font-size: 14px; color: #525252; }
-  .info-card strong { color: #171717; }
+  .doc-section li { font-size: 15px; color: var(--pf-text); margin-bottom: 6px; line-height: 1.7; }
+  .doc-section a { color: var(--pf-a-3); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+  .info-card { background: var(--pf-bg-tint); border: 1px solid var(--pf-line); border-radius: var(--pf-r); padding: 18px 22px; margin-bottom: 26px; font-size: 14px; color: var(--pf-text); line-height: 1.6; }
+  .info-card strong { color: var(--pf-ink); }
   .processor-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-  .processor-table th { text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #a3a3a3; padding: 0 12px 10px 0; border-bottom: 1px solid #e5e5e5; }
-  .processor-table td { font-size: 14px; color: #404040; padding: 10px 12px 10px 0; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+  .processor-table th { text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pf-muted); padding: 0 12px 10px 0; border-bottom: 1px solid var(--pf-line-2); }
+  .processor-table td { font-size: 14px; color: var(--pf-text); padding: 10px 12px 10px 0; border-bottom: 1px solid var(--pf-line); vertical-align: top; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-hero">
-  <div class="page-badge">Legal</div>
+<div class="page-hero pf-aurora">
+  <div class="page-badge"><span style="width:6px;height:6px;border-radius:50%;background:var(--pf-a);"></span> Legal</div>
   <h1 class="page-title">Privacy Policy</h1>
   <p class="page-subtitle">How LocusAI collects, uses, and protects your information</p>
 </div>
