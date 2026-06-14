@@ -317,6 +317,16 @@ def _digest_tick():
             app.logger.info(f"Weekly digest: sent {sent}")
 
 
+def _kb_autolearn_tick():
+    """One iteration: let opted-in businesses' KB teach itself from recurring questions."""
+    from core.kb_autolearn import run_autolearn_for_enabled
+
+    with app.app_context():
+        added = run_autolearn_for_enabled()
+        if added:
+            app.logger.info(f"KB auto-learn: added {added} entries")
+
+
 # Bootstrap an admin from env (ADMIN_EMAIL/ADMIN_PASSWORD) if one is missing.
 # Lets you create the production admin via Railway Variables + a redeploy, with
 # no CLI access needed; idempotent (only creates when absent).
@@ -336,6 +346,7 @@ if not os.getenv("PYTEST_CURRENT_TEST"):
     )
     start_worker("webhook_dispatch", _webhook_dispatch_tick, interval=15, initial_delay=15)
     start_worker("weekly_digest", _digest_tick, interval=21600, initial_delay=120)  # ~6h
+    start_worker("kb_autolearn", _kb_autolearn_tick, interval=86400, initial_delay=300)  # daily
 
 # ============================================================================
 # Logging Configuration
@@ -1237,6 +1248,9 @@ def edit_business(business_id: int):
         desired_slug = (fields.get("slug") or "").strip()
         name = fields.get("name") or b.get("name", "")
         fields["slug"] = slugify(desired_slug or name)
+
+        # Self-improving KB toggle (checkbox: absent = off).
+        fields["kb_autolearn_enabled"] = 1 if request.form.get("kb_autolearn_enabled") else 0
 
         ensure_tenant_key(business_id)
 

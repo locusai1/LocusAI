@@ -18,6 +18,10 @@
               onclick="loadKbFromWebsite({{ business_id }})">
         🌐 Import from website
       </button>
+      <button class="btn" id="kb-autolearn-btn" type="button"
+              onclick="runKbAutolearn({{ business_id }})">
+        🧠 Auto-learn now
+      </button>
       <button class="btn" onclick="document.getElementById('importModal').classList.remove('hidden')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         Import CSV
@@ -102,6 +106,28 @@
       .catch(function () {
         btn.disabled = false; btn.textContent = orig;
         list.innerHTML = '<p class="text-muted" style="font-size:13px;">Couldn\'t load suggestions — please try again.</p>';
+      });
+  }
+
+  function runKbAutolearn(bid) {
+    var btn = document.getElementById('kb-autolearn-btn');
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Learning…';
+    var body = new URLSearchParams();
+    body.append('csrf_token', KB_CSRF);
+    body.append('business_id', bid);
+    fetch("{{ url_for('kb.kb_autolearn') }}", { method: 'POST', body: body })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false; btn.textContent = orig;
+        if (!data.configured) { alert('AI features need an OpenAI key configured on the server.'); return; }
+        var n = (data.added || []).length;
+        if (!n) { alert('Nothing to add yet — the AI only auto-adds answers for questions customers ask repeatedly that it can answer from your existing info.'); return; }
+        alert('Added ' + n + ' new answer' + (n === 1 ? '' : 's') + ' to your knowledge base.');
+        window.location.reload();
+      })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = orig;
+        alert("Couldn't run auto-learn — please try again.");
       });
   }
 

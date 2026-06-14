@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Value Report · LocusAI{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:24px;">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h1 class="page-title">Your LocusAI Value Report</h1>
+      <p class="text-muted" style="margin-top:4px;">
+        What your AI receptionist did for {{ business_name }} in the last {{ report.period_days }} days
+        ({{ report.start_date }} → {{ report.end_date }}).
+      </p>
+    </div>
+    <form method="get" action="{{ url_for('analytics.value_report') }}">
+      <select name="days" class="input" onchange="this.form.submit()" style="width:auto;">
+        <option value="7"  {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+        <option value="365"{% if days == 365 %}selected{% endif %}>Last year</option>
+      </select>
+    </form>
+  </div>
+</div>
+
+<!-- Headline value -->
+<div class="card mb-6" style="background:linear-gradient(135deg,#171717,#2a2a2a);color:#fff;">
+  <div class="card-body" style="text-align:center;padding:36px 20px;">
+    <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;">
+      Estimated revenue captured by your AI
+    </div>
+    <div style="font-size:48px;font-weight:800;margin:8px 0;">
+      £{{ '{:,.0f}'.format(report.revenue_captured) }}
+    </div>
+    <div style="font-size:14px;opacity:.8;">
+      across {{ report.ai_bookings }} appointment{{ '' if report.ai_bookings == 1 else 's' }} booked by LocusAI
+    </div>
+  </div>
+</div>
+
+<!-- Supporting metrics -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="card"><div class="card-body">
+    <div class="text-muted text-xs uppercase tracking-wide">Conversations handled</div>
+    <div style="font-size:28px;font-weight:700;margin-top:6px;">{{ report.conversations_handled }}</div>
+    <div class="text-muted text-xs mt-1">across voice, chat &amp; SMS — 24/7</div>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="text-muted text-xs uppercase tracking-wide">Calls answered</div>
+    <div style="font-size:28px;font-weight:700;margin-top:6px;">{{ report.calls_answered }}</div>
+    <div class="text-muted text-xs mt-1">never sent to voicemail</div>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="text-muted text-xs uppercase tracking-wide">After-hours calls</div>
+    <div style="font-size:28px;font-weight:700;margin-top:6px;">{{ report.after_hours_calls }}</div>
+    <div class="text-muted text-xs mt-1">answered while you were closed</div>
+  </div></div>
+
+  <div class="card"><div class="card-body">
+    <div class="text-muted text-xs uppercase tracking-wide">Leads recovered</div>
+    <div style="font-size:28px;font-weight:700;margin-top:6px;">{{ report.leads_recovered }}</div>
+    <div class="text-muted text-xs mt-1">followed up after the call</div>
+  </div></div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <p class="text-secondary" style="font-size:14px;line-height:1.6;margin:0;">
+      {% if report.ai_bookings or report.calls_answered %}
+        LocusAI answered <strong>{{ report.calls_answered }}</strong> call{{ '' if report.calls_answered == 1 else 's' }}
+        {% if report.after_hours_calls %}(<strong>{{ report.after_hours_calls }}</strong> of them outside your opening hours){% endif %},
+        handled <strong>{{ report.conversations_handled }}</strong> conversation{{ '' if report.conversations_handled == 1 else 's' }} across every channel,
+        and booked <strong>{{ report.ai_bookings }}</strong> appointment{{ '' if report.ai_bookings == 1 else 's' }} worth an estimated
+        <strong>£{{ '{:,.0f}'.format(report.revenue_captured) }}</strong> — without you lifting a finger.
+      {% else %}
+        Once your AI starts taking calls and bookings, this report will show the revenue and time it's saving you.
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% endblock %}

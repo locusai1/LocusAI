@@ -130,6 +130,10 @@ def init_db() -> None:
             ("files_path", "ALTER TABLE businesses ADD COLUMN files_path TEXT"),
             ("static_path", "ALTER TABLE businesses ADD COLUMN static_path TEXT"),
             ("archived", "ALTER TABLE businesses ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"),
+            (
+                "kb_autolearn_enabled",
+                "ALTER TABLE businesses ADD COLUMN kb_autolearn_enabled INTEGER NOT NULL DEFAULT 0",
+            ),
         ]
         for col, ddl in business_columns:
             _safe_alter_add_column(cur, "businesses", col, ddl)
@@ -706,6 +710,7 @@ _BUSINESS_ALLOWED_COLUMNS = frozenset(
         "files_path",
         "static_path",
         "archived",
+        "kb_autolearn_enabled",
     }
 )
 

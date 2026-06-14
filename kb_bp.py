@@ -174,6 +174,31 @@ def kb_import_website():
     return result
 
 
+@bp.post("/kb/autolearn")
+def kb_autolearn():
+    """Run self-improving KB now: auto-add grounded answers for recurring
+    unanswered questions. Returns JSON {added: [...]}."""
+    if not _logged_in():
+        return redirect(url_for("auth.login"))
+    business_id = _int(request.form.get("business_id") or request.args.get("business_id") or "0")
+    if not business_id or not _can_access(business_id):
+        return {"configured": False, "added": [], "error": "access"}, 403
+
+    from core.kb_autolearn import auto_learn_kb
+    from core.kb_suggestions import is_configured
+
+    if not is_configured():
+        return {"configured": False, "added": []}
+    with get_conn() as con:
+        row = con.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
+    name = row["name"] if row else "the business"
+    try:
+        added = auto_learn_kb(business_id, name)
+    except Exception:
+        added = []
+    return {"configured": True, "added": added}
+
+
 @bp.post("/kb/suggestions/add")
 def kb_suggestions_add():
     """Create a KB entry from an accepted suggestion."""

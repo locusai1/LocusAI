@@ -57,6 +57,21 @@
         <textarea class="input" name="tone" rows="3" placeholder="Describe how the AI should communicate...">{{ business.get('tone','') }}</textarea>
       </div>
 
+      <div style="border:1px solid var(--border-default,#e5e5e5);border-radius:11px;padding:14px 16px;">
+        <label class="flex items-start gap-3" style="cursor:pointer;">
+          <input type="checkbox" name="kb_autolearn_enabled" value="1" style="margin-top:3px;"
+                 {% if business.get('kb_autolearn_enabled') %}checked{% endif %}>
+          <span>
+            <span style="font-weight:600;">Self-improving knowledge base</span>
+            <span class="text-muted" style="display:block;font-size:13px;line-height:1.5;margin-top:2px;">
+              Let the AI teach itself: when the same question keeps coming up and it can answer
+              from your existing info, it adds the answer to your knowledge base automatically
+              (tagged “auto-learned” so you can review). It never invents prices, hours, or policies.
+            </span>
+          </span>
+        </label>
+      </div>
+
       <div class="grid md:grid-cols-3 gap-4 items-start">
         <div>
           <label class="form-label">Accent Color</label>

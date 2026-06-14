@@ -836,6 +836,34 @@ def analytics_index():
     )
 
 
+@analytics_bp.route("/analytics/value")
+def value_report():
+    """Owner-facing 'what LocusAI did for you' report."""
+    redir = _need_login()
+    if redir:
+        return redir
+
+    business_id = getattr(g, "active_business_id", None)
+    if not business_id:
+        flash("Please select a business first.", "err")
+        return redirect(url_for("dashboard"))
+
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    days = max(7, min(days, 365))
+
+    from core.value_report import compute_value_report
+
+    report = compute_value_report(business_id, days)
+    with get_conn() as con:
+        row = con.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
+    business_name = row["name"] if row else "your business"
+
+    return render_template("value_report.html", report=report, business_name=business_name, days=days)
+
+
 @analytics_bp.route("/api/analytics/overview")
 def api_overview():
     """API endpoint for real-time overview stats."""
