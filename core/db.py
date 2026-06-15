@@ -679,6 +679,19 @@ def init_db() -> None:
             UNIQUE(business_id, period_start)
         );""")
 
+        # Semantic KB embeddings — vector per kb_entry for meaning-based search
+        cur.execute("""CREATE TABLE IF NOT EXISTS kb_embeddings (
+            kb_entry_id INTEGER PRIMARY KEY,
+            business_id INTEGER NOT NULL,
+            vector TEXT NOT NULL,
+            model TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (kb_entry_id) REFERENCES kb_entries(id) ON DELETE CASCADE
+        );""")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kb_emb_business ON kb_embeddings(business_id)"
+        )
+
         # Audit log — immutable record of sensitive actions (compliance/RBAC trail)
         cur.execute("""CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -10,6 +10,25 @@ from core.db import get_conn, list_businesses
 bp = Blueprint("kb", __name__)
 
 
+def _index_kb_async(entry_id, business_id, question, answer) -> None:
+    """Best-effort: embed a KB entry for semantic search (no-op without OpenAI key)."""
+    try:
+        from core.semantic_kb import index_entry_async
+
+        index_entry_async(entry_id, business_id, question, answer)
+    except Exception:
+        pass
+
+
+def _remove_kb_index(entry_id) -> None:
+    try:
+        from core.semantic_kb import remove_entry
+
+        remove_entry(entry_id)
+    except Exception:
+        pass
+
+
 def _sanitize_fts5_query(q: str) -> str:
     """
     Sanitize input for FTS5 MATCH to prevent query injection.
@@ -214,14 +233,16 @@ def kb_suggestions_add():
         flash("Question and answer are required.", "err")
         return redirect(url_for("kb.kb_index", business_id=business_id))
     with get_conn() as con:
-        con.execute(
+        cur = con.execute(
             """
           INSERT INTO kb_entries(business_id,question,answer,tags,active,updated_at)
           VALUES(?,?,?,?,1,datetime('now','localtime'));
         """,
             (business_id, question, answer, "ai-suggested"),
         )
+        new_id = cur.lastrowid
         con.commit()
+    _index_kb_async(new_id, business_id, question, answer)
     flash("Added to your knowledge base.", "ok")
     return redirect(url_for("kb.kb_index", business_id=business_id))
 
@@ -256,6 +277,10 @@ def kb_edit(entry_id: int):
             """,
                 (business_id, question, answer, tags, active, entry_id),
             )
+        if active:
+            _index_kb_async(entry_id, business_id, question, answer)
+        else:
+            _remove_kb_index(entry_id)
         flash("KB entry updated.", "ok")
         return redirect(url_for("kb.kb_index", business_id=business_id))
     businesses = list_businesses(limit=500)

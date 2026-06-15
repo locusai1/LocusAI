@@ -328,6 +328,16 @@ def _kb_autolearn_tick():
         added = run_autolearn_for_enabled()
         if added:
             app.logger.info(f"KB auto-learn: added {added} entries")
+        # Safety net: embed any KB entries missing a semantic vector (bulk imports,
+        # AI suggestions, seeded data). No-op without an OpenAI key.
+        try:
+            from core.semantic_kb import backfill_pending
+
+            embedded = backfill_pending(limit=500)
+            if embedded:
+                app.logger.info(f"Semantic KB: embedded {embedded} entries")
+        except Exception:
+            app.logger.debug("semantic backfill skipped", exc_info=True)
 
 
 def _data_purge_tick():

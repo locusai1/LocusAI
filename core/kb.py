@@ -1,4 +1,4 @@
-# core/kb.py — KB search (FTS + fallback)
+# core/kb.py — KB search (semantic → FTS → LIKE fallback)
 from typing import Dict, List
 
 from core.db import get_conn
@@ -8,6 +8,18 @@ def search_kb(query: str, business_id: int, limit: int = 5) -> List[Dict]:
     q = (query or "").strip()
     if not q or not business_id:
         return []
+
+    # Prefer semantic (meaning-based) search; transparently falls back to FTS/LIKE
+    # when embeddings or the OpenAI key are unavailable.
+    try:
+        from core.semantic_kb import semantic_search
+
+        sem = semantic_search(q, business_id, limit=limit)
+        if sem:
+            return sem
+    except Exception:
+        pass
+
     with get_conn() as con:
         # Prefer FTS if available
         try:
