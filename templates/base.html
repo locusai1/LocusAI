@@ -314,6 +314,15 @@
   <script src="{{ url_for('static', filename='app.js') }}"></script>
   {% if session.user %}
   <script>
+  // Capture the Android/Chrome install prompt (fires early, before the banner
+  // script runs) so the dashboard "Install app" card can trigger it on demand.
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    window.__locusInstallPrompt = e;
+    window.dispatchEvent(new Event('locus-installable'));
+  });
+  </script>
+  <script>
   // PWA: register the service worker and wire up Web Push opt-in.
   (function(){
     if (!('serviceWorker' in navigator)) return;
