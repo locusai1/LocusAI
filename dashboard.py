@@ -24,7 +24,7 @@ from flask import (
     url_for,
 )
 
-from core.settings import FLASK_SECRET_KEY, SENTRY_DSN
+from core.settings import APP_BASE_URL, FLASK_SECRET_KEY, SENTRY_DSN
 
 # Error monitoring — activates only when SENTRY_DSN is set; no-op otherwise.
 if SENTRY_DSN:
@@ -61,11 +61,23 @@ from core.validators import safe_int, slugify, validate_redirect_url
 # ============================================================================
 
 app = Flask(__name__)
+
+# Trust Railway's (and any) reverse proxy for scheme/host so url_for(_external=True)
+# and request.url produce correct https:// absolute URLs — used by canonical tags,
+# social-share images, and links in verification / reset / reminder emails.
+from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
 register_csrf(app)
 app.secret_key = FLASK_SECRET_KEY
 
 APP_ENV = os.getenv("APP_ENV", "dev").lower()
 IS_PROD = APP_ENV in ("prod", "production")
+# Prefer https when generating external URLs in production (belt-and-braces with
+# ProxyFix, and correct even outside a request context, e.g. background emails).
+if IS_PROD:
+    app.config["PREFERRED_URL_SCHEME"] = "https"
 
 # ============================================================================
 # Session & Cookie Configuration
@@ -594,8 +606,11 @@ def _set_headers(resp: Response) -> Response:
         csp = [
             "default-src 'self'",
             "img-src 'self' data: https:",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com data:",
+            # Fonts are self-hosted now (see static/fonts.css) — no Google Fonts.
+            "style-src 'self' 'unsafe-inline'",
+            "font-src 'self' data:",
+            # Tailwind + Chart.js are still CDN-loaded on the dashboard; drop these
+            # once Tailwind is compiled locally, then 'unsafe-inline' can go too.
             "script-src 'self' https://cdn.tailwindcss.com https://cdn.jsdelivr.net 'unsafe-inline'",
             "connect-src 'self'",
             "frame-ancestors 'none'",
@@ -760,6 +775,7 @@ def _inject_branding():
         "is_prod": IS_PROD,
         "current_year": datetime.now().year,
         "pending_escalations": pending_escalations,
+        "app_base_url": APP_BASE_URL.rstrip("/"),
     }
 
 
@@ -1906,6 +1922,97 @@ def privacy():
 def terms():
     """Terms of Service — public page, no auth required."""
     return render_template("terms.html")
+
+
+@app.route("/account")
+def account():
+    """Account & data page — GDPR self-serve export + erasure."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    return render_template("account.html", user=session["user"])
+
+
+@app.route("/account/export")
+def account_export():
+    """Download all of the logged-in user's data as JSON (GDPR portability)."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    from core.account import export_account_json
+
+    data = export_account_json(session["user"]["id"])
+    resp = Response(data, mimetype="application/json")
+    resp.headers["Content-Disposition"] = 'attachment; filename="locusai-my-data.json"'
+    return resp
+
+
+@app.route("/account/delete", methods=["POST"])
+def account_delete():
+    """Permanently delete the logged-in user's account + data (GDPR erasure)."""
+    if session.get("user") is None:
+        return redirect(url_for("auth.login"))
+    from core.account import delete_account
+
+    if (request.form.get("confirm") or "").strip().upper() != "DELETE":
+        flash('Please type DELETE to confirm.', "err")
+        return redirect(url_for("account"))
+
+    ok, msg = delete_account(session["user"]["id"], request.form.get("password") or "")
+    if not ok:
+        flash(msg, "err")
+        return redirect(url_for("account"))
+    session.clear()
+    flash(msg, "ok")
+    return redirect(url_for("home"))
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    """Let crawlers index the marketing pages; keep app/API surfaces out."""
+    base = APP_BASE_URL.rstrip("/")
+    lines = [
+        "User-agent: *",
+        "Allow: /$",
+        "Allow: /privacy",
+        "Allow: /terms",
+        "Allow: /try",
+        "Disallow: /dashboard",
+        "Disallow: /login",
+        "Disallow: /signup",
+        "Disallow: /onboard",
+        "Disallow: /billing",
+        "Disallow: /api/",
+        "Disallow: /admin",
+        "Disallow: /users",
+        "",
+        f"Sitemap: {base}/sitemap.xml",
+        "",
+    ]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    """Sitemap of the public, indexable pages for search engines."""
+    base = APP_BASE_URL.rstrip("/")
+    today = datetime.now().strftime("%Y-%m-%d")
+    # (path, changefreq, priority)
+    pages = [
+        ("/", "weekly", "1.0"),
+        ("/try", "monthly", "0.8"),
+        ("/privacy", "yearly", "0.3"),
+        ("/terms", "yearly", "0.3"),
+    ]
+    entries = "".join(
+        f"<url><loc>{base}{p}</loc><lastmod>{today}</lastmod>"
+        f"<changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
+        for p, cf, pr in pages
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</urlset>"
+    )
+    return Response(xml, mimetype="application/xml")
 
 
 # ============================================================================

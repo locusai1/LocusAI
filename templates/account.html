@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Account & data — LocusAI{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Account &amp; data</h1>
+    <p class="page-subtitle">Manage your personal data and privacy rights</p>
+  </div>
+</div>
+
+<div class="card max-w-xl">
+  <div class="card-body">
+    <h2 class="text-lg font-semibold mb-1">Signed in as</h2>
+    <p class="text-sm text-gray-500 mb-4">{{ user.get('name') or '' }} · {{ user.get('email') }}</p>
+  </div>
+</div>
+
+<div class="card max-w-xl mt-6">
+  <div class="card-body">
+    <h2 class="text-lg font-semibold mb-1">Export your data</h2>
+    <p class="text-sm text-gray-500 mb-4">
+      Download a copy of your account and all data for the businesses you belong to
+      (customers, appointments, conversations, knowledge base and more) as a JSON file.
+      This supports your right to data portability under UK GDPR.
+    </p>
+    <a href="{{ url_for('account_export') }}" class="btn btn-secondary">Download my data (JSON)</a>
+  </div>
+</div>
+
+<div class="card max-w-xl mt-6" style="border-color:#fecaca;">
+  <div class="card-body">
+    <h2 class="text-lg font-semibold mb-1" style="color:#b91c1c;">Delete your account</h2>
+    <p class="text-sm text-gray-500 mb-4">
+      This permanently deletes your account and — for any business where you are the
+      only member — all of that business's data. This exercises your right to erasure
+      and <strong>cannot be undone</strong>. Businesses you share with others are kept;
+      only your access is removed.
+    </p>
+    <form method="post" action="{{ url_for('account_delete') }}" class="space-y-4"
+          onsubmit="return confirm('Permanently delete your account and data? This cannot be undone.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label class="form-label">Confirm your password</label>
+        <input type="password" name="password" class="input" autocomplete="current-password" required>
+      </div>
+      <div>
+        <label class="form-label">Type <strong>DELETE</strong> to confirm</label>
+        <input type="text" name="confirm" class="input" placeholder="DELETE" required>
+      </div>
+      <button type="submit" class="btn" style="background:#dc2626;color:#fff;">Permanently delete my account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
+from core import pending_store
 from core.db import create_appointment, get_conn
 from core.integrations import get_business_provider, get_business_provider_key
 
@@ -36,10 +37,13 @@ def _emit(event_type: str, business_id: int, data: dict) -> None:
 
 BOOKING_TAG = re.compile(r"<BOOKING>\s*(\{.*?\})\s*</BOOKING>", re.DOTALL)
 
-# In-memory store for pending bookings (use Redis in production for multi-instance)
-# Structure: {token: {booking_data, business_id, session_id, created_at, slot}}
-_PENDING_BOOKINGS: Dict[str, Dict[str, Any]] = {}
+# Pending bookings and changes live in a durable, cross-worker store (SQLite) —
+# see core/pending_store.py. They are NOT kept in a per-process dict, so a token
+# created while serving one request is visible to the gunicorn worker that later
+# serves the confirm request.
 PENDING_BOOKING_TTL = 300  # 5 minutes
+_BOOKING_KIND = "booking"
+_CHANGE_KIND = "change"
 
 
 def _parse_when(s: str) -> Optional[datetime]:
@@ -308,16 +312,8 @@ def _generate_booking_token(business_id: int, session_id: int) -> str:
 
 
 def _cleanup_expired_bookings() -> None:
-    """Remove expired pending bookings to prevent memory bloat."""
-    now = time.time()
-    expired = [
-        token
-        for token, data in _PENDING_BOOKINGS.items()
-        if now - data.get("created_at", 0) > PENDING_BOOKING_TTL
-    ]
-    for token in expired:
-        del _PENDING_BOOKINGS[token]
-        logger.debug(f"Expired pending booking token: {token[:8]}...")
+    """Remove expired pending bookings/changes from the shared store."""
+    pending_store.cleanup()
 
 
 def extract_pending_booking(
@@ -423,7 +419,7 @@ def extract_pending_booking(
         "expires_at": now + PENDING_BOOKING_TTL,
     }
 
-    _PENDING_BOOKINGS[token] = pending_data
+    pending_store.put(token, _BOOKING_KIND, pending_data, PENDING_BOOKING_TTL, business_id=bid)
     logger.info(f"Created pending booking {token[:8]}... for session {session_id}")
 
     # Clean the AI response text
@@ -451,20 +447,15 @@ def confirm_pending_booking(token: str) -> Tuple[bool, str, Optional[int]]:
     Returns:
         (success, message, appointment_id)
     """
-    _cleanup_expired_bookings()
-
-    if token not in _PENDING_BOOKINGS:
+    # pop() is atomic (single-use): a replayed confirm can only succeed once,
+    # and it returns None for a missing/expired token.
+    pending = pending_store.pop(token, _BOOKING_KIND)
+    if pending is None:
         return (
             False,
             "Booking has expired or was already processed. Please start a new booking.",
             None,
         )
-
-    pending = _PENDING_BOOKINGS.pop(token)
-
-    # Verify it hasn't expired
-    if time.time() > pending.get("expires_at", 0):
-        return False, "Booking has expired. Please start a new booking.", None
 
     bid = pending["business_id"]
     session_id = pending.get("session_id")
@@ -583,8 +574,8 @@ def cancel_pending_booking(token: str) -> Tuple[bool, str]:
     Returns:
         (success, message)
     """
-    if token in _PENDING_BOOKINGS:
-        pending = _PENDING_BOOKINGS.pop(token)
+    pending = pending_store.pop(token, _BOOKING_KIND)
+    if pending is not None:
         logger.info(
             f"Cancelled pending booking {token[:8]}... for session {pending.get('session_id')}"
         )
@@ -595,8 +586,7 @@ def cancel_pending_booking(token: str) -> Tuple[bool, str]:
 
 def get_pending_booking(token: str) -> Optional[Dict[str, Any]]:
     """Get details of a pending booking by token."""
-    _cleanup_expired_bookings()
-    return _PENDING_BOOKINGS.get(token)
+    return pending_store.get(token, _BOOKING_KIND)
 
 
 # ============================================================================
@@ -606,9 +596,9 @@ def get_pending_booking(token: str) -> Optional[Dict[str, Any]]:
 CANCEL_TAG = re.compile(r"<CANCEL>\s*(\{.*?\})\s*</CANCEL>", re.DOTALL)
 RESCHEDULE_TAG = re.compile(r"<RESCHEDULE>\s*(\{.*?\})\s*</RESCHEDULE>", re.DOTALL)
 
-# token -> {action, appointment_id, business_id, session_id, service, old_slot,
-#           new_slot, customer_name, created_at, expires_at}
-_PENDING_CHANGES: Dict[str, Dict[str, Any]] = {}
+# Staged changes (action, appointment_id, business_id, session_id, service,
+# old_slot, new_slot, customer_name, ...) live in the shared pending_store under
+# the "change" kind — see the note above _BOOKING_KIND.
 
 
 def find_upcoming_appointments(
@@ -826,20 +816,26 @@ def extract_pending_change(
 
     token = _generate_booking_token(bid, session_id or 0)
     now = time.time()
-    _PENDING_CHANGES[token] = {
-        "token": token,
-        "action": action,
-        "appointment_id": appt["id"],
-        "business_id": bid,
-        "session_id": session_id,
-        "service": appt.get("service"),
-        "customer_name": appt.get("customer_name"),
-        "phone": appt.get("phone"),
-        "old_slot": appt.get("start_at"),
-        "new_slot": new_slot,
-        "created_at": now,
-        "expires_at": now + PENDING_BOOKING_TTL,
-    }
+    pending_store.put(
+        token,
+        _CHANGE_KIND,
+        {
+            "token": token,
+            "action": action,
+            "appointment_id": appt["id"],
+            "business_id": bid,
+            "session_id": session_id,
+            "service": appt.get("service"),
+            "customer_name": appt.get("customer_name"),
+            "phone": appt.get("phone"),
+            "old_slot": appt.get("start_at"),
+            "new_slot": new_slot,
+            "created_at": now,
+            "expires_at": now + PENDING_BOOKING_TTL,
+        },
+        PENDING_BOOKING_TTL,
+        business_id=bid,
+    )
     logger.info(f"Created pending {action} {token[:8]}... for appt {appt['id']}")
 
     return clean_text, {
@@ -854,33 +850,25 @@ def extract_pending_change(
 
 
 def _cleanup_expired_changes() -> None:
-    now = time.time()
-    for tok in [
-        t for t, d in _PENDING_CHANGES.items() if now - d.get("created_at", 0) > PENDING_BOOKING_TTL
-    ]:
-        del _PENDING_CHANGES[tok]
+    pending_store.cleanup()
 
 
 def get_pending_change(token: str) -> Optional[Dict[str, Any]]:
-    _cleanup_expired_changes()
-    return _PENDING_CHANGES.get(token)
+    return pending_store.get(token, _CHANGE_KIND)
 
 
 def cancel_pending_change(token: str) -> Tuple[bool, str]:
     """Discard a staged change before it's applied."""
-    if token in _PENDING_CHANGES:
-        _PENDING_CHANGES.pop(token)
+    if pending_store.pop(token, _CHANGE_KIND) is not None:
         return True, "No problem — I've left your appointment as it is."
     return False, "No pending change found."
 
 
 def confirm_pending_change(token: str) -> Tuple[bool, str]:
     """Apply a staged cancel/reschedule to the appointment + reminders + provider."""
-    _cleanup_expired_changes()
-    if token not in _PENDING_CHANGES:
-        return False, "That request has expired. Please tell me again what you'd like to change."
-    change = _PENDING_CHANGES.pop(token)
-    if time.time() > change.get("expires_at", 0):
+    # pop() is atomic + single-use, and returns None for a missing/expired token.
+    change = pending_store.pop(token, _CHANGE_KIND)
+    if change is None:
         return False, "That request has expired. Please tell me again what you'd like to change."
 
     appt_id = change["appointment_id"]

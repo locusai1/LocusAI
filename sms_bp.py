@@ -31,11 +31,16 @@ def _get_business_by_phone(phone_number: str):
         if row:
             return dict(row)
 
-        row = con.execute(
-            "SELECT id, name, tone FROM businesses WHERE archived = 0 ORDER BY id LIMIT 1"
-        ).fetchone()
-
-        return dict(row) if row else None
+        # Only fall back to "the business" when there is exactly one active — with
+        # multiple tenants, guessing would route an SMS on an unknown number to the
+        # wrong business (and reply to the sender as that business). Return None so
+        # the webhook records "no_business" instead.
+        rows = con.execute(
+            "SELECT id, name, tone FROM businesses WHERE archived = 0 ORDER BY id LIMIT 2"
+        ).fetchall()
+        if len(rows) == 1:
+            return dict(rows[0])
+        return None
 
 
 def _get_or_create_session(business_id: int, phone_number: str):

@@ -722,6 +722,21 @@ def init_db() -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );""")
 
+        # Short-lived pending actions (booking-confirm + reschedule/cancel tokens,
+        # and per-call voice staging). Durable + shared across gunicorn workers so
+        # a token created on one worker is visible to the worker that confirms it.
+        cur.execute("""CREATE TABLE IF NOT EXISTS pending_actions (
+            token TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            business_id INTEGER,
+            data_json TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        );""")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_pending_actions_expires ON pending_actions(expires_at);"
+        )
+
         # Compliance / integration columns on businesses
         _safe_alter_add_column(
             cur,

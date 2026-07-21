@@ -11,9 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="LocusAI">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.svg') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='locus.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard-components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.css') }}">
@@ -144,7 +142,10 @@
         </button>
         {% endif %}
         <div class="flex items-center justify-between">
-          <a href="{{ url_for('auth.logout') }}">Logout</a>
+          <div class="flex items-center gap-3">
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
+            {% if session.user %}<a href="{{ url_for('account') }}" style="font-size:12px;color:#a3a3a3;">Account &amp; data</a>{% endif %}
+          </div>
           <button id="theme-toggle" class="btn btn-ghost btn-sm">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
           </button>

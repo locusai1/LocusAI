@@ -178,7 +178,9 @@ def send_digest(business_id: int, *, force: bool = False) -> bool:
     try:
         from core.mailer import send_email
 
-        return bool(send_email(email, subject, body))
+        # Weekly digest is bulk/automated — give a clear unsubscribe + suppress
+        # auto-replies. (Owners can also turn it off in the dashboard.)
+        return bool(send_email(email, subject, body, auto_generated=True))
     except Exception as e:
         logger.warning(f"Digest send failed for business {business_id}: {e}")
         return False

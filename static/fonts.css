@@ -1,0 +1,17 @@
+/* Self-hosted Latin subsets of Inter + Space Grotesk (variable woff2).
+   No Google Fonts — keeps visitor IPs off Google's servers (UK GDPR) and lets
+   the CSP drop fonts.googleapis.com / fonts.gstatic.com. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/static/fonts/inter-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/static/fonts/space-grotesk-latin.woff2') format('woff2');
+}

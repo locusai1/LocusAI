@@ -347,7 +347,7 @@ class TestVoiceSettings:
 class TestVoiceBookingConfirmation:
     """Tests for voice booking confirmation flow."""
 
-    def test_store_pending_booking(self):
+    def test_store_pending_booking(self, test_db):
         """Stores a pending booking for voice confirmation."""
         from core.voice import (
             clear_voice_pending_booking,
@@ -378,7 +378,7 @@ class TestVoiceBookingConfirmation:
         # Should be gone now
         assert get_voice_pending_booking(call_id) is None
 
-    def test_extract_voice_booking_from_response(self):
+    def test_extract_voice_booking_from_response(self, test_db):
         """Extracts booking details from AI response."""
         from core.voice import clear_voice_pending_booking, extract_voice_booking
 
@@ -990,7 +990,7 @@ class TestExpandedIntents:
             appt = get_appointment_by_id(appt_id)
             assert appt["start_at"] == new_date
 
-    def test_pending_change_store_and_retrieve(self):
+    def test_pending_change_store_and_retrieve(self, test_db):
         """Should store and retrieve pending changes."""
         from core.voice import (
             clear_voice_pending_change,

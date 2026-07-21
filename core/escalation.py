@@ -248,7 +248,7 @@ def notify_escalation(
     body = "\n".join(body_parts)
 
     try:
-        send_email(email, subject, body)
+        send_email(email, subject, body, auto_generated=True)
 
         # Mark as notified
         with get_conn() as con:

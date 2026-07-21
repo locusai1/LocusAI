@@ -11,6 +11,7 @@ from datetime import datetime
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
+from core import pending_store
 from core.circuit_breaker import CircuitBreaker
 from core.settings import (
     RETELL_API_KEY,
@@ -552,9 +553,13 @@ def update_voice_settings(business_id: int, **fields) -> bool:
 # Voice Booking Confirmation
 # ============================================================================
 
-# In-memory storage for pending voice bookings (per call)
-_VOICE_PENDING_BOOKINGS: Dict[str, Dict] = {}
-_booking_lock = Lock()
+# Pending voice bookings are staged in the shared, cross-worker pending_store
+# (keyed by Retell call_id) — Retell fires several webhooks per call that can
+# land on different gunicorn workers, so a per-process dict would lose the
+# staged booking between "book" and "confirm". TTL covers a long call.
+_VOICE_BOOKING_KIND = "voice_booking"
+_VOICE_CHANGE_KIND = "voice_change"
+_VOICE_PENDING_TTL = 3600  # 1 hour — comfortably longer than any call
 
 
 def store_voice_pending_booking(call_id: str, booking_data: Dict) -> None:
@@ -564,25 +569,23 @@ def store_voice_pending_booking(call_id: str, booking_data: Dict) -> None:
         call_id: Retell call ID
         booking_data: Booking details (name, phone, service, datetime, etc.)
     """
-    with _booking_lock:
-        _VOICE_PENDING_BOOKINGS[call_id] = {
-            **booking_data,
-            "created_at": time.time(),
-            "call_id": call_id,
-        }
+    pending_store.put(
+        call_id,
+        _VOICE_BOOKING_KIND,
+        {**booking_data, "created_at": time.time(), "call_id": call_id},
+        _VOICE_PENDING_TTL,
+    )
     logger.info(f"Stored pending voice booking for call {call_id}")
 
 
 def get_voice_pending_booking(call_id: str) -> Optional[Dict]:
     """Get pending booking for a call."""
-    with _booking_lock:
-        return _VOICE_PENDING_BOOKINGS.get(call_id)
+    return pending_store.get(call_id, _VOICE_BOOKING_KIND)
 
 
 def clear_voice_pending_booking(call_id: str) -> Optional[Dict]:
     """Clear and return pending booking for a call."""
-    with _booking_lock:
-        return _VOICE_PENDING_BOOKINGS.pop(call_id, None)
+    return pending_store.pop(call_id, _VOICE_BOOKING_KIND)
 
 
 def extract_voice_booking(ai_response: str, call_id: str) -> Tuple[str, Optional[Dict]]:
@@ -1120,9 +1123,8 @@ def reschedule_caller_appointment(
         return False, "I had trouble rescheduling that appointment. Could you try again?", None
 
 
-# In-memory storage for pending appointment changes (cancel/reschedule)
-_VOICE_PENDING_CHANGES: Dict[str, Dict] = {}
-_changes_lock = Lock()
+# Pending appointment changes (cancel/reschedule) are staged in the shared
+# pending_store, keyed by call_id — same cross-worker reason as voice bookings.
 
 
 def store_voice_pending_change(call_id: str, change_type: str, change_data: Dict) -> None:
@@ -1133,26 +1135,28 @@ def store_voice_pending_change(call_id: str, change_type: str, change_data: Dict
         change_type: 'cancel' or 'reschedule'
         change_data: Details of the change
     """
-    with _changes_lock:
-        _VOICE_PENDING_CHANGES[call_id] = {
+    pending_store.put(
+        call_id,
+        _VOICE_CHANGE_KIND,
+        {
             "type": change_type,
             "data": change_data,
             "created_at": time.time(),
             "call_id": call_id,
-        }
+        },
+        _VOICE_PENDING_TTL,
+    )
     logger.info(f"Stored pending {change_type} for call {call_id}")
 
 
 def get_voice_pending_change(call_id: str) -> Optional[Dict]:
     """Get pending appointment change for a call."""
-    with _changes_lock:
-        return _VOICE_PENDING_CHANGES.get(call_id)
+    return pending_store.get(call_id, _VOICE_CHANGE_KIND)
 
 
 def clear_voice_pending_change(call_id: str) -> Optional[Dict]:
     """Clear and return pending change for a call."""
-    with _changes_lock:
-        return _VOICE_PENDING_CHANGES.pop(call_id, None)
+    return pending_store.pop(call_id, _VOICE_CHANGE_KIND)
 
 
 def confirm_voice_change(
@@ -1476,10 +1480,16 @@ def _get_business_by_phone(phone: str) -> Optional[int]:
         if row:
             return row["id"]
 
-        # Fallback to first active business
-        row = con.execute("SELECT id FROM businesses WHERE archived = 0 LIMIT 1").fetchone()
-
-        return row["id"] if row else None
+        # Fallback: only when there is exactly ONE active business is it safe to
+        # assume the call is for them. With multiple tenants we must NOT guess —
+        # attributing a call on an unknown/misconfigured number to an arbitrary
+        # business would misroute it and could leak that business's caller data.
+        rows = con.execute(
+            "SELECT id FROM businesses WHERE archived = 0 LIMIT 2"
+        ).fetchall()
+        if len(rows) == 1:
+            return rows[0]["id"]
+        return None
 
 
 # ============================================================================

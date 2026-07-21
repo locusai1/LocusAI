@@ -116,7 +116,7 @@ def recover_call(call: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 from core.mailer import send_email
 
-                send_email(owner_email, subject, body)
+                send_email(owner_email, subject, body, auto_generated=True)
                 result["channels"].append("email")
             except Exception as e:
                 logger.warning("Owner missed-call email failed: %s", e)

@@ -8,8 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from core import pending_store
 from core.booking import (
-    _PENDING_BOOKINGS,
+    _BOOKING_KIND,
     PENDING_BOOKING_TTL,
     _cleanup_expired_bookings,
     _generate_booking_token,
@@ -18,6 +19,15 @@ from core.booking import (
     extract_pending_booking,
     get_pending_booking,
 )
+
+
+def _store_booking(token, data, ttl=PENDING_BOOKING_TTL):
+    """Helper: stage a pending booking in the shared store (test convenience)."""
+    pending_store.put(token, _BOOKING_KIND, data, ttl, business_id=data.get("business_id"))
+
+
+def _has_booking(token):
+    return pending_store.get(token, _BOOKING_KIND) is not None
 
 # ============================================================================
 # Fixtures
@@ -63,12 +73,8 @@ def booking_response(future_slot):
 Your appointment has been scheduled."""
 
 
-@pytest.fixture(autouse=True)
-def cleanup_bookings():
-    """Clean up pending bookings before and after each test."""
-    _PENDING_BOOKINGS.clear()
-    yield
-    _PENDING_BOOKINGS.clear()
+# Storage-touching tests take the `test_db` fixture (temp DB per test), so the
+# shared pending_store is naturally isolated between tests — no manual cleanup.
 
 
 # ============================================================================
@@ -108,7 +114,7 @@ class TestTokenGeneration:
 class TestExtractPendingBooking:
     """Tests for extracting pending bookings from AI responses."""
 
-    def test_extract_booking_from_response(self, booking_response, sample_business):
+    def test_extract_booking_from_response(self, booking_response, sample_business, test_db):
         """Should extract booking data from AI response."""
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
@@ -128,7 +134,7 @@ class TestExtractPendingBooking:
         assert pending["email"] == "john@example.com"
         assert pending["service"] == "Haircut"
 
-    def test_booking_tag_removed_from_text(self, booking_response, sample_business):
+    def test_booking_tag_removed_from_text(self, booking_response, sample_business, test_db):
         """Booking tag should be removed from returned text."""
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
@@ -144,7 +150,7 @@ class TestExtractPendingBooking:
         assert "<BOOKING>" not in clean_text
         assert "</BOOKING>" not in clean_text
 
-    def test_no_booking_tag_returns_none(self, sample_business):
+    def test_no_booking_tag_returns_none(self, sample_business, test_db):
         """Text without booking tag should return None for pending."""
         clean_text, pending = extract_pending_booking(
             "Just a normal response.", sample_business, session_id=123
@@ -153,8 +159,8 @@ class TestExtractPendingBooking:
         assert pending is None
         assert clean_text == "Just a normal response."
 
-    def test_pending_booking_stored_in_memory(self, booking_response, sample_business):
-        """Pending booking should be stored in memory."""
+    def test_pending_booking_stored_in_shared_store(self, booking_response, sample_business, test_db):
+        """Pending booking should be persisted to the shared cross-worker store."""
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
             mock_prov.key = "local"
@@ -166,9 +172,9 @@ class TestExtractPendingBooking:
                     booking_response, sample_business, session_id=123
                 )
 
-        assert pending["token"] in _PENDING_BOOKINGS
+        assert _has_booking(pending["token"])
 
-    def test_expires_in_included(self, booking_response, sample_business):
+    def test_expires_in_included(self, booking_response, sample_business, test_db):
         """Pending booking should include expiration info."""
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
@@ -184,7 +190,7 @@ class TestExtractPendingBooking:
         assert "expires_in" in pending
         assert pending["expires_in"] == PENDING_BOOKING_TTL
 
-    def test_invalid_json_handled(self, sample_business):
+    def test_invalid_json_handled(self, sample_business, test_db):
         """Invalid JSON in booking tag should be handled gracefully."""
         bad_response = """Here's your booking:
 <BOOKING>{invalid json here}</BOOKING>
@@ -194,7 +200,7 @@ class TestExtractPendingBooking:
         assert pending is None
         assert "provide your details again" in clean_text
 
-    def test_no_slots_available_handled(self, sample_business):
+    def test_no_slots_available_handled(self, sample_business, test_db):
         """No available slots should be handled gracefully."""
         booking_data = {
             "name": "John",
@@ -227,11 +233,11 @@ class TestExtractPendingBooking:
 class TestConfirmPendingBooking:
     """Tests for confirming pending bookings."""
 
-    def test_confirm_valid_booking(self, sample_business):
+    def test_confirm_valid_booking(self, sample_business, test_db):
         """Should successfully confirm a valid pending booking."""
         # Create a pending booking
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
+        _store_booking(token, {
             "token": token,
             "business_id": sample_business["id"],
             "session_id": 123,
@@ -245,7 +251,7 @@ class TestConfirmPendingBooking:
             "notes": None,
             "created_at": time.time(),
             "expires_at": time.time() + PENDING_BOOKING_TTL,
-        }
+        })
 
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
@@ -260,18 +266,17 @@ class TestConfirmPendingBooking:
         assert success is True
         assert appt_id == 1
         assert "confirmed" in message.lower()
-        assert token not in _PENDING_BOOKINGS  # Should be removed
+        assert not _has_booking(token)  # Should be removed
 
-    def test_confirm_expired_booking(self):
+    def test_confirm_expired_booking(self, test_db):
         """Should fail for expired booking."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
+        # Negative TTL stores an already-expired row.
+        _store_booking(token, {
             "token": token,
             "business_id": 1,
             "session_id": 123,
-            "created_at": time.time() - 600,  # 10 minutes ago
-            "expires_at": time.time() - 300,  # Expired 5 minutes ago
-        }
+        }, ttl=-300)
 
         success, message, appt_id = confirm_pending_booking(token)
 
@@ -279,7 +284,7 @@ class TestConfirmPendingBooking:
         assert "expired" in message.lower()
         assert appt_id is None
 
-    def test_confirm_nonexistent_booking(self):
+    def test_confirm_nonexistent_booking(self, test_db):
         """Should fail for nonexistent token."""
         success, message, appt_id = confirm_pending_booking("nonexistent-token")
 
@@ -287,10 +292,10 @@ class TestConfirmPendingBooking:
         assert "expired" in message.lower() or "processed" in message.lower()
         assert appt_id is None
 
-    def test_confirm_removes_from_pending(self, sample_business):
+    def test_confirm_removes_from_pending(self, sample_business, test_db):
         """Confirming should remove booking from pending."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
+        _store_booking(token, {
             "token": token,
             "business_id": 1,
             "session_id": 123,
@@ -299,9 +304,9 @@ class TestConfirmPendingBooking:
             "slot": "2026-01-27 10:00",
             "created_at": time.time(),
             "expires_at": time.time() + PENDING_BOOKING_TTL,
-        }
+        })
 
-        assert token in _PENDING_BOOKINGS
+        assert _has_booking(token)
 
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()
@@ -313,7 +318,7 @@ class TestConfirmPendingBooking:
                 with patch("core.booking.create_appointment", return_value=1):
                     confirm_pending_booking(token)
 
-        assert token not in _PENDING_BOOKINGS
+        assert not _has_booking(token)
 
 
 # ============================================================================
@@ -324,32 +329,32 @@ class TestConfirmPendingBooking:
 class TestCancelPendingBooking:
     """Tests for cancelling pending bookings."""
 
-    def test_cancel_valid_booking(self):
+    def test_cancel_valid_booking(self, test_db):
         """Should successfully cancel a valid pending booking."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
+        _store_booking(token, {
             "token": token,
             "session_id": 123,
             "customer_name": "John",
-        }
+        })
 
         success, message = cancel_pending_booking(token)
 
         assert success is True
         assert "cancelled" in message.lower()
-        assert token not in _PENDING_BOOKINGS
+        assert not _has_booking(token)
 
-    def test_cancel_nonexistent_booking(self):
+    def test_cancel_nonexistent_booking(self, test_db):
         """Should fail gracefully for nonexistent token."""
         success, message = cancel_pending_booking("nonexistent-token")
 
         assert success is False
         assert "no pending booking" in message.lower()
 
-    def test_cancel_already_cancelled(self):
+    def test_cancel_already_cancelled(self, test_db):
         """Cancelling twice should fail gracefully."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {"token": token, "session_id": 123}
+        _store_booking(token, {"token": token, "session_id": 123})
 
         # First cancel
         success1, _ = cancel_pending_booking(token)
@@ -368,7 +373,7 @@ class TestCancelPendingBooking:
 class TestGetPendingBooking:
     """Tests for retrieving pending booking details."""
 
-    def test_get_existing_booking(self):
+    def test_get_existing_booking(self, test_db):
         """Should return booking details for valid token."""
         token = _generate_booking_token(1, 123)
         booking_data = {
@@ -377,14 +382,14 @@ class TestGetPendingBooking:
             "created_at": time.time(),
             "expires_at": time.time() + PENDING_BOOKING_TTL,
         }
-        _PENDING_BOOKINGS[token] = booking_data
+        _store_booking(token, booking_data)
 
         result = get_pending_booking(token)
 
         assert result is not None
         assert result["customer_name"] == "John"
 
-    def test_get_nonexistent_booking(self):
+    def test_get_nonexistent_booking(self, test_db):
         """Should return None for nonexistent token."""
         result = get_pending_booking("nonexistent-token")
         assert result is None
@@ -398,35 +403,28 @@ class TestGetPendingBooking:
 class TestCleanupExpiredBookings:
     """Tests for automatic cleanup of expired bookings."""
 
-    def test_cleanup_removes_expired(self):
+    def test_cleanup_removes_expired(self, test_db):
         """Should remove expired bookings."""
-        # Add an expired booking
+        # Add an expired booking (negative TTL) and a valid one.
         expired_token = _generate_booking_token(1, 1)
-        _PENDING_BOOKINGS[expired_token] = {
-            "created_at": time.time() - 600,  # 10 minutes ago
-        }
+        _store_booking(expired_token, {"created_at": time.time() - 600}, ttl=-300)
 
-        # Add a valid booking
         valid_token = _generate_booking_token(1, 2)
-        _PENDING_BOOKINGS[valid_token] = {
-            "created_at": time.time(),
-        }
+        _store_booking(valid_token, {"created_at": time.time()})
 
         _cleanup_expired_bookings()
 
-        assert expired_token not in _PENDING_BOOKINGS
-        assert valid_token in _PENDING_BOOKINGS
+        assert not _has_booking(expired_token)
+        assert _has_booking(valid_token)
 
-    def test_cleanup_preserves_valid(self):
+    def test_cleanup_preserves_valid(self, test_db):
         """Should preserve non-expired bookings."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
-            "created_at": time.time(),
-        }
+        _store_booking(token, {"created_at": time.time()})
 
         _cleanup_expired_bookings()
 
-        assert token in _PENDING_BOOKINGS
+        assert _has_booking(token)
 
 
 # ============================================================================
@@ -437,7 +435,7 @@ class TestCleanupExpiredBookings:
 class TestBookingConfirmationFlow:
     """Integration tests for the complete booking confirmation flow."""
 
-    def test_full_flow_extract_confirm(self, sample_business):
+    def test_full_flow_extract_confirm(self, sample_business, test_db):
         """Test complete flow from extraction to confirmation."""
         booking_data = {
             "name": "Jane Smith",
@@ -472,7 +470,7 @@ class TestBookingConfirmationFlow:
         assert success is True
         assert appt_id == 5
 
-    def test_full_flow_extract_cancel(self, sample_business):
+    def test_full_flow_extract_cancel(self, sample_business, test_db):
         """Test complete flow from extraction to cancellation."""
         booking_data = {
             "name": "Bob Wilson",
@@ -499,12 +497,12 @@ class TestBookingConfirmationFlow:
                 success, message = cancel_pending_booking(token)
 
         assert success is True
-        assert token not in _PENDING_BOOKINGS
+        assert not _has_booking(token)
 
-    def test_double_confirm_fails(self, sample_business):
+    def test_double_confirm_fails(self, sample_business, test_db):
         """Confirming the same booking twice should fail."""
         token = _generate_booking_token(1, 123)
-        _PENDING_BOOKINGS[token] = {
+        _store_booking(token, {
             "token": token,
             "business_id": 1,
             "session_id": 123,
@@ -513,7 +511,7 @@ class TestBookingConfirmationFlow:
             "slot": "2026-01-27 10:00",
             "created_at": time.time(),
             "expires_at": time.time() + PENDING_BOOKING_TTL,
-        }
+        })
 
         with patch("core.booking.get_business_provider") as mock_provider:
             mock_prov = MagicMock()

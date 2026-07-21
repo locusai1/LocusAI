@@ -80,10 +80,14 @@ def call_setup():
     from_number = data.get("from_number") or data.get("caller_number", "")
     to_number = data.get("to_number") or data.get("called_number", "")
 
-    # Look up the business by the called number
+    # Look up the business by the called number. If we can't identify it (an
+    # unknown/misconfigured number in a multi-tenant setup), return no dynamic
+    # variables — the agent uses its generic greeting rather than us guessing a
+    # business and leaking another tenant's caller recognition.
     business_id = _get_business_by_phone(to_number)
     if not business_id:
-        business_id = 1  # fallback to Style Cuts
+        logger.warning("call-setup: no business matched to_number=%s", to_number)
+        return jsonify({"dynamic_variables": {}})
 
     # Build dynamic variables
     dynamic_vars = {}
@@ -169,13 +173,31 @@ def voice_webhook():
 
 
 def _fn_context(data: dict):
-    """Pull (business_id, caller_phone, args) from a Retell custom-function call."""
+    """Pull (business_id, caller_phone, args) from a Retell custom-function call.
+
+    business_id is None when the called number can't be resolved to a business —
+    callers MUST refuse rather than act on an arbitrary tenant's data (see
+    _unresolved_business_response)."""
     call = data.get("call", {}) or {}
     from_number = call.get("from_number") or ""
     to_number = call.get("to_number") or ""
-    business_id = _get_business_by_phone(to_number) or 1
+    business_id = _get_business_by_phone(to_number)
     args = data.get("args", {}) or data.get("arguments", {}) or {}
     return business_id, from_number, args
+
+
+def _unresolved_business_response():
+    """Spoken refusal when we can't tell which business a call is for. Better to
+    take a message than to read back or modify the wrong tenant's appointments."""
+    return jsonify(
+        {
+            "success": False,
+            "message": (
+                "I'm sorry, I'm having trouble accessing your details right now. "
+                "Let me take a message and have someone call you straight back."
+            ),
+        }
+    )
 
 
 def _speak_dt(s: str) -> str:
@@ -196,6 +218,8 @@ def fn_find_appointments():
         return Response("Unauthorized", status=403)
     data = request.get_json(force=True, silent=True) or {}
     business_id, from_number, args = _fn_context(data)
+    if business_id is None:
+        return _unresolved_business_response()
     phone = (args.get("phone") or from_number or "").strip() or None
 
     from core.booking import voice_find_appointments
@@ -227,6 +251,8 @@ def fn_cancel_appointment():
         return Response("Unauthorized", status=403)
     data = request.get_json(force=True, silent=True) or {}
     business_id, from_number, args = _fn_context(data)
+    if business_id is None:
+        return _unresolved_business_response()
     phone = (args.get("phone") or from_number or "").strip() or None
 
     from core.booking import voice_cancel_appointment
@@ -248,6 +274,8 @@ def fn_reschedule_appointment():
         return Response("Unauthorized", status=403)
     data = request.get_json(force=True, silent=True) or {}
     business_id, from_number, args = _fn_context(data)
+    if business_id is None:
+        return _unresolved_business_response()
     phone = (args.get("phone") or from_number or "").strip() or None
 
     from core.booking import voice_reschedule_appointment
@@ -278,6 +306,8 @@ def fn_transfer():
     call = data.get("call", {}) or {}
     call_id = call.get("call_id")
     business_id, from_number, args = _fn_context(data)
+    if business_id is None:
+        return _unresolved_business_response()
     reason = (args.get("reason") or "Caller requested a human").strip()
 
     settings = get_voice_settings(business_id) or {}

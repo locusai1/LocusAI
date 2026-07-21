@@ -347,16 +347,10 @@ Your appointment has been scheduled. Is there anything else I can help you with?
 
 @pytest.fixture(autouse=True)
 def cleanup_pending_bookings():
-    """Clean up pending bookings after each test."""
+    """Pending bookings/changes now live in the SQLite-backed pending_store.
+    Tests that touch it take the `test_db` fixture (a fresh temp DB each), so
+    isolation is automatic and no cross-test cleanup is needed here."""
     yield
-
-    # Clear pending bookings
-    try:
-        from core.booking import _PENDING_BOOKINGS
-
-        _PENDING_BOOKINGS.clear()
-    except ImportError:
-        pass
 
 
 @pytest.fixture(autouse=True)

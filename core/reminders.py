@@ -430,7 +430,12 @@ def _send_email_reminder(reminder: Dict[str, Any]) -> Tuple[bool, str]:
     try:
         from core.mailer import send_email
 
-        send_email(to=customer_email, subject=content["subject"], body=content["body"])
+        send_email(
+            to_email=customer_email,
+            subject=content["subject"],
+            body=content["body"],
+            auto_generated=True,
+        )
         logger.info(f"Sent email reminder to {customer_email}")
         return True, ""
     except ImportError:

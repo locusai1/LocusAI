@@ -579,6 +579,7 @@ def appointments_new():
                         subject=f"Appointment confirmed — {svc_name}",
                         body=f"Hi {name},\n\nYour appointment for {svc_name} is booked at {format_datetime(start_dt)}.\n\nThanks,\n{business_name}",
                         attachments=[("appointment.ics", "text/calendar", ics)],
+                        auto_generated=True,
                     )
         except Exception as e:
             logger.error(f"Failed to generate ICS or send email: {e}")

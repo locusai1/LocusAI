@@ -75,6 +75,8 @@ Direct routes on app (dashboard.py):
 Core Modules (26) — all in /core/:
   ai.py                # process_message(), process_message_with_metadata(), _kb_snippets() RAG
   booking.py           # extract_pending_booking(), confirm_pending_booking() — token flow
+  pending_store.py     # SQLite-backed, cross-worker store for booking/change/voice tokens (replaces per-process dicts — fixes multi-worker booking-confirm failures)
+  account.py           # GDPR: export_account_data() (portability) + delete_account() (erasure)
   sentiment.py         # analyze_sentiment(text, history) → SentimentResult with triggers_escalation
   escalation.py        # create_escalation(), handle_escalation()
   db.py                # get_conn(), transaction(), init_db() — all 19 tables defined here
@@ -147,7 +149,7 @@ Static:
   static/widget.js          # ~1009 lines — embeddable chat widget (served by Flask currently)
   static/logo.svg           # LocusAI logo
 
-tests/                      # 563 tests across 18 files
+tests/                      # 834 tests across 49 files
 ```
 
 ---
@@ -257,6 +259,12 @@ integrations  (id, business_id, provider_key, status[active|inactive|error],
                access_token, refresh_token, token_expires_at, account_json,
                created_at, updated_at)
                UNIQUE(business_id, provider_key)
+
+-- Short-lived pending tokens (durable + shared across gunicorn workers)
+pending_actions (token PK, kind[booking|change|voice_booking|voice_change],
+               business_id, data_json, created_at REAL, expires_at REAL)
+               -- Replaces the old per-process dicts in booking.py/voice.py.
+               -- pop() is atomic single-use (see core/pending_store.py).
 ```
 
 ---
@@ -374,18 +382,21 @@ Retell AI → voice_ws.py WebSocket → core/ai.py → OpenAI → Response
 | Agent ID | `agent_7fe6433627a68c931f05b7ae84` |
 | Agent Name | LocusAI Receptionist |
 | LLM ID | `llm_b41019c52636d5321f084e5bdbbb` |
-| LLM model | `gpt-4.1-mini` (+ `model_high_priority`) — tuned Jun 2026 from `gpt-4o-mini` |
+| LLM model | `gpt-4.1` (full) + `model_high_priority` — evolved `gpt-4o-mini` → `gpt-4.1-mini` → **`gpt-4.1`** (Jun 2026; Retell's #1 receptionist pick — fast + reliable tool use, no reasoning latency) |
 | Voice | `11labs-Dorothy` (British female) |
-| Voice model | `eleven_v3` (`voice_temperature` 1.1) |
+| Voice model | `eleven_v3` (`voice_temperature` 1.2) |
 | Language | en-GB |
 | Response Engine | Retell LLM (native) |
 | STT mode | `accurate` (was `fast`) |
 | Dynamic pacing | `enable_dynamic_voice_speed` + `enable_dynamic_responsiveness` ON |
 | Responsiveness | 1.0 (max) |
 | Interruption Sensitivity | 0.8 |
-| Backchannels | Enabled (0.7 frequency) |
+| Backchannels | Enabled + `backchannel_words` (mm-hmm/right/of course/I see/okay) |
+| Denoising | `noise-and-background-speech-cancellation` |
+| Ambient sound | `call-center` @ 0.3 (subjective — easy to drop) |
+| Extras | `boosted_keywords` (booking + salon terms), `fallback_voice_ids:[openai-Amy]` (outage safety) |
 | Webhook URL | `https://locusai.co.uk/api/voice/webhook` (was a stale trycloudflare tunnel) |
-| **Live published version** | **v3** (phone number follows latest published — no version pin) |
+| **Live published version** | **v6** (agent + LLM both v6; phone number follows latest published — no version pin). Rollback: republish v5 (clean gpt-4.1) or v4 (gpt-4.1-mini). |
 
 **Current LLM Prompt** (in `core/voice.py` — dynamic per business):
 ```
@@ -405,29 +416,34 @@ Never skip the recording notice. It must always be the first thing said.
 
 **Old Agent** (deprecated): `agent_19e267112e9474a8f53d3368a4` (used custom WebSocket LLM)
 
-### Voice Latency & Naturalness Tuning (verified vs Retell API, Jun 2026)
+### Voice Latency & Naturalness Tuning (knob reference — verified vs Retell API, Jun 2026)
 
-Confirmed field names + recommended values for the two open voice issues (latency too slow; Dorothy sounds robotic). Pulled from current Retell API docs — see `docs.retellai.com/api-references/update-agent`, `.../update-retell-llm`, `.../build/transcription-mode`.
+Reference for every tuning knob (field names + valid values). **The recommended settings here are already applied on live v6** — this section stays as the map for future changes. Pulled from current Retell API docs — see `docs.retellai.com/api-references/update-agent`, `.../update-retell-llm`, `.../build/transcription-mode`.
 
 **On the LLM (`update-retell-llm` → `llm_b41019c52636d5321f084e5bdbbb`):**
-- `model` — accepts `gpt-4.1` | `gpt-4.1-mini` | `gpt-4.1-nano` | `gpt-5`…`gpt-5.5` | `claude-4.5-sonnet` | `claude-4.6-sonnet` | `claude-4.5-haiku` | `gemini-3.0-flash` | etc. **Retell's 2026 production recommendation is `gpt-4.1`** (low latency + reliable tool use; GPT-5 variants are *slower* due to reasoning). Verify what `llm_b41019…` is currently on.
-- `model_high_priority` (bool, default false) — set `true` for "dedicated resource, lower & more consistent latency".
+- `model` — accepts `gpt-4.1` | `gpt-4.1-mini` | `gpt-4.1-nano` | `gpt-5`…`gpt-5.5` | `claude-4.5-sonnet` | `claude-4.6-sonnet` | `claude-4.5-haiku` | `gemini-3.0-flash` | etc. **Retell's 2026 production recommendation is `gpt-4.1`** (low latency + reliable tool use; GPT-5 variants are *slower* due to reasoning). **Live = `gpt-4.1`.**
+- `model_high_priority` (bool, default false) — `true` for "dedicated resource, lower & more consistent latency". **Live = `true`.**
 
 **On the agent (`update-agent` → `agent_7fe6433627a68c931f05b7ae84`):**
-- `voice_model` (enum) — engine selector, separate from `voice_id`. Expressiveness↑: `eleven_v3` (newest, fixes "robotic", slightly higher latency). Latency↑: `eleven_flash_v2_5`. Others: `eleven_turbo_v2_5`, `sonic-3`/`sonic-3.5` (Cartesia, emotion control), `speech-02-turbo` (MiniMax). **Genuine tradeoff — A/B `eleven_v3` vs `eleven_flash_v2_5` on a recording.**
-- `voice_temperature` (0–2, default 1) — higher = more variant/expressive (counteracts robotic flatness); ~1.1 to start.
+- `voice_model` (enum) — engine selector, separate from `voice_id`. Expressiveness↑: `eleven_v3` (newest, fixes "robotic", slightly higher latency). Latency↑: `eleven_flash_v2_5`. Others: `eleven_turbo_v2_5`, `sonic-3`/`sonic-3.5` (Cartesia, emotion control), `speech-02-turbo` (MiniMax). **Live = `eleven_v3`.** Open A/B if latency bites: `eleven_v3` vs `eleven_flash_v2_5` on a recording.
+- `voice_temperature` (0–2, default 1) — higher = more variant/expressive (counteracts robotic flatness). **Live = 1.2.**
 - `voice_speed` (0.5–2, default 1).
-- `enable_dynamic_voice_speed` (bool, default false) — agent paces to caller's speech rate. **Turn on.**
-- `enable_dynamic_responsiveness` (bool, default false) — agent adapts response speed to caller turn-taking. **Turn on.**
-- `responsiveness` (0–1, default 1) — already maxed.
-- `interruption_sensitivity` (0–1, default 1) — currently 0.8.
-- `enable_backchannel` (bool) + `backchannel_frequency` (0–1, default 0.8) + `backchannel_words` (array).
-- `stt_mode` (enum) — `fast` (lowest latency, use this) | `accurate` (~+200ms) | `custom` (needs `custom_stt_config`: `provider` azure/deepgram/soniox, `endpointing_ms`).
+- `enable_dynamic_voice_speed` (bool, default false) — agent paces to caller's speech rate. **Live = on.**
+- `enable_dynamic_responsiveness` (bool, default false) — agent adapts response speed to caller turn-taking. **Live = on.**
+- `responsiveness` (0–1, default 1) — **live = 1.0 (maxed).**
+- `interruption_sensitivity` (0–1, default 1) — **live = 0.8.**
+- `enable_backchannel` (bool) + `backchannel_frequency` (0–1, default 0.8) + `backchannel_words` (array). **Live: on, custom words (mm-hmm/right/of course/I see/okay).**
+- `denoising_mode` — **live = `noise-and-background-speech-cancellation`.**
+- `ambient_sound` (enum) + `ambient_sound_volume` — **live = `call-center` @ 0.3** (subjective; drop if it distracts).
+- `boosted_keywords` (array) — booking + salon terms, improves STT on domain words. **Live: set.**
+- `fallback_voice_ids` (array) — **live = `[openai-Amy]`** (used if primary TTS provider has an outage).
+- `stt_mode` (enum) — `fast` (lowest latency) | `accurate` (~+200ms, fewer mis-hears) | `custom` (needs `custom_stt_config`: `provider` azure/deepgram/soniox, `endpointing_ms`). **Live = `accurate`** (chose accuracy over the ~200ms; revisit if latency is the bigger complaint).
+- ⚠️ `normalize_for_speech` — attempted but **did NOT persist** (reads back `None` live). Skip / re-test before relying on it.
 
 ⚠️ **`update-agent` edits the agent's *draft* version** — you must **publish** the agent (dashboard or API) for changes to hit live calls.
 ⚠️ **`voice_id` list lives in the Retell dashboard** (API only says "find in Dashboard"). `voice_model` picks the engine; to use a v3 Dorothy you copy the matching `voice_id` from the dashboard. Current `11labs-Dorothy` is the older naming.
 
-**Recommended rollout order:** (1) LLM `gpt-4.1` + `model_high_priority:true`; (2) agent `enable_dynamic_voice_speed:true`, `enable_dynamic_responsiveness:true`, `stt_mode:"fast"`; test call; (3) A/B `voice_model` `eleven_v3` (+`voice_temperature:1.1`) vs `eleven_flash_v2_5`. Publish after each agent patch.
+**Remaining open levers (subjective — need Paulo's ear on a test call):** keep/kill the `call-center` ambient sound; voice A/B (11labs-Amy / Maren / cartesia-Willa vs Dorothy).
 
 #### ⚠️ Versioning workflow (CRITICAL — learned the hard way, Jun 2026)
 
@@ -439,7 +455,7 @@ AG=agent_7fe6433627a68c931f05b7ae84
 # 1. New draft from the current live version (also creates a matching Retell-LLM draft):
 NEWV=$(curl -s -X POST "https://api.retellai.com/create-agent-version/$AG" \
   -H "Authorization: Bearer $RK" -H "Content-Type: application/json" \
-  -d '{"base_version": 3}' | python3 -c "import sys,json;print(json.load(sys.stdin)['version'])")
+  -d '{"base_version": 6}' | python3 -c "import sys,json;print(json.load(sys.stdin)['version'])")   # base_version = current live (6)
 # 2. Edit the draft (LLM edits target the new draft automatically — no separate LLM-version endpoint exists):
 curl -s -X PATCH "https://api.retellai.com/update-retell-llm/llm_b41019c52636d5321f084e5bdbbb" \
   -H "Authorization: Bearer $RK" -H "Content-Type: application/json" -d '{"model":"gpt-4.1-mini"}'
@@ -461,7 +477,8 @@ Notes: `create-agent-version` (`base_version` int, required) returns the new dra
 | Transport | TCP |
 
 **Outbound Calls** (credential connection):
-- Username: `locusairetell` | Password: `Locus2026Secure` | Termination URI: `sip.telnyx.com`
+- Username: `locusairetell` | Password: _(in Telnyx dashboard / `TELNYX_SIP_PASSWORD` env — NOT stored in this repo)_ | Termination URI: `sip.telnyx.com`
+- ⚠️ The old password was previously committed to this file in git history — **rotate it in the Telnyx portal** and keep the new one out of the repo.
 
 ### Retell API Commands
 ```bash
@@ -597,38 +614,67 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 
 ---
 
-## Test Suite (563 tests)
+## Test Suite (834 tests across 49 files)
 
 | File | Tests | Coverage |
 |------|-------|----------|
 | test_validators.py | 95 | Input validation, CSV escaping |
-| test_security.py | 61 | PII masking, webhooks, rate limiting |
+| test_security.py | 58 | PII masking, webhooks, rate limiting |
 | test_sentiment.py | 46 | Sentiment analysis, intent detection |
-| test_sms.py | 27 | Telnyx SMS integration |
+| test_voice.py | 42 | Voice call management |
 | test_encryption.py | 39 | Field encryption, token hashing |
+| test_booking_confirmation.py | 32 | Token flow, confirm/cancel |
 | test_db.py | 29 | Database operations |
 | test_auth.py | 28 | Login, lockout, user management |
-| test_booking_confirmation.py | 25 | Token flow, confirm/cancel |
-| test_circuit_breaker.py | 25 | States, decorators, resilience |
+| test_sms.py | 27 | Telnyx SMS integration |
 | test_widget_api.py | 25 | Widget endpoints, CORS |
+| test_circuit_breaker.py | 25 | States, decorators, resilience |
 | test_ics.py | 23 | iCalendar generation |
-| test_voice.py | 23 | Voice call management |
-| test_ai.py | 22 | AI conversation, prompts |
 | test_observability.py | 22 | Metrics collection |
+| test_ai.py | 22 | AI conversation, prompts |
+| test_billing.py | 20 | Stripe checkout, webhooks, plans |
 | test_reminders.py | 19 | Reminder scheduling |
 | test_escalation.py | 18 | Human handoff |
+| test_reschedule_cancel.py | 16 | AI cancel/reschedule token flow |
+| test_webhooks.py | 15 | Outbound event bus, HMAC, SSRF guard |
+| test_followups.py | 12 | Post-appointment follow-ups |
 | test_authz.py | 12 | Authorization checks |
+| test_semantic_kb.py | 11 | Embedding search, fallback chain |
+| test_limits.py | 11 | Plan feature gating / quotas |
+| test_compliance.py | 11 | Consent, retention, compliance rules |
+| test_push.py | 10 | Web push notifications |
+| test_kb_suggestions.py | 10 | AI KB gap suggestions |
+| test_sms_optout.py | 9 | STOP/START opt-out |
+| test_demo.py | 9 | Instant demo flow |
+| test_call_recovery.py | 9 | Missed-call recovery |
+| test_ai_quality.py | 9 | AI response quality checks |
+| test_kb_ingest.py | 8 | KB CSV bulk import |
+| test_trial.py | 7 | Trial expiry enforcement |
+| test_public_booking.py | 7 | `/book/<slug>` race-safe booking |
+| test_kb_autolearn.py | 7 | KB auto-learn tick |
+| test_calendar_feed.py | 7 | Per-business iCal feed |
+| test_value_report.py | 6 | Value/ROI report |
+| test_insights.py | 6 | Analytics insights |
+| test_digest.py | 6 | Weekly AI digest email |
+| test_workers.py | 5 | Supervised background workers |
+| test_onboarding.py | 5 | In-app onboarding checklist |
+| test_handoff.py | 5 | Escalation handoff |
+| test_calendar.py | 5 | Appointment calendar view |
+| test_bootstrap.py | 4 | Admin bootstrap on startup |
+| test_backup.py | 4 | DB snapshot + rotate |
+| test_sms_reschedule.py | 3 | SMS reschedule/cancel |
+| test_error_pages.py | 3 | 404/500 for logged-out users |
 | test_booking.py | 1 | Booking commit basic test |
 
 ```bash
-.venv/bin/python -m pytest tests/ -v                     # All 682
+.venv/bin/python -m pytest tests/ -v                     # All 834
 .venv/bin/python -m pytest tests/test_sentiment.py -v    # Specific file
 .venv/bin/python -m pytest tests/ -k "test_widget" -v    # Filter by name
 ```
 
 ---
 
-## Current State (Jun 2026)
+## Current State (Jul 2026)
 
 ### What's Working ✅
 - **LIVE IN PRODUCTION**: deployed on Railway, served by Gunicorn (`Procfile`: `gunicorn dashboard:app --workers 2`)
@@ -639,7 +685,15 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - **Cookie consent banner**: present in `public_base.html` (also referenced in `privacy.html`)
 - Pricing displayed in **£ (GBP)** across `home.html`, `onboard.html`, `services.html`
 - Rebranding complete: AxisAI → LocusAI (all references updated)
-- Test suite: **682 tests passing** (verified Jun 2026)
+- Test suite: **834 tests passing** (verified Jul 2026)
+- **Launch-hardening (Jul 2026)** — done this session:
+  - **Booking-confirm concurrency fix**: pending booking/change/voice tokens moved from per-process dicts to a shared SQLite store (`core/pending_store.py`, `pending_actions` table) — they no longer vanish across `gunicorn --workers 2`. `pop()` is atomic single-use (no double-book on replay).
+  - **Multi-tenant call/SMS routing fix**: `_get_business_by_phone` (voice + SMS) no longer falls back to "first active business" for an unknown number — it only auto-resolves when exactly ONE active business exists; otherwise returns None and the caller refuses (no cross-tenant misroute/leak). Voice `_fn_context` + `call-setup` handle None gracefully.
+  - **GDPR self-serve** (`core/account.py`, `/account`): data export (JSON, portability) + account deletion (erasure; sole-owner businesses fully purged, shared ones preserved), password-confirmed. Linked from sidebar + Privacy Policy.
+  - **Self-hosted fonts**: Inter + Space Grotesk served locally (`static/fonts/*.woff2`, `static/fonts.css`) — removed Google Fonts from all templates (UK GDPR IP-leak) and dropped the font hosts from CSP.
+  - **SEO/social**: OG + Twitter cards + canonical in `public_base.html`, branded `static/og-image.png`, `favicon.ico` + apple-touch + png favicons, `/robots.txt` + `/sitemap.xml` routes.
+  - **Email deliverability**: `core/mailer.py` now sets Date + Message-ID; automated mail (reminders/digest/alerts) gets `List-Unsubscribe` (+ one-click) and `Auto-Submitted`. Fixed a latent `send_email(to=...)` kwarg bug in reminders.
+  - **ProxyFix** added (correct https absolute URLs behind Railway's proxy — canonical/OG/email links). Loose deps pinned. `.env.example` added. SIP password redacted from this file (rotate it).
 - **In-app onboarding checklist**: dashboard shows setup progress (`core/onboarding.py`) until complete
 - **Public self-serve booking page**: `/book/<slug>` — services + live availability, race-safe booking, reminders (`public_booking_bp.py`)
 - **Outbound webhooks / event bus**: `core/webhooks.py` + `webhooks_bp.py` — HMAC-signed, SSRF-safe, retried deliveries for booking/appointment/escalation events; `/integrations/webhooks` UI (Zapier/Make/n8n-ready)
@@ -672,6 +726,10 @@ Tenant key is in `businesses.tenant_key` — shown in the Dashboard integrations
 - Customer detail: voice call history tab with intent/sentiment/summary
 - Sentiment: real-time escalation in widget chat endpoint
 - KB RAG: fixed question/answer field mapping in `_kb_snippets`
+- **Semantic KB search** (`core/semantic_kb.py`): OpenAI `text-embedding-3-small` embeddings in `kb_embeddings` table, cosine-ranked (MIN_SCORE 0.30), wired transparently into `core.kb.search_kb` (semantic → FTS → LIKE). Chat/voice/widget all benefit; degrades to [] without key/embeddings. Auto-indexes on KB add/edit + daily backfill.
+- **Instant "try it" demo**: live AI receptionist generated from any website URL, no signup (`test_demo.py`)
+- **Per-business iCal calendar feed**: integration-free calendar subscription (`test_calendar_feed.py`)
+- **Demo seed data**: rich demo business (Aurora Hair & Beauty) via seed script
 - Google Calendar: full OAuth2 flow + two-way sync built (`core/google_calendar.py`) — needs GOOGLE_* env vars
 - Voice settings modal: editable voice_id, greeting, transfer, after-hours, recording
 - User management: /users (admin only) — create, delete, change password, assign businesses
